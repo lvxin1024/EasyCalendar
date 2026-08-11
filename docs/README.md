@@ -48,10 +48,10 @@
 - 规则解析器只输出待确认的 `CandidateItem`，不再暴露旧 `CalendarEvent` 视图。
 - `Item` 领域模型、SQLite Repository、正式 CRUD、候选确认、提醒协调和 JSON/ICS transfer 已实现。
 - 正式 `/v1/items`、`/v1/assistant`、`/v1/import`、`/v1/export` 已提供；旧 `/api/v1` 原型已删除。
-- `client/` 已实现离线 SQLite CRUD 和核心页面；三平台 runner、lockfile、analyzer 和单测已验收，原生 build 工具链状态见 `client.md`。
+- `client/` 已实现离线 SQLite CRUD、outbox push/cursor pull、安全 token 存储和核心页面；三平台 runner、lockfile、analyzer 和单测已验收，原生 build 工具链状态见 `client.md`。
 - Python 运行和测试依赖已精确锁定，`scripts/test.sh` 可在隔离环境运行全部离线测试。
 - `server/` 已提供 Worker/D1、Bearer 鉴权、幂等 push/pull、cursor 分页和 Cloudflare 基础部署入口。
 - Google、Microsoft 和飞书将在 T6 的 Importer SDK 之上重新实现，不复用已删除的日历客户端原型。
-- 客户端自动同步、冲突恢复、完整部署生命周期和 Docker 同步服务仍是目标能力。
+- 同步冲突恢复、完整部署生命周期和 Docker 同步服务仍是目标能力。
 
 完整差距见 [implementation-status.md](./implementation-status.md)，实施顺序见 [roadmap.md](./roadmap.md)。

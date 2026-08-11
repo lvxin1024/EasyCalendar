@@ -7,7 +7,7 @@ EasyCalendar 是一个本地优先、可自托管的个人日程与 Due 管理�
 - 使用本地规则把中文文本解析为 `CandidateItem`，核心流程不依赖 AI。
 - 通过 `config/app.yaml`、`config/secrets.env` 和环境变量统一配置。
 - 提供正式 `/v1` Item/Candidate API、JSON/ICS 导入导出和 health/capabilities。
-- Flutter 客户端包含今日、全部、Due、编辑、设置和 SQLite 离线 CRUD；三平台构建状态见 `docs/client.md`。
+- Flutter 客户端包含今日、全部、Due、编辑、设置、SQLite 离线 CRUD 和 outbox/cursor 自动同步；三平台构建状态见 `docs/client.md`。
 - Cloudflare Worker 已提供公开 health/capabilities、单实例 Bearer 鉴权、幂等 push/pull、D1 migration 和配置驱动的部署入口。
 - 外部日历接入将在 Importer SDK 完成后按统一契约重新实现；仓库不保留未经验证的 provider 原型。
 
@@ -63,7 +63,7 @@ Flutter 固定为 `3.44.9`；首次运行会生成 Android/macOS/Windows runner�
 
 ## 产品文档
 
-[docs/README.md](docs/README.md) 汇总产品需求、架构、配置、同步协议、部署目标和实施路线图。Cloudflare 基础部署和 push/pull 已实现，客户端自动同步、订阅、备份/回滚和 Docker 部署仍按路线图推进。
+[docs/README.md](docs/README.md) 汇总产品需求、架构、配置、同步协议、部署目标和实施路线图。Cloudflare 基础部署、push/pull 和客户端自动同步已实现，冲突恢复、订阅、备份/回滚和 Docker 部署仍按路线图推进。
 
 ## License
 

@@ -15,7 +15,7 @@
 | Candidate Service | `src/application/candidate_service.py` | 候选提取、持久化预览、拒绝审计和确认编排已实现 |
 | Reminder Service | `src/application/reminder_service.py` | 相对/绝对提醒计算、持久化调度状态、改期取消、失败重试和启动恢复已实现 |
 | Import/Export Service | `src/application/import_export_service.py` | JSON 全量备份恢复、ICS Event 导入导出、预览、重复检测、幂等提交和整批事务已实现 |
-| Flutter 客户端 | `client/` | 今日、全部、Due、编辑器、设置、SQLite Repository、软删除和 outbox 已实现；三平台 runner/lockfile、analyzer 和单测已验收，原生 build 待平台工具链 |
+| Flutter 客户端 | `client/` | 今日、全部、Due、编辑器、设置、SQLite Repository、软删除、outbox 同步、cursor pull、安全 token 存储和网络恢复触发已实现；三平台 runner/lockfile、analyzer 和单测已验收，原生 build 待平台工具链 |
 | Cloudflare 同步服务 | `server/` | Worker health/capabilities、Bearer 鉴权、D1 migration、双重幂等 push、cursor pull 和基础 setup/deploy 已实现；冲突恢复待 T2.4 |
 | Notification adapter | `src/notification/` | 平台 port 已定义；`memory` adapter 可用于离线开发和测试，不发送系统通知 |
 | 解析器输出候选项 | `src/parser/rule_adapter.py` | 规则 Parser 已适配 Candidate application port，并使用请求时区和参考时间 |
@@ -39,9 +39,9 @@
 
 ## 尚未实现的目标能力
 
-- Cloudflare 冲突记录和客户端 outbox 同步器。
+- Cloudflare 与客户端冲突记录和被覆盖版本恢复。
 - ICS URL 订阅、ETag、RRULE 和只读 Collection。
-- Flutter 端 JSON/ICS transfer adapter、同步 transport 和真实平台通知 adapter。
+- Flutter 端 JSON/ICS transfer adapter 和真实平台通知 adapter。
 - Android、macOS、Windows 的真实系统通知 adapter 和 macOS WidgetKit。
 - AI Provider 抽象、结构化输出校验和提醒建议。
 - Cloudflare 备份/回滚和 Docker 一键部署。
@@ -55,4 +55,4 @@
 
 ## 结论
 
-正式 Item CRUD、Candidate 确认、可恢复本地提醒协调、事务化 JSON/ICS transfer、Flutter 离线 CRUD 和 Worker/D1 push/pull 均已落地。下一步是 T2.3 客户端 outbox 同步器；T1.6 的三平台原生启动验收作为环境任务保留。
+正式 Item CRUD、Candidate 确认、可恢复本地提醒协调、事务化 JSON/ICS transfer、Flutter 离线 CRUD、客户端 outbox 同步和 Worker/D1 push/pull 均已落地。下一步是 T2.4 冲突与恢复；T1.6 的三平台原生启动验收作为环境任务保留。

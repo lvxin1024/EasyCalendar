@@ -7,11 +7,14 @@ environment:
   sdk: ">=3.12.0 <4.0.0"
 
 dependencies:
+  connectivity_plus: 7.3.1
   flutter:
     sdk: flutter
+  flutter_secure_storage: 11.0.0
   flutter_localizations:
     sdk: flutter
   intl: 0.20.2
+  http: 1.6.0
   path: 1.9.1
   path_provider: 2.1.6
   sqflite: 2.4.3

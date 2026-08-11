@@ -9,5 +9,6 @@
   "EASYCALENDAR_DEVICE_ID": "my-easycalendar-client",
   "EASYCALENDAR_API_URL": "http://localhost:8000",
   "EASYCALENDAR_SYNC_ENABLED": "false",
+  "EASYCALENDAR_SYNC_RETRY_LIMIT": "8",
   "EASYCALENDAR_NOTIFICATIONS_ENABLED": "false"
 }

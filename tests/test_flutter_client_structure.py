@@ -39,6 +39,9 @@ def test_flutter_project_declares_pinned_sdk_and_offline_dependencies():
     assert pubspec["dependencies"]["path_provider"] == "2.1.6"
     assert pubspec["dependencies"]["timezone"] == "0.11.1"
     assert pubspec["dependencies"]["uuid"] == "4.6.0"
+    assert pubspec["dependencies"]["http"] == "1.6.0"
+    assert pubspec["dependencies"]["connectivity_plus"] == "7.3.1"
+    assert pubspec["dependencies"]["flutter_secure_storage"] == "11.0.0"
 
 
 def test_t16_views_repository_and_platform_bootstrap_are_present():
@@ -47,12 +50,21 @@ def test_t16_views_repository_and_platform_bootstrap_are_present():
         "lib/app.dart",
         "lib/data/item_repository.dart",
         "lib/data/local_item_repository.dart",
+        "lib/sync/http_sync_transport.dart",
+        "lib/sync/sync_coordinator.dart",
+        "lib/sync/sync_models.dart",
+        "lib/sync/sync_repository.dart",
+        "lib/sync/token_store.dart",
+        "lib/sync/connectivity_monitor.dart",
         "lib/features/today/today_page.dart",
         "lib/features/items/items_page.dart",
         "lib/features/due/due_page.dart",
         "lib/features/editor/item_editor_page.dart",
         "lib/features/settings/settings_page.dart",
         "test/item_controller_test.dart",
+        "test/http_sync_transport_test.dart",
+        "test/local_sync_repository_test.dart",
+        "test/sync_coordinator_test.dart",
         ".metadata",
         "pubspec.lock",
         "android/app/build.gradle.kts",
@@ -89,3 +101,19 @@ def test_local_mutations_are_versioned_soft_deleted_and_write_outbox():
     assert "_writeOutbox(transaction, item, 'create')" in source
     assert "_writeOutbox(transaction, updated, 'update')" in source
     assert "_writeOutbox(transaction, deleted, 'delete')" in source
+
+
+def test_t23_sync_state_and_credentials_have_explicit_storage_boundaries():
+    repository = (CLIENT / "lib" / "data" / "local_item_repository.dart").read_text(
+        encoding="utf-8"
+    )
+    token_store = (CLIENT / "lib" / "sync" / "token_store.dart").read_text(
+        encoding="utf-8"
+    )
+
+    assert "CREATE TABLE sync_state" in repository
+    assert "next_attempt_at" in repository
+    assert "permanent_failure" in repository
+    assert "applyRemoteBatch" in repository
+    assert "FlutterSecureStorage" in token_store
+    assert "easycalendar_admin_token" not in repository

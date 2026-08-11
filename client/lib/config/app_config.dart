@@ -12,6 +12,7 @@ class AppConfig {
     required this.deviceId,
     required this.apiUrl,
     required this.syncEnabled,
+    required this.syncRetryLimit,
     required this.notificationsEnabled,
   });
 
@@ -61,6 +62,10 @@ class AppConfig {
           defaultValue: 'false',
         ),
       ),
+      syncRetryLimit: const int.fromEnvironment(
+        'EASYCALENDAR_SYNC_RETRY_LIMIT',
+        defaultValue: 8,
+      ),
       notificationsEnabled: _parseBool(
         const String.fromEnvironment(
           'EASYCALENDAR_NOTIFICATIONS_ENABLED',
@@ -80,6 +85,7 @@ class AppConfig {
   final String deviceId;
   final String apiUrl;
   final bool syncEnabled;
+  final int syncRetryLimit;
   final bool notificationsEnabled;
 
   static bool _parseBool(String value) => value.toLowerCase() == 'true';

@@ -19,6 +19,7 @@ void main() {
     deviceId: 'test-device',
     apiUrl: 'http://localhost:8000',
     syncEnabled: false,
+    syncRetryLimit: 8,
     notificationsEnabled: false,
   );
 
@@ -95,10 +96,7 @@ class _MemoryRepository implements ItemRepository {
   }
 
   @override
-  Future<CalendarItem> updateItem(
-    CalendarItem current,
-    ItemDraft draft,
-  ) async {
+  Future<CalendarItem> updateItem(CalendarItem current, ItemDraft draft) async {
     final item = _fromDraft(
       current.id,
       draft,
@@ -131,9 +129,8 @@ class _MemoryRepository implements ItemRepository {
   }
 
   @override
-  Future<ClientPreferences> loadPreferences(
-    ClientPreferences defaults,
-  ) async => defaults;
+  Future<ClientPreferences> loadPreferences(ClientPreferences defaults) async =>
+      defaults;
 
   @override
   Future<void> savePreferences(ClientPreferences preferences) async {}

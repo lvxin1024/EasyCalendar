@@ -55,7 +55,7 @@ Application 通过抽象接口调用存储、同步、通知、Importer 和 Prov
 ### Adapters
 
 - API adapter：将 HTTP 请求映射到 application command/query。
-- SQLite adapter：`src/storage/` 已实现本地 Repository、migration、outbox 和 sync cursor；`server/` 已实现 D1 schema 与远端 push/pull，Flutter transport 待 T2.3 接入。
+- SQLite adapter：`src/storage/` 已实现 Python 本地 Repository、migration、outbox 和 sync cursor；`server/` 已实现 D1 schema 与远端 push/pull；Flutter 已实现本地 outbox、HTTP transport、安全 token 存储和 pull cursor 原子提交。
 - Parser/AI adapter：`RuleParserAdapter` 已实现规则解析 port，其他 provider 仍待实现。
 - Notification adapter：`NotificationSchedulerPort` 定义稳定调度/取消边界；当前 `memory` adapter 只用于开发和测试，系统 adapter 由各客户端平台实现。
 - ICS/Google/Microsoft adapter：未来通过 Importer contract 输出带来源信息的 Item。
@@ -63,7 +63,7 @@ Application 通过抽象接口调用存储、同步、通知、Importer 和 Prov
 
 ### Client UI / Platform
 
-Flutter 负责跨端 UI、本地数据库访问编排和设置。当前 `client/` 已按 `Widget -> ItemController -> ItemRepository -> LocalItemRepository` 落地，SQLite 支持离线 CRUD、乐观 version、软删除和 outbox。macOS WidgetKit、Android alarm、Windows toast 通过后续 platform adapter 接入。Widget 和通知都不能拥有第二份 Item 业务逻辑。
+Flutter 负责跨端 UI、本地数据库访问编排和设置。当前 `client/` 已按 `Widget -> ItemController -> ItemRepository -> LocalItemRepository` 落地，SQLite 支持离线 CRUD、乐观 version、软删除和 outbox；`SyncCoordinator` 通过独立 transport/repository/token ports 编排 push、pull、退避与网络恢复。macOS WidgetKit、Android alarm、Windows toast 通过后续 platform adapter 接入。Widget 和通知都不能拥有第二份 Item 业务逻辑。
 
 ### SQLite 事务边界
 
@@ -179,6 +179,6 @@ Google、Microsoft、AI 和 Cloudflare SDK 必须延迟加载或作为独立 ada
 
 待完成：
 
-1. 在 Flutter 客户端消费 outbox、应用 pull 并保存 cursor。
+1. 为 Worker 和 Flutter 客户端补齐确定性冲突策略与被覆盖版本恢复。
 2. 在 T6.1 建立 Importer SDK 后重新实现外部日历适配，不复用已删除原型。
 3. 接入 AI、系统通知、Widget 和 OAuth provider。
