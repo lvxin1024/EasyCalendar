@@ -11,8 +11,67 @@ class MainFlutterWindow: NSWindow {
 
     RegisterGeneratedPlugins(registry: flutterViewController)
     WidgetSnapshotBridge.configure(with: flutterViewController)
+    DesktopWindowBridge.configure(with: self, controller: flutterViewController)
 
     super.awakeFromNib()
+  }
+}
+
+enum DesktopWindowBridge {
+  private static let channelName = "io.easycalendar/window"
+  private static weak var window: NSWindow?
+  private static var channel: FlutterMethodChannel?
+  private(set) static var interactionLocked = false
+
+  static func configure(with window: NSWindow, controller: FlutterViewController) {
+    self.window = window
+    let methodChannel = FlutterMethodChannel(
+      name: channelName,
+      binaryMessenger: controller.engine.binaryMessenger
+    )
+    methodChannel.setMethodCallHandler { call, result in
+      switch call.method {
+      case "setOpacity":
+        guard let arguments = call.arguments as? [String: Any],
+              let value = arguments["opacity"] as? Double else {
+          result(FlutterError(code: "invalid_opacity", message: nil, details: nil))
+          return
+        }
+        window.alphaValue = CGFloat(min(max(value, 0.2), 1.0))
+        result(nil)
+      case "setAlwaysOnTop":
+        guard let arguments = call.arguments as? [String: Any],
+              let value = arguments["value"] as? Bool else {
+          result(FlutterError(code: "invalid_topmost", message: nil, details: nil))
+          return
+        }
+        window.level = value ? .floating : .normal
+        result(nil)
+      case "setInteractionLocked":
+        guard let arguments = call.arguments as? [String: Any],
+              let value = arguments["value"] as? Bool else {
+          result(FlutterError(code: "invalid_click_through", message: nil, details: nil))
+          return
+        }
+        setInteractionLocked(value, notifyFlutter: false)
+        result(nil)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+    channel = methodChannel
+  }
+
+  static func setInteractionLocked(_ value: Bool, notifyFlutter: Bool) {
+    interactionLocked = value
+    window?.ignoresMouseEvents = value
+    if notifyFlutter {
+      channel?.invokeMethod("windowInteractionUnlocked", arguments: nil)
+    }
+  }
+
+  static func unlock() {
+    setInteractionLocked(false, notifyFlutter: true)
   }
 }
 

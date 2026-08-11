@@ -60,3 +60,17 @@ def test_runner_and_widget_share_app_group_and_flutter_publishes_snapshot():
     assert "widgetSnapshotWriter" in controller
     assert "openWidgetTarget" in deep_links
     assert "readyForWidgetLinks" in deep_links
+
+
+def test_macos_desktop_window_bridge_has_safe_click_through_unlock():
+    bridge = (MACOS / "Runner" / "MainFlutterWindow.swift").read_text(
+        encoding="utf-8"
+    )
+    app_delegate = (MACOS / "Runner" / "AppDelegate.swift").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'io.easycalendar/window' in bridge
+    assert 'ignoresMouseEvents' in bridge
+    assert 'applicationDockMenu' in app_delegate
+    assert '解除窗口交互锁定' in app_delegate

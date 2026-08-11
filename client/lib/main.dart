@@ -13,6 +13,7 @@ import 'sync/sync_coordinator.dart';
 import 'sync/token_store.dart';
 import 'widget/widget_deep_link_controller.dart';
 import 'widget/widget_snapshot_writer.dart';
+import 'window/desktop_window_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,6 +22,7 @@ Future<void> main() async {
   tz.setLocalLocation(tz.getLocation(config.timezone));
   await initializeDateFormatting('zh_CN');
   final repository = LocalItemRepository(config);
+  final desktopWindowController = DesktopWindowController();
   final syncCoordinator = SyncCoordinator(
     repository: repository,
     transport: HttpSyncTransport(),
@@ -34,6 +36,7 @@ Future<void> main() async {
     config: config,
     syncCoordinator: syncCoordinator,
     widgetSnapshotWriter: const PlatformWidgetSnapshotWriter(),
+    desktopWindowController: desktopWindowController,
   );
   await controller.initialize();
   final widgetDeepLinks = WidgetDeepLinkController();

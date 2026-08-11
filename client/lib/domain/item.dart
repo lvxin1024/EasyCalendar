@@ -108,19 +108,27 @@ class ClientPreferences {
     required this.apiUrl,
     required this.syncEnabled,
     required this.notificationsEnabled,
+    this.windowOpacity = 1,
+    this.windowAlwaysOnTop = false,
   });
 
   final String apiUrl;
   final bool syncEnabled;
   final bool notificationsEnabled;
+  final double windowOpacity;
+  final bool windowAlwaysOnTop;
 
   ClientPreferences copyWith({
     String? apiUrl,
     bool? syncEnabled,
     bool? notificationsEnabled,
+    double? windowOpacity,
+    bool? windowAlwaysOnTop,
   }) => ClientPreferences(
     apiUrl: apiUrl ?? this.apiUrl,
     syncEnabled: syncEnabled ?? this.syncEnabled,
     notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
+    windowOpacity: windowOpacity ?? this.windowOpacity,
+    windowAlwaysOnTop: windowAlwaysOnTop ?? this.windowAlwaysOnTop,
   );
 }

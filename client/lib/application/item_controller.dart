@@ -9,6 +9,7 @@ import '../sync/sync_coordinator.dart';
 import '../sync/sync_models.dart';
 import '../utils/configured_time.dart';
 import '../widget/widget_snapshot_writer.dart';
+import '../window/desktop_window_controller.dart';
 
 class ItemController extends ChangeNotifier {
   ItemController({
@@ -16,6 +17,7 @@ class ItemController extends ChangeNotifier {
     required this.config,
     this.syncCoordinator,
     this.widgetSnapshotWriter,
+    this.desktopWindowController,
   }) {
     syncCoordinator?.addListener(_syncChanged);
   }
@@ -24,6 +26,7 @@ class ItemController extends ChangeNotifier {
   final AppConfig config;
   final SyncCoordinator? syncCoordinator;
   final WidgetSnapshotWriter? widgetSnapshotWriter;
+  final DesktopWindowController? desktopWindowController;
 
   List<CalendarItem> _items = const [];
   ClientPreferences? _preferences;
@@ -44,6 +47,8 @@ class ItemController extends ChangeNotifier {
     apiUrl: config.apiUrl,
     syncEnabled: config.syncEnabled,
     notificationsEnabled: config.notificationsEnabled,
+    windowOpacity: 1,
+    windowAlwaysOnTop: false,
   );
 
   List<CalendarItem> get todayItems {
@@ -73,6 +78,14 @@ class ItemController extends ChangeNotifier {
       await repository.initialize();
       _initialized = true;
       _preferences = await repository.loadPreferences(_defaultPreferences);
+      try {
+        await desktopWindowController?.initialize(
+          opacity: _preferences!.windowOpacity,
+          alwaysOnTop: _preferences!.windowAlwaysOnTop,
+        );
+      } catch (_) {
+        // Window preferences are optional and must not block local startup.
+      }
       await syncCoordinator?.start(
         enabled: _preferences!.syncEnabled,
         serverUrl: _preferences!.apiUrl,
@@ -115,6 +128,12 @@ class ItemController extends ChangeNotifier {
     await _mutate(() async {
       await repository.savePreferences(value);
       _preferences = value;
+      try {
+        await desktopWindowController?.setOpacity(value.windowOpacity);
+        await desktopWindowController?.setAlwaysOnTop(value.windowAlwaysOnTop);
+      } catch (_) {
+        // A platform window adapter may be unavailable while the app is starting.
+      }
       syncCoordinator?.configure(
         enabled: value.syncEnabled,
         serverUrl: value.apiUrl,

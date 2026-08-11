@@ -535,6 +535,14 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
         values['notifications_enabled'],
         defaults.notificationsEnabled,
       ),
+      windowOpacity: _storedOpacity(
+        values['window_opacity'],
+        defaults.windowOpacity,
+      ),
+      windowAlwaysOnTop: _storedBool(
+        values['window_always_on_top'],
+        defaults.windowAlwaysOnTop,
+      ),
     );
   }
 
@@ -547,6 +555,10 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
         'notifications_enabled': preferences.notificationsEnabled
             ? 'true'
             : 'false',
+        'window_opacity': preferences.windowOpacity.toString(),
+        'window_always_on_top': preferences.windowAlwaysOnTop
+            ? 'true'
+            : 'false',
       }.entries) {
         await transaction.insert('app_settings', {
           'key': entry.key,
@@ -554,6 +566,11 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
         }, conflictAlgorithm: ConflictAlgorithm.replace);
       }
     });
+  }
+
+  static double _storedOpacity(String? value, double fallback) {
+    final parsed = double.tryParse(value ?? '');
+    return (parsed ?? fallback).clamp(0.2, 1.0).toDouble();
   }
 
   Future<void> _writeOutbox(

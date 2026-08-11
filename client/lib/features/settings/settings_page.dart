@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../application/item_controller.dart';
@@ -25,6 +27,8 @@ class _SettingsPageState extends State<SettingsPage> {
   late final TextEditingController _tokenController;
   late bool _syncEnabled;
   late bool _notificationsEnabled;
+  late double _windowOpacity;
+  late bool _windowAlwaysOnTop;
   bool _obscureToken = true;
 
   @override
@@ -35,12 +39,16 @@ class _SettingsPageState extends State<SettingsPage> {
     _tokenController = TextEditingController();
     _syncEnabled = preferences.syncEnabled;
     _notificationsEnabled = preferences.notificationsEnabled;
+    _windowOpacity = preferences.windowOpacity;
+    _windowAlwaysOnTop = preferences.windowAlwaysOnTop;
+    widget.controller.desktopWindowController?.addListener(_windowChanged);
   }
 
   @override
   void dispose() {
     _apiUrlController.dispose();
     _tokenController.dispose();
+    widget.controller.desktopWindowController?.removeListener(_windowChanged);
     super.dispose();
   }
 
@@ -146,6 +154,18 @@ class _SettingsPageState extends State<SettingsPage> {
                 onChanged: (value) =>
                     setState(() => _notificationsEnabled = value),
               ),
+              if (widget.controller.desktopWindowController?.available == true)
+                _DesktopWindowSection(
+                  opacity: _windowOpacity,
+                  alwaysOnTop: _windowAlwaysOnTop,
+                  locked: widget
+                      .controller
+                      .desktopWindowController!
+                      .interactionLocked,
+                  onOpacityChanged: _setWindowOpacity,
+                  onAlwaysOnTopChanged: _setAlwaysOnTop,
+                  onLockedChanged: _setInteractionLocked,
+                ),
               const SizedBox(height: 24),
               _SectionLabel(label: '本地环境'),
               _InfoRow(
@@ -203,6 +223,8 @@ class _SettingsPageState extends State<SettingsPage> {
           apiUrl: _apiUrlController.text.trim(),
           syncEnabled: _syncEnabled,
           notificationsEnabled: _notificationsEnabled,
+          windowOpacity: _windowOpacity,
+          windowAlwaysOnTop: _windowAlwaysOnTop,
         ),
       );
       if (_tokenController.text.trim().isNotEmpty) {
@@ -246,6 +268,52 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _clearToken() async {
     await widget.controller.clearSyncToken();
     if (mounted) setState(() {});
+  }
+
+  void _windowChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _setWindowOpacity(double value) {
+    setState(() => _windowOpacity = value);
+    unawaited(widget.controller.desktopWindowController?.setOpacity(value));
+  }
+
+  void _setAlwaysOnTop(bool value) {
+    setState(() => _windowAlwaysOnTop = value);
+    unawaited(widget.controller.desktopWindowController?.setAlwaysOnTop(value));
+  }
+
+  Future<void> _setInteractionLocked(bool value) async {
+    if (!value) {
+      await widget.controller.desktopWindowController?.setInteractionLocked(
+        false,
+      );
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('锁定窗口交互？'),
+        content: const Text('锁定后鼠标会穿透窗口。请从 Dock 右键菜单选择“解除窗口交互锁定”来恢复操作。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(context, true),
+            icon: const Icon(Icons.lock_outline),
+            label: const Text('锁定'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await widget.controller.desktopWindowController?.setInteractionLocked(
+        true,
+      );
+    }
   }
 
   Future<void> _syncNow() async {
@@ -346,6 +414,75 @@ class _SettingSwitch extends StatelessWidget {
       value: value,
       onChanged: onChanged,
     ),
+  );
+}
+
+class _DesktopWindowSection extends StatelessWidget {
+  const _DesktopWindowSection({
+    required this.opacity,
+    required this.alwaysOnTop,
+    required this.locked,
+    required this.onOpacityChanged,
+    required this.onAlwaysOnTopChanged,
+    required this.onLockedChanged,
+  });
+
+  final double opacity;
+  final bool alwaysOnTop;
+  final bool locked;
+  final ValueChanged<double> onOpacityChanged;
+  final ValueChanged<bool> onAlwaysOnTopChanged;
+  final Future<void> Function(bool) onLockedChanged;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      const SizedBox(height: 24),
+      const _SectionLabel(label: '桌面窗口'),
+      DecoratedBox(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          border: Border(bottom: BorderSide(color: Color(0xFFE4E7EC))),
+        ),
+        child: Column(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.opacity_outlined),
+              title: const Text('窗口透明度'),
+              subtitle: Text('${(opacity * 100).round()}%'),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+              child: Slider(
+                value: opacity,
+                min: 0.2,
+                max: 1,
+                divisions: 16,
+                label: '${(opacity * 100).round()}%',
+                onChanged: onOpacityChanged,
+              ),
+            ),
+            const Divider(height: 1),
+            SwitchListTile(
+              secondary: const Icon(Icons.push_pin_outlined),
+              title: const Text('始终置顶'),
+              subtitle: const Text('窗口保持在其他窗口上方'),
+              value: alwaysOnTop,
+              onChanged: onAlwaysOnTopChanged,
+            ),
+            const Divider(height: 1),
+            SwitchListTile(
+              secondary: const Icon(Icons.mouse_outlined),
+              title: const Text('锁定交互'),
+              subtitle: const Text('鼠标点击和滚动穿透到下一层窗口'),
+              value: locked,
+              onChanged: (value) => unawaited(onLockedChanged(value)),
+            ),
+          ],
+        ),
+      ),
+    ],
   );
 }
 
