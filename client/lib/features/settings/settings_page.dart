@@ -295,7 +295,9 @@ class _SettingsPageState extends State<SettingsPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('锁定窗口交互？'),
-        content: const Text('锁定后鼠标会穿透窗口。请从 Dock 右键菜单选择“解除窗口交互锁定”来恢复操作。'),
+        content: const Text(
+          '锁定后鼠标会穿透窗口。macOS 请从 Dock 右键菜单解锁，Windows 请按 Ctrl+Alt+L。',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),

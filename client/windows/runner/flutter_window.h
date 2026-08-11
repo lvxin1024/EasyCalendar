@@ -2,7 +2,9 @@
 #define RUNNER_FLUTTER_WINDOW_H_
 
 #include <flutter/dart_project.h>
+#include <flutter/method_channel.h>
 #include <flutter/flutter_view_controller.h>
+#include <flutter/standard_method_codec.h>
 
 #include <memory>
 
@@ -23,11 +25,22 @@ class FlutterWindow : public Win32Window {
                          LPARAM const lparam) noexcept override;
 
  private:
+  using WindowChannel =
+      flutter::MethodChannel<flutter::EncodableValue>;
+
+  void SetOpacity(double value);
+  void SetAlwaysOnTop(bool value);
+  void SetInteractionLocked(bool value, bool notify_flutter);
+
   // The project to run.
   flutter::DartProject project_;
 
   // The Flutter instance hosted by this window.
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;
+  std::unique_ptr<WindowChannel> window_channel_;
+  bool interaction_locked_ = false;
+
+  static constexpr int kUnlockHotKeyId = 0xEC01;
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_

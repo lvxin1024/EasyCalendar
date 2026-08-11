@@ -181,6 +181,7 @@
 
 ### T5.5 Windows 窗口控制适配
 
+- 状态：已完成；Windows channel、透明度、置顶、点击穿透和 Ctrl+Alt+L 解锁已接入。
 - 依赖：T5.4。
 - 内容：复用窗口控制 port，实现 Windows 透明度、topmost 和 click-through；不改变 macOS 行为。
 - 验收：Windows 三项能力与 macOS 语义一致；不支持时明确降级；平台 adapter 单独测试和提交。

@@ -32,6 +32,7 @@
 | 单日/周时间网格 | `client/lib/features/calendar/calendar_time_grid.dart` | T5.2 已接入 24 小时时间轴、全天区域、重叠 Event 分栏、跨日裁剪、当前时间线、滚动和缩放 |
 | 月视图和周跳转 | `client/lib/features/calendar/calendar_month_grid.dart` | T5.3 已接入按周分行的月视图、事件摘要、溢出入口和 ISO 周序号跳转 |
 | macOS 桌面窗口控制 | `client/lib/window/desktop_window_controller.dart`、`client/macos/Runner/MainFlutterWindow.swift` | T5.4 已接入设置页透明度、置顶、点击穿透和 Dock 解锁；偏好保存在本机 app_settings |
+| Windows 桌面窗口控制 | `client/windows/runner/flutter_window.cpp` | T5.5 已接入 channel、透明度、置顶、点击穿透和 Ctrl+Alt+L 解锁；待 Windows SDK 真机编译验收 |
 | 配置 | `config/loader.py` | YAML、secrets.env、环境覆盖和严格校验已接入 |
 | 本地启动入口 | `run.py` | 从统一配置读取 host、port 和 debug |
 | 测试与依赖 | `scripts/test.sh` | 单一命令安装锁定依赖并运行全部离线 Python 测试 |
@@ -65,4 +66,4 @@
 
 ## 结论
 
-正式 Item CRUD、Candidate 确认、可恢复本地提醒协调、事务化 JSON/ICS transfer、Flutter 离线 CRUD、T2 的 Worker/D1 与客户端同步冲突恢复、完整 T3 ICS 订阅链路、T4 Widget 和 T5.1–T5.4 日历与 macOS 桌面工作台均已落地。下一项产品功能是 T5.5 Windows 窗口控制适配；T1.6 的 Android/Windows 原生启动验收作为环境任务保留，macOS 已通过 Xcode 验收。
+正式 Item CRUD、Candidate 确认、可恢复本地提醒协调、事务化 JSON/ICS transfer、Flutter 离线 CRUD、T2 的 Worker/D1 与客户端同步冲突恢复、完整 T3 ICS 订阅链路、T4 Widget 和 T5.1–T5.5 日历与桌面工作台均已落地。T5.5 的 Windows SDK 真机编译和 T1.6 的 Android/Windows 原生启动验收仍作为环境任务保留，macOS 已通过 Xcode 验收。
