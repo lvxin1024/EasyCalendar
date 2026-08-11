@@ -18,10 +18,12 @@ void main() {
       baseUrl: 'https://ai.example.com/v1',
       model: 'gpt-test',
       keyConfigured: true,
+      requestParameters: const {'temperature': 0.2, 'api_key': 'nested-secret'},
     );
 
     expect(config.toStorageJson(), isNot(contains('api_key')));
     expect(config.toStorageJson(), isNot(contains('secret')));
+    expect(config.toStorageJson(), contains('temperature'));
   });
 
   test('local preferences persist non-sensitive provider fields', () async {

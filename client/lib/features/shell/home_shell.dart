@@ -7,6 +7,7 @@ import '../../widget/widget_deep_link_controller.dart';
 import '../calendar/calendar_navigation_controller.dart';
 import '../calendar/calendar_page.dart';
 import '../due/due_page.dart';
+import '../assistant/assistant_page.dart';
 import '../editor/item_editor_page.dart';
 import '../items/items_page.dart';
 import '../settings/settings_page.dart';
@@ -71,6 +72,11 @@ class _HomeShellState extends State<HomeShell> {
       icon: Icon(Icons.check_circle_outline),
       selectedIcon: Icon(Icons.check_circle),
       label: 'Due',
+    ),
+    NavigationDestination(
+      icon: Icon(Icons.auto_awesome_outlined),
+      selectedIcon: Icon(Icons.auto_awesome),
+      label: '助手',
     ),
     NavigationDestination(
       icon: Icon(Icons.settings_outlined),
@@ -160,6 +166,11 @@ class _HomeShellState extends State<HomeShell> {
                         label: Text('Due'),
                       ),
                       NavigationRailDestination(
+                        icon: Icon(Icons.auto_awesome_outlined),
+                        selectedIcon: Icon(Icons.auto_awesome),
+                        label: Text('助手'),
+                      ),
+                      NavigationRailDestination(
                         icon: Icon(Icons.settings_outlined),
                         selectedIcon: Icon(Icons.settings),
                         label: Text('设置'),
@@ -185,7 +196,7 @@ class _HomeShellState extends State<HomeShell> {
                     destinations: _destinations,
                     onDestinationSelected: _selectDestination,
                   ),
-            floatingActionButton: _selectedIndex == 3
+            floatingActionButton: _selectedIndex >= 3
                 ? null
                 : FloatingActionButton(
                     tooltip: '新建事项',
@@ -219,6 +230,7 @@ class _HomeShellState extends State<HomeShell> {
       onDelete: _confirmDelete,
       onToggleCompleted: _toggleCompleted,
     ),
+    3 => AssistantPage(config: widget.config, controller: widget.controller),
     _ => SettingsPage(config: widget.config, controller: widget.controller),
   };
 

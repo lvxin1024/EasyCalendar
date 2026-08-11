@@ -66,7 +66,12 @@ def decode_candidate_response(payload: Any, *, timezone_name: str) -> CandidateP
         candidate_data = dict(raw)
         candidate_data.setdefault("timezone", timezone_name)
         try:
-            candidates.append(CandidateItem.from_dict(candidate_data))
+            candidate = CandidateItem.from_dict(candidate_data)
+            if candidate.type.value == "event" and candidate.start_at is None:
+                raise ValueError("Event candidate requires start_at")
+            if candidate.type.value == "task" and candidate.due_at is None:
+                raise ValueError("Task candidate requires due_at")
+            candidates.append(candidate)
         except (TypeError, ValueError) as error:
             errors.append({"index": index, "message": str(error)[:240]})
     if errors:

@@ -14,6 +14,7 @@
 - outbox 批量 push、cursor pull、失败分类、指数退避和网络恢复触发。
 - 系统安全存储中的 Bearer token、同步状态和手动同步入口。
 - 与 Worker 一致的确定性 LWW、删除墓碑、winner/loser 日志和冲突历史入口。
+- OpenAI-compatible/Ollama Provider 设置、安全 API key 存储、连接测试和多候选确认工作台。
 
 真实系统通知尚未接入；设置页的通知开关仍只是后续 adapter 的启用意向。macOS WidgetKit 已通过 App Group 读取主 App 的只读快照。
 

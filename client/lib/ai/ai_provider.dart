@@ -61,6 +61,11 @@ class AiProviderConfig {
   // This is derived from secure storage and is deliberately omitted from JSON.
   final bool keyConfigured;
 
+  Map<String, dynamic> get nonSensitiveRequestParameters => {
+    for (final entry in requestParameters.entries)
+      if (!_sensitiveParameter(entry.key)) entry.key: entry.value,
+  };
+
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
@@ -68,7 +73,7 @@ class AiProviderConfig {
     'base_url': baseUrl,
     'model': model,
     'enabled': enabled,
-    'request_parameters': requestParameters,
+    'request_parameters': nonSensitiveRequestParameters,
   };
 
   String toStorageJson() => jsonEncode(toJson());
@@ -99,13 +104,31 @@ class AiProviderConfig {
     }
     return value.trim();
   }
+
+  static bool _sensitiveParameter(String key) {
+    final normalized = key.toLowerCase().replaceAll(RegExp(r'[_\-.]'), '');
+    return const {
+      'apikey',
+      'authorization',
+      'token',
+      'accesstoken',
+      'refreshtoken',
+      'secret',
+      'clientsecret',
+    }.contains(normalized);
+  }
 }
 
 class AiProviderImport {
   const AiProviderImport({required this.config, this.apiKey});
 
   factory AiProviderImport.fromJson(Map<String, dynamic> json) {
-    final config = AiProviderConfig.fromJson(json);
+    final normalized = Map<String, dynamic>.from(json);
+    normalized.putIfAbsent(
+      'id',
+      () => 'ai_${DateTime.now().microsecondsSinceEpoch}',
+    );
+    final config = AiProviderConfig.fromJson(normalized);
     final rawKey = json['api_key'];
     if (rawKey != null && rawKey is! String) {
       throw const FormatException('api_key must be a string');
