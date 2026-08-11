@@ -10,6 +10,7 @@ import { parse as parseYaml } from "yaml";
 const serverDirectory = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const generatedDirectory = resolve(serverDirectory, ".generated");
 const generatedConfigPath = resolve(generatedDirectory, "wrangler.json");
+export const workerSchemaVersion = 3;
 
 function fail(message) {
   throw new Error(message);
@@ -286,7 +287,7 @@ async function smokeTest(config) {
   const response = await fetch(`${config.publicUrl}/v1/health`);
   if (!response.ok) fail(`Health smoke test failed with HTTP ${response.status}`);
   const payload = await response.json();
-  if (payload.status !== "ok" || payload.schema_version !== 2) {
+  if (payload.status !== "ok" || payload.schema_version !== workerSchemaVersion) {
     fail("Health smoke test returned an incompatible response");
   }
 }

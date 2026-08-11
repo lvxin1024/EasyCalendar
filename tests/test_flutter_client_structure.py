@@ -117,3 +117,18 @@ def test_t23_sync_state_and_credentials_have_explicit_storage_boundaries():
     assert "applyRemoteBatch" in repository
     assert "FlutterSecureStorage" in token_store
     assert "easycalendar_admin_token" not in repository
+
+
+def test_t24_conflict_heads_and_recovery_history_are_persisted():
+    repository = (CLIENT / "lib" / "data" / "local_item_repository.dart").read_text(
+        encoding="utf-8"
+    )
+    models = (CLIENT / "lib" / "sync" / "sync_models.dart").read_text(
+        encoding="utf-8"
+    )
+
+    assert "version: 3" in repository
+    assert "CREATE TABLE sync_entity_heads" in repository
+    assert "CREATE TABLE sync_conflicts" in repository
+    assert "listSyncConflicts" in repository
+    assert "compareSyncChanges" in models

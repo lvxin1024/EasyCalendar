@@ -4,6 +4,7 @@ import {
   buildWranglerConfig,
   parseSecrets,
   validateConfig,
+  workerSchemaVersion,
 } from "../scripts/setup.mjs";
 
 const config = {
@@ -25,6 +26,10 @@ const config = {
 const secrets = { ADMIN_TOKEN: "a-secure-token-with-at-least-32-characters" };
 
 describe("Cloudflare setup configuration", () => {
+  it("tracks the deployed Worker schema", () => {
+    expect(workerSchemaVersion).toBe(3);
+  });
+
   it("validates the shared configuration and builds generated Wrangler input", () => {
     const validated = validateConfig(config, secrets);
     const wrangler = buildWranglerConfig(

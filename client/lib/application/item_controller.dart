@@ -163,6 +163,9 @@ class ItemController extends ChangeNotifier {
     await _reload();
   }
 
+  Future<List<SyncConflictRecord>> loadSyncConflictHistory() async =>
+      syncCoordinator?.loadConflictHistory() ?? const [];
+
   void _syncChanged() {
     if (syncCoordinator?.snapshot.phase == SyncPhase.idle &&
         _initialized &&

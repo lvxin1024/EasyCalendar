@@ -2,7 +2,7 @@ import { Hono } from "hono";
 
 import { requireAdminToken } from "./auth";
 import { errorResponse, requestId } from "./errors";
-import { pullChanges, pushChanges } from "./sync";
+import { listConflicts, pullChanges, pushChanges } from "./sync";
 import type { AppEnv } from "./types";
 
 export const app = new Hono<AppEnv>();
@@ -44,7 +44,7 @@ app.get("/v1/health", (c) =>
     status: "ok",
     service: "easycalendar",
     version: "0.1.0",
-    schema_version: 2,
+    schema_version: 3,
   }),
 );
 
@@ -85,6 +85,7 @@ app.use("/v1/*", requireAdminToken);
 
 app.post("/v1/sync/push", pushChanges);
 app.get("/v1/sync/pull", pullChanges);
+app.get("/v1/sync/conflicts", listConflicts);
 
 app.notFound((c) =>
   errorResponse(c, 404, "not_found", "The requested resource does not exist"),

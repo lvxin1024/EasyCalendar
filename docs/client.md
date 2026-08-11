@@ -2,7 +2,7 @@
 
 ## 1. 当前范围
 
-`client/` 是 EasyCalendar 的本地优先 Flutter 客户端，目标平台为 Android、macOS 和 Windows。T1.6 与 T2.3 已实现以下 Dart 代码：
+`client/` 是 EasyCalendar 的本地优先 Flutter 客户端，目标平台为 Android、macOS 和 Windows。T1.6、T2.3 与 T2.4 已实现以下 Dart 代码：
 
 - 响应式 NavigationRail / NavigationBar 外壳。
 - 今日视图、全部事项搜索和类型过滤、Due 状态过滤。
@@ -13,8 +13,9 @@
 - API 地址、同步意向和通知意向的本地设置持久化。
 - outbox 批量 push、cursor pull、失败分类、指数退避和网络恢复触发。
 - 系统安全存储中的 Bearer token、同步状态和手动同步入口。
+- 与 Worker 一致的确定性 LWW、删除墓碑、winner/loser 日志和冲突历史入口。
 
-同步冲突恢复和真实系统通知尚未接入；设置页的通知开关仍只是后续 adapter 的启用意向，不代表 T4 已完成。
+真实系统通知尚未接入；设置页的通知开关仍只是后续 adapter 的启用意向，不代表 T4 已完成。
 
 ## 2. 代码边界
 
@@ -42,12 +43,16 @@ items
 subscriptions
 outbox
 sync_state
+sync_entity_heads
+sync_conflicts
 app_settings
 ```
 
 每次 create/update/complete/delete 都在一个 SQLite transaction 中更新 Item 并追加 outbox。update/delete 使用 `id + version` 乐观条件；删除写 `deleted_at` 墓碑，不硬删除。outbox 保留 `device_id`、entity、operation、version、retry/error/sent 字段，payload 使用稳定 Item domain 字段而不是 SQLite 列快照。同步器先发送默认 Collection 和本地变更，成功后删除已接受记录；临时错误写入指数退避时间，永久错误停止快速重试。pull 的整页变更和新 cursor 在同一事务提交，失败时一起回滚。
 
 Bearer token 不写 SQLite、JSON 配置或日志，而由 `flutter_secure_storage` 保存。Android 声明网络权限，macOS 声明网络 client 与 Keychain Sharing entitlement；Windows 使用插件提供的 Credential Locker adapter。
+
+每个同步实体的当前 head 保存其完整 change envelope。远端与本地统一按 `updated_at`、`version`、`change_id` 比较；删除墓碑不特殊降级。冲突表保存完整 winner/loser 快照，设置页可打开“冲突历史”查看被覆盖版本。pull 中较旧的远端 change 不会覆盖排序胜出的未发送本地 head。
 
 当前 Flutter schema 是 T1.6 所需的 Item 子集，并保留后续 migration 边界；Python 完整备份不能直接复制成客户端 SQLite 文件。跨实现迁移统一走 T1.5 JSON API，后续任务再为 Flutter 增加对应 transfer adapter。
 
@@ -93,7 +98,7 @@ EASYCALENDAR_CLIENT_DEVICE=macos ./scripts/run-client.sh
 
 - 生成并纳入版本控制的 Android、macOS、Windows runner、`.metadata` 和 `pubspec.lock`。
 - `flutter analyze`：0 issues。
-- `flutter test`：覆盖内存 Repository 下的 CRUD、今日计算和 Due 完成，以及 HTTP envelope、重试/永久失败、网络恢复和 SQLite 原子 pull/cursor。
+- `flutter test`：覆盖内存 Repository 下的 CRUD、今日计算和 Due 完成，以及 HTTP envelope、重试/永久失败、网络恢复、SQLite 原子 pull/cursor、本地胜出保护和被覆盖版本恢复。
 - `scripts/setup-client.sh` 完整执行通过；Web 目标拒绝测试返回预期错误。
 
 原生构建探测结果：

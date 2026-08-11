@@ -119,5 +119,5 @@ cp config/secrets.example.env config/secrets.env
 当前实现边界：
 
 - `scripts/setup.sh` 已能校验 Cloudflare 配置、创建 D1、执行 migration、部署 Worker、写入 token secret 和检查 health。
-- Worker 当前只提供服务端骨架；部署成功不代表 T2.2 push/pull 已可用。
+- Worker 已提供 T2 的 push/pull、cursor、幂等和冲突恢复；部署验收仍必须实际执行 migration、鉴权和 health 检查。
 - 自动 D1 备份、回滚、Cron/R2、Pages 和 Docker Compose 尚未实现，因此仍不宣传为完整的一键部署生命周期。

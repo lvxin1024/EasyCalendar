@@ -42,6 +42,13 @@ class HttpSyncTransport implements SyncTransport {
             );
           })
           .toList(growable: false),
+      conflicts: (body['conflicts'] as List<Object?>)
+          .map(
+            (value) => SyncConflictSummary.fromJson(
+              (value as Map<Object?, Object?>).cast<String, Object?>(),
+            ),
+          )
+          .toList(growable: false),
     );
   }
 

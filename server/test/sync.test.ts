@@ -36,20 +36,34 @@ function collectionChange(changeId: string, version = 1) {
   };
 }
 
-function itemChange(changeId: string) {
+function itemChange(
+  changeId: string,
+  options: {
+    deviceId?: string;
+    title?: string;
+    version?: number;
+    updatedAt?: string;
+    operation?: "create" | "update" | "delete";
+    deletedAt?: string | null;
+  } = {},
+) {
+  const deviceId = options.deviceId ?? "macbook-01";
+  const version = options.version ?? 1;
+  const updatedAt = options.updatedAt ?? timestamp;
+  const operation = options.operation ?? (version === 1 ? "create" : "update");
   return {
     change_id: changeId,
-    device_id: "macbook-01",
+    device_id: deviceId,
     entity_type: "item",
     entity_id: "item_01",
-    operation: "create",
-    version: 1,
-    updated_at: timestamp,
+    operation,
+    version,
+    updated_at: updatedAt,
     payload: {
       id: "item_01",
       collection_id: "collection_local",
       type: "task",
-      title: "Project sync",
+      title: options.title ?? "Project sync",
       timezone: "Asia/Shanghai",
       all_day: false,
       status: "todo",
@@ -58,14 +72,18 @@ function itemChange(changeId: string) {
       source: "local",
       metadata: {},
       created_at: timestamp,
-      updated_at: timestamp,
-      deleted_at: null,
-      version: 1,
+      updated_at: updatedAt,
+      deleted_at: options.deletedAt ?? null,
+      version,
     },
   };
 }
 
-async function push(idempotencyKey: string, changes: unknown[]) {
+async function push(
+  idempotencyKey: string,
+  changes: unknown[],
+  deviceId = "macbook-01",
+) {
   return app.request(
     "/v1/sync/push",
     {
@@ -75,7 +93,7 @@ async function push(idempotencyKey: string, changes: unknown[]) {
         "Content-Type": "application/json",
         "Idempotency-Key": idempotencyKey,
       },
-      body: JSON.stringify({ device_id: "macbook-01", changes }),
+      body: JSON.stringify({ device_id: deviceId, changes }),
     },
     env,
   );
@@ -112,8 +130,10 @@ beforeAll(async () => {
   database = (await miniflare.getD1Database("DB")) as D1Database;
   const migration1 = await readFile("migrations/0001_initial.sql", "utf8");
   const migration2 = await readFile("migrations/0002_sync_protocol.sql", "utf8");
+  const migration3 = await readFile("migrations/0003_sync_conflicts.sql", "utf8");
   await applyMigration(migration1);
   await applyMigration(migration2);
+  await applyMigration(migration3);
   env = {
     ADMIN_TOKEN: token,
     APP_NAME: "EasyCalendar",
@@ -131,11 +151,14 @@ beforeEach(async () => {
   await database.exec(`
     DELETE FROM sync_requests;
     DELETE FROM applied_changes;
+    DELETE FROM sync_conflicts;
+    DELETE FROM sync_entity_heads;
     DELETE FROM change_log;
     DELETE FROM items;
     DELETE FROM subscriptions;
     DELETE FROM collections;
     DELETE FROM sqlite_sequence WHERE name = 'change_log';
+    DELETE FROM sqlite_sequence WHERE name = 'sync_conflicts';
   `);
 });
 
@@ -192,6 +215,135 @@ describe("sync push", () => {
     expect(
       await database.prepare("SELECT COUNT(*) AS count FROM change_log").first(),
     ).toMatchObject({ count: 0 });
+  });
+
+  it("resolves concurrent device edits deterministically and preserves the loser", async () => {
+    await push("push_collection", [collectionChange("chg_collection")]);
+    await push("push_base", [itemChange("chg_base")]);
+    const concurrentAt = "2026-08-11T10:00:00.000Z";
+    const editA = itemChange("chg_edit_a", {
+      deviceId: "device-a",
+      title: "Edit A",
+      version: 2,
+      updatedAt: concurrentAt,
+    });
+    const editZ = itemChange("chg_edit_z", {
+      deviceId: "device-z",
+      title: "Edit Z",
+      version: 2,
+      updatedAt: concurrentAt,
+    });
+
+    await push("push_edit_a", [editA], "device-a");
+    const response = await push("push_edit_z", [editZ], "device-z");
+    const payload = await response.json<{
+      conflicts: Array<{
+        resolution: string;
+        winner: { change_id: string };
+        loser: { change_id: string };
+      }>;
+    }>();
+    const canonical = await database
+      .prepare("SELECT payload FROM items WHERE id = ?")
+      .bind("item_01")
+      .first<{ payload: string }>();
+
+    expect(JSON.parse(canonical!.payload)).toMatchObject({ title: "Edit Z" });
+    expect(payload.conflicts).toEqual([
+      expect.objectContaining({
+        resolution: "incoming_won",
+        winner: expect.objectContaining({ change_id: "chg_edit_z" }),
+        loser: expect.objectContaining({ change_id: "chg_edit_a" }),
+      }),
+    ]);
+
+    const history = await app.request(
+      "/v1/sync/conflicts",
+      { headers: { Authorization: `Bearer ${token}` } },
+      env,
+    );
+    expect(await history.json()).toMatchObject({
+      conflicts: [
+        {
+          entity_id: "item_01",
+          winner: { change_id: "chg_edit_z", payload: { title: "Edit Z" } },
+          loser: { change_id: "chg_edit_a", payload: { title: "Edit A" } },
+        },
+      ],
+    });
+  });
+
+  it("keeps the same winner when the losing edit arrives last", async () => {
+    await push("push_collection", [collectionChange("chg_collection")]);
+    await push("push_base", [itemChange("chg_base")]);
+    const concurrentAt = "2026-08-11T10:00:00.000Z";
+    const editZ = itemChange("chg_edit_z", {
+      deviceId: "device-z",
+      title: "Edit Z",
+      version: 2,
+      updatedAt: concurrentAt,
+    });
+    const editA = itemChange("chg_edit_a", {
+      deviceId: "device-a",
+      title: "Edit A",
+      version: 2,
+      updatedAt: concurrentAt,
+    });
+
+    await push("push_edit_z", [editZ], "device-z");
+    const response = await push("push_edit_a", [editA], "device-a");
+    const payload = await response.json<{
+      conflicts: Array<{ resolution: string; winner: { change_id: string } }>;
+    }>();
+    const canonical = await database
+      .prepare("SELECT payload FROM items WHERE id = ?")
+      .bind("item_01")
+      .first<{ payload: string }>();
+
+    expect(JSON.parse(canonical!.payload)).toMatchObject({ title: "Edit Z" });
+    expect(payload.conflicts).toEqual([
+      expect.objectContaining({
+        resolution: "stored_won",
+        winner: expect.objectContaining({ change_id: "chg_edit_z" }),
+      }),
+    ]);
+  });
+
+  it("lets a winning delete tombstone beat a concurrent edit", async () => {
+    await push("push_collection", [collectionChange("chg_collection")]);
+    await push("push_base", [itemChange("chg_base")]);
+    const concurrentAt = "2026-08-11T10:00:00.000Z";
+    await push(
+      "push_edit",
+      [
+        itemChange("chg_edit", {
+          deviceId: "device-a",
+          title: "Still active",
+          version: 2,
+          updatedAt: concurrentAt,
+        }),
+      ],
+      "device-a",
+    );
+    const tombstone = itemChange("chg_z_delete", {
+      deviceId: "device-z",
+      title: "Deleted",
+      version: 2,
+      updatedAt: concurrentAt,
+      operation: "delete",
+      deletedAt: concurrentAt,
+    });
+
+    await push("push_delete", [tombstone], "device-z");
+    const canonical = await database
+      .prepare("SELECT deleted_at, payload FROM items WHERE id = ?")
+      .bind("item_01")
+      .first<{ deleted_at: string; payload: string }>();
+
+    expect(canonical!.deleted_at).toBe(concurrentAt);
+    expect(JSON.parse(canonical!.payload)).toMatchObject({
+      deleted_at: concurrentAt,
+    });
   });
 });
 

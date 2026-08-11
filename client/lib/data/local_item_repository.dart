@@ -57,7 +57,7 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
     _database = await factory.openDatabase(
       databasePath!,
       options: OpenDatabaseOptions(
-        version: 2,
+        version: 3,
         onConfigure: (database) async {
           await database.execute('PRAGMA foreign_keys = ON');
         },
@@ -66,6 +66,7 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
       ),
     );
     await _ensureDefaultCollection();
+    await _ensureLegacySyncHeads();
   }
 
   DatabaseFactory _databaseFactory() {
@@ -161,6 +162,7 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
         version INTEGER NOT NULL
       )
     ''');
+    await _createConflictSchema(database);
   }
 
   Future<void> _upgradeSchema(
@@ -168,29 +170,92 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
     int oldVersion,
     int newVersion,
   ) async {
-    if (oldVersion >= 2) return;
-    await database.execute(
-      'ALTER TABLE outbox ADD COLUMN next_attempt_at TEXT',
-    );
-    await database.execute(
-      'ALTER TABLE outbox ADD COLUMN permanent_failure INTEGER NOT NULL DEFAULT 0',
-    );
+    if (oldVersion < 2) {
+      await database.execute(
+        'ALTER TABLE outbox ADD COLUMN next_attempt_at TEXT',
+      );
+      await database.execute(
+        'ALTER TABLE outbox ADD COLUMN permanent_failure INTEGER NOT NULL DEFAULT 0',
+      );
+      await database.execute('''
+        CREATE TABLE sync_state (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      ''');
+      await database.execute('''
+        CREATE TABLE subscriptions (
+          id TEXT PRIMARY KEY,
+          collection_id TEXT NOT NULL,
+          payload_json TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          deleted_at TEXT,
+          version INTEGER NOT NULL
+        )
+      ''');
+    }
+    if (oldVersion < 3) {
+      await _createConflictSchema(database);
+      await database.execute('''
+        INSERT INTO sync_entity_heads (
+          entity_type, entity_id, change_id, device_id, operation,
+          entity_version, updated_at, payload_json
+        )
+        SELECT entity_type, entity_id, change_id, device_id, operation,
+               entity_version, created_at, payload_json
+        FROM outbox AS candidate
+        WHERE NOT EXISTS (
+          SELECT 1 FROM outbox AS other
+          WHERE other.entity_type = candidate.entity_type
+            AND other.entity_id = candidate.entity_id
+            AND (
+              other.created_at > candidate.created_at
+              OR (
+                other.created_at = candidate.created_at
+                AND other.entity_version > candidate.entity_version
+              )
+              OR (
+                other.created_at = candidate.created_at
+                AND other.entity_version = candidate.entity_version
+                AND other.change_id > candidate.change_id
+              )
+            )
+        )
+      ''');
+    }
+  }
+
+  static Future<void> _createConflictSchema(DatabaseExecutor database) async {
     await database.execute('''
-      CREATE TABLE sync_state (
-        key TEXT PRIMARY KEY,
-        value TEXT NOT NULL,
-        updated_at TEXT NOT NULL
+      CREATE TABLE sync_entity_heads (
+        entity_type TEXT NOT NULL,
+        entity_id TEXT NOT NULL,
+        change_id TEXT NOT NULL,
+        device_id TEXT NOT NULL,
+        operation TEXT NOT NULL,
+        entity_version INTEGER NOT NULL,
+        updated_at TEXT NOT NULL,
+        payload_json TEXT NOT NULL,
+        PRIMARY KEY (entity_type, entity_id)
       )
     ''');
     await database.execute('''
-      CREATE TABLE subscriptions (
-        id TEXT PRIMARY KEY,
-        collection_id TEXT NOT NULL,
-        payload_json TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        deleted_at TEXT,
-        version INTEGER NOT NULL
+      CREATE TABLE sync_conflicts (
+        conflict_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        entity_type TEXT NOT NULL,
+        entity_id TEXT NOT NULL,
+        winner_change_id TEXT NOT NULL,
+        loser_change_id TEXT NOT NULL,
+        winner_json TEXT NOT NULL,
+        loser_json TEXT NOT NULL,
+        recorded_at TEXT NOT NULL,
+        UNIQUE (entity_type, entity_id, winner_change_id, loser_change_id)
       )
+    ''');
+    await database.execute('''
+      CREATE INDEX idx_client_sync_conflicts
+      ON sync_conflicts (conflict_id DESC)
     ''');
   }
 
@@ -228,6 +293,86 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
         'updated_at': now,
       });
     });
+  }
+
+  Future<void> _ensureLegacySyncHeads() async {
+    await _db.transaction((transaction) async {
+      for (final collection in await transaction.query('collections')) {
+        if (await _hasSyncHead(transaction, 'collection', collection['id'])) {
+          continue;
+        }
+        final payload = {
+          'id': collection['id'],
+          'name': collection['name'],
+          'kind': collection['kind'],
+          'color': collection['color'],
+          'readonly': collection['readonly'] == 1,
+          'created_at': collection['created_at'],
+          'updated_at': collection['updated_at'],
+          'deleted_at': collection['deleted_at'],
+          'version': collection['version'],
+        };
+        await _upsertSyncHead(
+          transaction,
+          _legacyChange('collection', collection, payload),
+        );
+      }
+      for (final itemRow in await transaction.query('items')) {
+        if (await _hasSyncHead(transaction, 'item', itemRow['id'])) continue;
+        final item = _itemFromRow(itemRow);
+        await _upsertSyncHead(
+          transaction,
+          _legacyChange('item', itemRow, _itemPayload(item)),
+        );
+      }
+      for (final subscription in await transaction.query('subscriptions')) {
+        if (await _hasSyncHead(
+          transaction,
+          'subscription',
+          subscription['id'],
+        )) {
+          continue;
+        }
+        final payload =
+            (jsonDecode(subscription['payload_json'] as String)
+                    as Map<String, dynamic>)
+                .cast<String, Object?>();
+        await _upsertSyncHead(
+          transaction,
+          _legacyChange('subscription', subscription, payload),
+        );
+      }
+    });
+  }
+
+  RemoteSyncChange _legacyChange(
+    String entityType,
+    Map<String, Object?> row,
+    Map<String, Object?> payload,
+  ) => RemoteSyncChange(
+    changeId: '0',
+    deviceId: config.deviceId,
+    entityType: entityType,
+    entityId: row['id'] as String,
+    operation: row['deleted_at'] == null ? 'update' : 'delete',
+    version: row['version'] as int,
+    updatedAt: DateTime.parse(row['updated_at'] as String),
+    payload: payload,
+  );
+
+  static Future<bool> _hasSyncHead(
+    Transaction transaction,
+    String entityType,
+    Object? entityId,
+  ) async {
+    final rows = await transaction.query(
+      'sync_entity_heads',
+      columns: ['entity_id'],
+      where: 'entity_type = ? AND entity_id = ?',
+      whereArgs: [entityType, entityId],
+      limit: 1,
+    );
+    return rows.isNotEmpty;
   }
 
   @override
@@ -416,14 +561,16 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
     CalendarItem item,
     String operation,
   ) async {
+    final changeId = 'change_${_uuid.v4()}';
+    final payload = _itemPayload(item);
     await transaction.insert('outbox', {
-      'change_id': 'change_${_uuid.v4()}',
+      'change_id': changeId,
       'device_id': config.deviceId,
       'entity_type': 'item',
       'entity_id': item.id,
       'operation': operation,
       'entity_version': item.version,
-      'payload_json': jsonEncode(_itemPayload(item)),
+      'payload_json': jsonEncode(payload),
       'created_at': _timeText(item.updatedAt),
       'retry_count': 0,
       'last_error': null,
@@ -431,6 +578,19 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
       'permanent_failure': 0,
       'sent_at': null,
     });
+    await _upsertSyncHead(
+      transaction,
+      RemoteSyncChange(
+        changeId: changeId,
+        deviceId: config.deviceId,
+        entityType: 'item',
+        entityId: item.id,
+        operation: operation,
+        version: item.version,
+        updatedAt: item.updatedAt,
+        payload: payload,
+      ),
+    );
   }
 
   Future<void> _writeCollectionOutbox(
@@ -448,8 +608,9 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
       'deleted_at': collection['deleted_at'],
       'version': collection['version'],
     };
+    final changeId = 'change_${_uuid.v4()}';
     await transaction.insert('outbox', {
-      'change_id': 'change_${_uuid.v4()}',
+      'change_id': changeId,
       'device_id': config.deviceId,
       'entity_type': 'collection',
       'entity_id': collection['id'],
@@ -463,6 +624,19 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
       'permanent_failure': 0,
       'sent_at': null,
     });
+    await _upsertSyncHead(
+      transaction,
+      RemoteSyncChange(
+        changeId: changeId,
+        deviceId: config.deviceId,
+        entityType: 'collection',
+        entityId: collection['id'] as String,
+        operation: 'create',
+        version: collection['version'] as int,
+        updatedAt: DateTime.parse(collection['updated_at'] as String),
+        payload: payload,
+      ),
+    );
   }
 
   @override
@@ -601,48 +775,24 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
   }
 
   @override
+  Future<void> applyPushConflicts(List<SyncConflictSummary> conflicts) async {
+    if (conflicts.isEmpty) return;
+    await _db.transaction((transaction) async {
+      for (final conflict in conflicts) {
+        await _recordSyncConflict(transaction, conflict.winner, conflict.loser);
+        await _applyRemoteChange(transaction, conflict.winner);
+      }
+    });
+  }
+
+  @override
   Future<void> applyRemoteBatch(
     List<RemoteSyncChange> changes,
     String cursor,
   ) async {
     await _db.transaction((transaction) async {
       for (final change in changes) {
-        if (change.payload['id'] != change.entityId ||
-            change.payload['version'] != change.version) {
-          throw const FormatException(
-            'Remote change envelope does not match payload',
-          );
-        }
-        switch (change.entityType) {
-          case 'collection':
-            await transaction.insert(
-              'collections',
-              _remoteCollectionRow(change.payload),
-              conflictAlgorithm: ConflictAlgorithm.replace,
-            );
-            break;
-          case 'item':
-            await transaction.insert(
-              'items',
-              _remoteItemRow(change.payload),
-              conflictAlgorithm: ConflictAlgorithm.replace,
-            );
-            break;
-          case 'subscription':
-            await transaction.insert('subscriptions', {
-              'id': change.entityId,
-              'collection_id': change.payload['collection_id'],
-              'payload_json': jsonEncode(change.payload),
-              'updated_at': change.payload['updated_at'],
-              'deleted_at': change.payload['deleted_at'],
-              'version': change.version,
-            }, conflictAlgorithm: ConflictAlgorithm.replace);
-            break;
-          default:
-            throw FormatException(
-              'Unsupported sync entity: ${change.entityType}',
-            );
-        }
+        await _applyRemoteChange(transaction, change);
       }
       await transaction.insert('sync_state', {
         'key': 'remote_cursor',
@@ -651,6 +801,166 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
       }, conflictAlgorithm: ConflictAlgorithm.replace);
     });
   }
+
+  @override
+  Future<List<SyncConflictRecord>> listSyncConflicts({int limit = 100}) async {
+    if (limit < 1 || limit > 500) {
+      throw const FormatException('Conflict history limit must be 1 to 500');
+    }
+    final rows = await _db.query(
+      'sync_conflicts',
+      orderBy: 'conflict_id DESC',
+      limit: limit,
+    );
+    return rows
+        .map(
+          (row) => SyncConflictRecord(
+            id: row['conflict_id'] as int,
+            recordedAt: DateTime.parse(row['recorded_at'] as String),
+            winner: RemoteSyncChange.fromJson(
+              (jsonDecode(row['winner_json'] as String) as Map<String, dynamic>)
+                  .cast<String, Object?>(),
+            ),
+            loser: RemoteSyncChange.fromJson(
+              (jsonDecode(row['loser_json'] as String) as Map<String, dynamic>)
+                  .cast<String, Object?>(),
+            ),
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  Future<void> _applyRemoteChange(
+    Transaction transaction,
+    RemoteSyncChange change,
+  ) async {
+    final payloadUpdatedAt = change.payload['updated_at'];
+    if (change.payload['id'] != change.entityId ||
+        change.payload['version'] != change.version ||
+        payloadUpdatedAt is! String ||
+        DateTime.parse(payloadUpdatedAt).toUtc() != change.updatedAt.toUtc()) {
+      throw const FormatException(
+        'Remote change envelope does not match payload',
+      );
+    }
+    if (change.operation == 'delete' &&
+        change.payload['deleted_at'] is! String) {
+      throw const FormatException('Remote delete requires a tombstone');
+    }
+    final rows = await transaction.query(
+      'sync_entity_heads',
+      where: 'entity_type = ? AND entity_id = ?',
+      whereArgs: [change.entityType, change.entityId],
+      limit: 1,
+    );
+    final current = rows.isEmpty ? null : _syncChangeFromHead(rows.single);
+    if (current?.changeId == change.changeId) return;
+    final incomingWins =
+        current == null || compareSyncChanges(change, current) > 0;
+    final isSuccessor =
+        current != null &&
+        incomingWins &&
+        change.version == current.version + 1;
+    final sameDeviceReplay =
+        current != null &&
+        !incomingWins &&
+        current.deviceId == change.deviceId &&
+        change.version <= current.version;
+    if (current != null && !isSuccessor && !sameDeviceReplay) {
+      await _recordSyncConflict(
+        transaction,
+        incomingWins ? change : current,
+        incomingWins ? current : change,
+      );
+    }
+    if (!incomingWins) return;
+
+    switch (change.entityType) {
+      case 'collection':
+        await _updateOrInsert(
+          transaction,
+          'collections',
+          _remoteCollectionRow(change.payload),
+        );
+        break;
+      case 'item':
+        await _updateOrInsert(
+          transaction,
+          'items',
+          _remoteItemRow(change.payload),
+        );
+        break;
+      case 'subscription':
+        await _updateOrInsert(transaction, 'subscriptions', {
+          'id': change.entityId,
+          'collection_id': change.payload['collection_id'],
+          'payload_json': jsonEncode(change.payload),
+          'updated_at': change.payload['updated_at'],
+          'deleted_at': change.payload['deleted_at'],
+          'version': change.version,
+        });
+        break;
+      default:
+        throw FormatException('Unsupported sync entity: ${change.entityType}');
+    }
+    await _upsertSyncHead(transaction, change);
+  }
+
+  static Future<void> _updateOrInsert(
+    Transaction transaction,
+    String table,
+    Map<String, Object?> values,
+  ) async {
+    final updated = await transaction.update(
+      table,
+      values,
+      where: 'id = ?',
+      whereArgs: [values['id']],
+    );
+    if (updated == 0) await transaction.insert(table, values);
+  }
+
+  static Future<void> _upsertSyncHead(
+    Transaction transaction,
+    SyncChangeValue change,
+  ) => transaction.insert('sync_entity_heads', {
+    'entity_type': change.entityType,
+    'entity_id': change.entityId,
+    'change_id': change.changeId,
+    'device_id': change.deviceId,
+    'operation': change.operation,
+    'entity_version': change.version,
+    'updated_at': _timeText(change.updatedAt),
+    'payload_json': jsonEncode(change.payload),
+  }, conflictAlgorithm: ConflictAlgorithm.replace);
+
+  static RemoteSyncChange _syncChangeFromHead(Map<String, Object?> row) =>
+      RemoteSyncChange(
+        changeId: row['change_id'] as String,
+        deviceId: row['device_id'] as String,
+        entityType: row['entity_type'] as String,
+        entityId: row['entity_id'] as String,
+        operation: row['operation'] as String,
+        version: row['entity_version'] as int,
+        updatedAt: DateTime.parse(row['updated_at'] as String),
+        payload:
+            (jsonDecode(row['payload_json'] as String) as Map<String, dynamic>)
+                .cast<String, Object?>(),
+      );
+
+  static Future<void> _recordSyncConflict(
+    Transaction transaction,
+    RemoteSyncChange winner,
+    RemoteSyncChange loser,
+  ) => transaction.insert('sync_conflicts', {
+    'entity_type': winner.entityType,
+    'entity_id': winner.entityId,
+    'winner_change_id': winner.changeId,
+    'loser_change_id': loser.changeId,
+    'winner_json': jsonEncode(winner.toJson()),
+    'loser_json': jsonEncode(loser.toJson()),
+    'recorded_at': _timeText(DateTime.now()),
+  }, conflictAlgorithm: ConflictAlgorithm.ignore);
 
   static Map<String, Object?> _remoteCollectionRow(
     Map<String, Object?> payload,

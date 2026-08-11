@@ -265,7 +265,7 @@ Item 内嵌完整 Reminder。备份保留同步实体的 ID、version、时间�
 
 `replace` 先完成所有 JSON、domain、重复 ID、外键和 outbox 引用校验，再在单事务中清空可恢复数据并写入；失败会回滚到原数据库。`merge` 对相同 ID 且内容完全相同的资源记为 skipped，不同内容记为 conflict，并拒绝整批写入。
 
-`sync_conflicts` 以及外部事项稳定键 `(subscription_id, provider, external_id, recurrence_instance)` 随对应同步和订阅任务增加，不提前占位。
+T2.4 已在 Worker/D1 和 Flutter SQLite 中增加 `sync_entity_heads` 与 `sync_conflicts`：head 保存当前胜出 change envelope，conflict 保存完整 winner/loser 快照。外部事项稳定键 `(subscription_id, provider, external_id, recurrence_instance)` 随订阅任务增加，不提前占位。
 
 ## 10. Flutter 本地 schema
 

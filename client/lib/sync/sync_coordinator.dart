@@ -141,6 +141,7 @@ class SyncCoordinator extends ChangeNotifier {
           idempotencyKey: 'push_${_uuid.v4()}',
           changes: pending,
         );
+        await repository.applyPushConflicts(result.conflicts);
         await repository.removeAcceptedChanges(result.accepted);
         await repository.recordPermanentFailures(result.rejected);
         if (result.accepted.isEmpty && result.rejected.isEmpty) {
@@ -233,6 +234,9 @@ class SyncCoordinator extends ChangeNotifier {
     await repository.resetTransientBackoff();
     await synchronize();
   }
+
+  Future<List<SyncConflictRecord>> loadConflictHistory({int limit = 100}) =>
+      repository.listSyncConflicts(limit: limit);
 
   void _setSnapshot(SyncSnapshot value) {
     _snapshot = value;

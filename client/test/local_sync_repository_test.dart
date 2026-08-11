@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:easy_calendar/config/app_config.dart';
 import 'package:easy_calendar/data/local_item_repository.dart';
 import 'package:easy_calendar/domain/item.dart';
@@ -68,10 +70,153 @@ void main() {
     );
     expect(await repository.loadRemoteCursor(), 'cur_1');
   });
+
+  test('a winning unsent local edit is not overwritten by pull', () async {
+    final local = await repository.createItem(
+      const ItemDraft(
+        type: ItemType.task,
+        title: 'Local winner',
+        timezone: 'Asia/Shanghai',
+      ),
+    );
+    final remoteLoser = _remoteItem(
+      local.id,
+      'Remote loser',
+      timestamp: '2026-08-11T08:00:00.000Z',
+    );
+
+    await repository.applyRemoteBatch([remoteLoser], 'cur_local_wins');
+
+    expect((await repository.listItems()).single.title, 'Local winner');
+    final history = await repository.listSyncConflicts();
+    expect(history.single.winner.payload['title'], 'Local winner');
+    expect(history.single.loser.payload['title'], 'Remote loser');
+  });
+
+  test(
+    'pulling accepted changes from the same device is only a replay',
+    () async {
+      final created = await repository.createItem(
+        const ItemDraft(
+          type: ItemType.task,
+          title: 'First local version',
+          timezone: 'Asia/Shanghai',
+        ),
+      );
+      await repository.updateItem(
+        created,
+        const ItemDraft(
+          type: ItemType.task,
+          title: 'Locally pushed',
+          timezone: 'Asia/Shanghai',
+        ),
+      );
+      final pending = await repository.listPendingChanges(now: DateTime.now());
+      final replay = pending
+          .map(
+            (change) => RemoteSyncChange(
+              changeId: change.changeId,
+              deviceId: change.deviceId,
+              entityType: change.entityType,
+              entityId: change.entityId,
+              operation: change.operation,
+              version: change.version,
+              updatedAt: change.updatedAt,
+              payload: change.payload,
+            ),
+          )
+          .toList();
+
+      await repository.applyRemoteBatch(replay, 'cur_replay');
+
+      expect(await repository.listSyncConflicts(), isEmpty);
+      expect((await repository.listItems()).single.title, 'Locally pushed');
+    },
+  );
+
+  test(
+    'a remote winner replaces local state and keeps recovery data',
+    () async {
+      final local = await repository.createItem(
+        const ItemDraft(
+          type: ItemType.task,
+          title: 'Recoverable local version',
+          timezone: 'Asia/Shanghai',
+        ),
+      );
+      final remoteWinner = _remoteItem(
+        local.id,
+        'Remote winner',
+        timestamp: '2099-08-11T08:00:00.000Z',
+      );
+
+      await repository.applyRemoteBatch([remoteWinner], 'cur_remote_wins');
+
+      expect((await repository.listItems()).single.title, 'Remote winner');
+      final history = await repository.listSyncConflicts();
+      expect(history.single.winner.payload['title'], 'Remote winner');
+      expect(
+        history.single.loser.payload['title'],
+        'Recoverable local version',
+      );
+    },
+  );
+
+  test('schema v2 upgrades with pending entity heads intact', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'easycalendar-sync-migration-',
+    );
+    addTearDown(() => directory.delete(recursive: true));
+    final databasePath = '${directory.path}/client.sqlite3';
+    final original = LocalItemRepository(
+      _config,
+      databaseFactory: databaseFactoryFfi,
+      databasePath: databasePath,
+    );
+    await original.initialize();
+    await original.createItem(
+      const ItemDraft(
+        type: ItemType.task,
+        title: 'Pending before migration',
+        timezone: 'Asia/Shanghai',
+      ),
+    );
+    await original.close();
+
+    final legacy = await databaseFactoryFfi.openDatabase(databasePath);
+    await legacy.execute('DROP INDEX idx_client_sync_conflicts');
+    await legacy.execute('DROP TABLE sync_conflicts');
+    await legacy.execute('DROP TABLE sync_entity_heads');
+    await legacy.execute('PRAGMA user_version = 2');
+    await legacy.close();
+
+    final migrated = LocalItemRepository(
+      _config,
+      databaseFactory: databaseFactoryFfi,
+      databasePath: databasePath,
+    );
+    await migrated.initialize();
+    addTearDown(migrated.close);
+
+    final pending = await migrated.listPendingChanges(now: DateTime.now());
+    expect(pending.map((change) => change.entityType), ['collection', 'item']);
+    final item = (await migrated.listItems()).single;
+    await migrated.applyRemoteBatch([
+      _remoteItem(item.id, 'Older remote value'),
+    ], 'cur_after_migration');
+    expect(
+      (await migrated.listItems()).single.title,
+      'Pending before migration',
+    );
+    expect(await migrated.listSyncConflicts(), hasLength(1));
+  });
 }
 
-RemoteSyncChange _remoteItem(String id, String title) {
-  const timestamp = '2026-08-11T08:00:00.000Z';
+RemoteSyncChange _remoteItem(
+  String id,
+  String title, {
+  String timestamp = '2026-08-11T08:00:00.000Z',
+}) {
   return RemoteSyncChange(
     changeId: 'change_$id',
     deviceId: 'other-device',

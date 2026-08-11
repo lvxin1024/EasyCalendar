@@ -130,6 +130,11 @@ class _SettingsPageState extends State<SettingsPage> {
                       icon: const Icon(Icons.sync),
                       label: const Text('立即同步'),
                     ),
+                    TextButton.icon(
+                      onPressed: _showConflictHistory,
+                      icon: const Icon(Icons.history_outlined),
+                      label: const Text('冲突历史'),
+                    ),
                   ],
                 ),
               ],
@@ -253,6 +258,51 @@ class _SettingsPageState extends State<SettingsPage> {
         context,
       ).showSnackBar(SnackBar(content: Text('同步失败：$error')));
     }
+  }
+
+  Future<void> _showConflictHistory() async {
+    final conflicts = await widget.controller.loadSyncConflictHistory();
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('冲突历史'),
+        content: SizedBox(
+          width: 520,
+          child: conflicts.isEmpty
+              ? const Text('暂无冲突记录')
+              : ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: conflicts.length,
+                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final conflict = conflicts[index];
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.compare_arrows_outlined),
+                      title: Text(
+                        '${conflict.winner.entityType} · '
+                        '${conflict.winner.entityId}',
+                      ),
+                      subtitle: Text(
+                        '保留 v${conflict.winner.version} '
+                        '(${conflict.winner.changeId})\n'
+                        '覆盖 v${conflict.loser.version} '
+                        '(${conflict.loser.changeId})',
+                      ),
+                      isThreeLine: true,
+                    );
+                  },
+                ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
+    );
   }
 }
 

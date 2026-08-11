@@ -23,7 +23,7 @@ describe("Worker system endpoints", () => {
       status: "ok",
       service: "easycalendar",
       version: "0.1.0",
-      schema_version: 2,
+      schema_version: 3,
     });
   });
 

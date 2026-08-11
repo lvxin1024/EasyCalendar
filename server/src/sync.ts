@@ -28,15 +28,24 @@ interface Rejection {
   message: string;
 }
 
+interface ConflictSummary {
+  entity_type: EntityType;
+  entity_id: string;
+  resolution: "incoming_won" | "stored_won";
+  winner: SyncChange;
+  loser: SyncChange;
+}
+
 interface PushResponse {
   accepted: string[];
   rejected: Rejection[];
-  conflicts: unknown[];
+  conflicts: ConflictSummary[];
   server_cursor: string;
 }
 
 interface AppliedChangeRow {
   request_hash: string;
+  result: string;
 }
 
 interface SyncRequestRow {
@@ -54,6 +63,26 @@ interface ChangeLogRow {
   entity_version: number;
   changed_at: string;
   payload: string;
+}
+
+interface EntityHeadRow {
+  change_id: string;
+  device_id: string;
+  entity_type: EntityType;
+  entity_id: string;
+  operation: Operation;
+  entity_version: number;
+  updated_at: string;
+  payload: string;
+}
+
+interface ConflictRow {
+  conflict_id: number;
+  entity_type: EntityType;
+  entity_id: string;
+  winner: string;
+  loser: string;
+  recorded_at: string;
 }
 
 const idPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/;
@@ -124,6 +153,9 @@ function validateChange(value: unknown, deviceId: string): SyncChange {
   if (value.payload.updated_at !== value.updated_at) {
     throw new Error("payload.updated_at must match change updated_at");
   }
+  if (value.operation === "delete" && !validTimestamp(value.payload.deleted_at)) {
+    throw new Error("delete payload requires a deleted_at tombstone");
+  }
   return value as unknown as SyncChange;
 }
 
@@ -186,15 +218,27 @@ function entityStatement(db: D1Database, change: SyncChange): D1PreparedStatemen
     return db
       .prepare(
         `INSERT INTO items
-          (id, collection_id, item_type, version, updated_at, deleted_at, payload)
-         VALUES (?, ?, ?, ?, ?, ?, ?)
+          (id, collection_id, item_type, version, updated_at, deleted_at,
+           payload, winner_change_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
           collection_id = excluded.collection_id,
           item_type = excluded.item_type,
           version = excluded.version,
           updated_at = excluded.updated_at,
           deleted_at = excluded.deleted_at,
-          payload = excluded.payload`,
+          payload = excluded.payload,
+          winner_change_id = excluded.winner_change_id
+         WHERE julianday(excluded.updated_at) > julianday(items.updated_at)
+            OR (
+              julianday(excluded.updated_at) = julianday(items.updated_at)
+              AND excluded.version > items.version
+            )
+            OR (
+              julianday(excluded.updated_at) = julianday(items.updated_at)
+              AND excluded.version = items.version
+              AND excluded.winner_change_id > items.winner_change_id
+            )`,
       )
       .bind(
         change.entity_id,
@@ -204,6 +248,7 @@ function entityStatement(db: D1Database, change: SyncChange): D1PreparedStatemen
         change.updated_at,
         deletedAt,
         payloadJson,
+        change.change_id,
       );
   }
   if (change.entity_type === "subscription") {
@@ -214,14 +259,26 @@ function entityStatement(db: D1Database, change: SyncChange): D1PreparedStatemen
     return db
       .prepare(
         `INSERT INTO subscriptions
-          (id, collection_id, version, updated_at, deleted_at, payload)
-         VALUES (?, ?, ?, ?, ?, ?)
+          (id, collection_id, version, updated_at, deleted_at, payload,
+           winner_change_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
           collection_id = excluded.collection_id,
           version = excluded.version,
           updated_at = excluded.updated_at,
           deleted_at = excluded.deleted_at,
-          payload = excluded.payload`,
+          payload = excluded.payload,
+          winner_change_id = excluded.winner_change_id
+         WHERE julianday(excluded.updated_at) > julianday(subscriptions.updated_at)
+            OR (
+              julianday(excluded.updated_at) = julianday(subscriptions.updated_at)
+              AND excluded.version > subscriptions.version
+            )
+            OR (
+              julianday(excluded.updated_at) = julianday(subscriptions.updated_at)
+              AND excluded.version = subscriptions.version
+              AND excluded.winner_change_id > subscriptions.winner_change_id
+            )`,
       )
       .bind(
         change.entity_id,
@@ -230,17 +287,30 @@ function entityStatement(db: D1Database, change: SyncChange): D1PreparedStatemen
         change.updated_at,
         deletedAt,
         payloadJson,
+        change.change_id,
       );
   }
   return db
     .prepare(
-      `INSERT INTO collections (id, version, updated_at, deleted_at, payload)
-       VALUES (?, ?, ?, ?, ?)
+      `INSERT INTO collections
+        (id, version, updated_at, deleted_at, payload, winner_change_id)
+       VALUES (?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET
         version = excluded.version,
         updated_at = excluded.updated_at,
         deleted_at = excluded.deleted_at,
-        payload = excluded.payload`,
+        payload = excluded.payload,
+        winner_change_id = excluded.winner_change_id
+       WHERE julianday(excluded.updated_at) > julianday(collections.updated_at)
+          OR (
+            julianday(excluded.updated_at) = julianday(collections.updated_at)
+            AND excluded.version > collections.version
+          )
+          OR (
+            julianday(excluded.updated_at) = julianday(collections.updated_at)
+            AND excluded.version = collections.version
+            AND excluded.winner_change_id > collections.winner_change_id
+          )`,
     )
     .bind(
       change.entity_id,
@@ -248,13 +318,123 @@ function entityStatement(db: D1Database, change: SyncChange): D1PreparedStatemen
       change.updated_at,
       deletedAt,
       payloadJson,
+      change.change_id,
     );
 }
 
-async function applyChange(db: D1Database, change: SyncChange, hash: string) {
-  const result = JSON.stringify({ status: "accepted" });
-  await db.batch([
-    entityStatement(db, change),
+function changeFromHead(row: EntityHeadRow): SyncChange {
+  return {
+    change_id: row.change_id,
+    device_id: row.device_id,
+    entity_type: row.entity_type,
+    entity_id: row.entity_id,
+    operation: row.operation,
+    version: row.entity_version,
+    updated_at: row.updated_at,
+    payload: JSON.parse(row.payload) as Record<string, unknown>,
+  };
+}
+
+function compareChanges(left: SyncChange, right: SyncChange): number {
+  const timeDifference = Date.parse(left.updated_at) - Date.parse(right.updated_at);
+  if (timeDifference !== 0) return timeDifference;
+  if (left.version !== right.version) return left.version - right.version;
+  if (left.change_id === right.change_id) return 0;
+  return left.change_id > right.change_id ? 1 : -1;
+}
+
+function headStatement(db: D1Database, change: SyncChange): D1PreparedStatement {
+  return db
+    .prepare(
+      `INSERT INTO sync_entity_heads
+        (entity_type, entity_id, change_id, device_id, operation,
+         entity_version, updated_at, payload)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(entity_type, entity_id) DO UPDATE SET
+        change_id = excluded.change_id,
+        device_id = excluded.device_id,
+        operation = excluded.operation,
+        entity_version = excluded.entity_version,
+        updated_at = excluded.updated_at,
+        payload = excluded.payload
+       WHERE julianday(excluded.updated_at) > julianday(sync_entity_heads.updated_at)
+          OR (
+            julianday(excluded.updated_at) = julianday(sync_entity_heads.updated_at)
+            AND excluded.entity_version > sync_entity_heads.entity_version
+          )
+          OR (
+            julianday(excluded.updated_at) = julianday(sync_entity_heads.updated_at)
+            AND excluded.entity_version = sync_entity_heads.entity_version
+            AND excluded.change_id > sync_entity_heads.change_id
+          )`,
+    )
+    .bind(
+      change.entity_type,
+      change.entity_id,
+      change.change_id,
+      change.device_id,
+      change.operation,
+      change.version,
+      change.updated_at,
+      JSON.stringify(change.payload),
+    );
+}
+
+async function applyChange(
+  db: D1Database,
+  change: SyncChange,
+  hash: string,
+): Promise<ConflictSummary | null> {
+  const head = await db
+    .prepare(
+      `SELECT change_id, device_id, entity_type, entity_id, operation,
+              entity_version, updated_at, payload
+       FROM sync_entity_heads
+       WHERE entity_type = ? AND entity_id = ?`,
+    )
+    .bind(change.entity_type, change.entity_id)
+    .first<EntityHeadRow>();
+  const stored = head ? changeFromHead(head) : null;
+  const incomingWon = stored === null || compareChanges(change, stored) > 0;
+  const isSuccessor =
+    stored !== null && incomingWon && change.version === stored.version + 1;
+  const hasConflict = stored !== null && !isSuccessor;
+  const conflict: ConflictSummary | null = hasConflict
+    ? {
+        entity_type: change.entity_type,
+        entity_id: change.entity_id,
+        resolution: incomingWon ? "incoming_won" : "stored_won",
+        winner: incomingWon ? change : stored,
+        loser: incomingWon ? stored : change,
+      }
+    : null;
+  const result = JSON.stringify({ status: "accepted", conflict });
+  const statements: D1PreparedStatement[] = [];
+
+  if (incomingWon) {
+    statements.push(entityStatement(db, change), headStatement(db, change));
+  }
+  if (conflict) {
+    statements.push(
+      db
+        .prepare(
+          `INSERT OR IGNORE INTO sync_conflicts
+            (entity_type, entity_id, winner_change_id, loser_change_id,
+             winner, loser, recorded_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .bind(
+          conflict.entity_type,
+          conflict.entity_id,
+          conflict.winner.change_id,
+          conflict.loser.change_id,
+          JSON.stringify(conflict.winner),
+          JSON.stringify(conflict.loser),
+          new Date().toISOString(),
+        ),
+    );
+  }
+  statements.push(
     db
       .prepare(
         `INSERT INTO change_log
@@ -279,7 +459,9 @@ async function applyChange(db: D1Database, change: SyncChange, hash: string) {
          VALUES (?, ?, ?, ?)`,
       )
       .bind(change.change_id, hash, new Date().toISOString(), result),
-  ]);
+  );
+  await db.batch(statements);
+  return conflict;
 }
 
 async function serverCursor(db: D1Database): Promise<string> {
@@ -332,16 +514,21 @@ export async function pushChanges(c: Context<AppEnv>) {
 
   const accepted: string[] = [];
   const rejected: Rejection[] = [];
+  const conflicts: ConflictSummary[] = [];
   for (const change of body.changes) {
     const changeHash = await hashJson(change);
     const prior = await c.env.DB.prepare(
-      "SELECT request_hash FROM applied_changes WHERE change_id = ?",
+      "SELECT request_hash, result FROM applied_changes WHERE change_id = ?",
     )
       .bind(change.change_id)
       .first<AppliedChangeRow>();
     if (prior) {
       if (prior.request_hash === changeHash) {
         accepted.push(change.change_id);
+        const priorResult = JSON.parse(prior.result) as {
+          conflict?: ConflictSummary | null;
+        };
+        if (priorResult.conflict) conflicts.push(priorResult.conflict);
       } else {
         rejected.push({
           change_id: change.change_id,
@@ -352,8 +539,9 @@ export async function pushChanges(c: Context<AppEnv>) {
       continue;
     }
     try {
-      await applyChange(c.env.DB, change, changeHash);
+      const conflict = await applyChange(c.env.DB, change, changeHash);
       accepted.push(change.change_id);
+      if (conflict) conflicts.push(conflict);
     } catch (error) {
       rejected.push({
         change_id: change.change_id,
@@ -371,7 +559,7 @@ export async function pushChanges(c: Context<AppEnv>) {
   const response: PushResponse = {
     accepted,
     rejected,
-    conflicts: [],
+    conflicts,
     server_cursor: await serverCursor(c.env.DB),
   };
   await c.env.DB.prepare(
@@ -444,6 +632,37 @@ export async function pullChanges(c: Context<AppEnv>) {
       version: row.entity_version,
       updated_at: row.changed_at,
       payload: JSON.parse(row.payload) as Record<string, unknown>,
+    })),
+  });
+}
+
+export async function listConflicts(c: Context<AppEnv>) {
+  const rawLimit = c.req.query("limit");
+  const limit = rawLimit ? Number(rawLimit) : 100;
+  if (!Number.isInteger(limit) || limit < 1 || limit > 500) {
+    return errorResponse(
+      c,
+      400,
+      "validation_error",
+      "limit must be between 1 and 500",
+    );
+  }
+  const result = await c.env.DB.prepare(
+    `SELECT conflict_id, entity_type, entity_id, winner, loser, recorded_at
+     FROM sync_conflicts
+     ORDER BY conflict_id DESC
+     LIMIT ?`,
+  )
+    .bind(limit)
+    .all<ConflictRow>();
+  return c.json({
+    conflicts: result.results.map((row) => ({
+      conflict_id: row.conflict_id,
+      entity_type: row.entity_type,
+      entity_id: row.entity_id,
+      winner: JSON.parse(row.winner) as SyncChange,
+      loser: JSON.parse(row.loser) as SyncChange,
+      recorded_at: row.recorded_at,
     })),
   });
 }

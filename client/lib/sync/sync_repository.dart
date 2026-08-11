@@ -17,9 +17,13 @@ abstract interface class SyncRepository {
 
   Future<void> recordPermanentFailures(List<SyncRejection> rejections);
 
+  Future<void> applyPushConflicts(List<SyncConflictSummary> conflicts);
+
   Future<void> resetTransientBackoff();
 
   Future<String?> loadRemoteCursor();
 
   Future<void> applyRemoteBatch(List<RemoteSyncChange> changes, String cursor);
+
+  Future<List<SyncConflictRecord>> listSyncConflicts({int limit = 100});
 }

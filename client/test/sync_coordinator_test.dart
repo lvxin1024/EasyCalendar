@@ -150,6 +150,7 @@ class _MemorySyncRepository implements SyncRepository {
   final List<PendingSyncChange> pending = [];
   final List<RemoteSyncChange> applied = [];
   final List<String> permanentFailures = [];
+  final List<SyncConflictSummary> pushConflicts = [];
   String? cursor;
   int transientFailures = 0;
   int resetCalls = 0;
@@ -171,6 +172,11 @@ class _MemorySyncRepository implements SyncRepository {
     pending.removeWhere(
       (change) => rejections.any((value) => value.changeId == change.changeId),
     );
+  }
+
+  @override
+  Future<void> applyPushConflicts(List<SyncConflictSummary> conflicts) async {
+    pushConflicts.addAll(conflicts);
   }
 
   @override
@@ -206,6 +212,10 @@ class _MemorySyncRepository implements SyncRepository {
     applied.addAll(changes);
     cursor = nextCursor;
   }
+
+  @override
+  Future<List<SyncConflictRecord>> listSyncConflicts({int limit = 100}) async =>
+      const [];
 }
 
 class _FakeTransport implements SyncTransport {

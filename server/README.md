@@ -2,8 +2,10 @@
 
 `server/` contains the single-instance Cloudflare Worker and D1 sync service.
 It provides public system endpoints, Bearer authentication, CORS enforcement,
-the common error envelope, idempotent push/pull with cursor pagination, D1
-migrations, and the deployment entry point.
+the common error envelope, idempotent push/pull with cursor pagination,
+deterministic last-write-wins conflict recovery, D1 migrations, and the
+deployment entry point. Authenticated conflict history is available at
+`GET /v1/sync/conflicts`.
 
 ## Prerequisites
 

@@ -358,12 +358,20 @@ AI provider 返回非法结构时，接口返回 422 或回退到规则 Parser�
   "changes": [
     {
       "change_id": "chg_01",
+      "device_id": "macbook-01",
       "entity_type": "item",
       "entity_id": "item_01",
       "operation": "update",
       "version": 3,
       "updated_at": "2026-08-11T08:00:00Z",
-      "payload": {"title": "Project sync"}
+      "payload": {
+        "id": "item_01",
+        "collection_id": "collection_local",
+        "type": "task",
+        "title": "Project sync",
+        "updated_at": "2026-08-11T08:00:00Z",
+        "version": 3
+      }
     }
   ]
 }
@@ -375,7 +383,15 @@ AI provider 返回非法结构时，接口返回 422 或回退到规则 Parser�
 {
   "accepted": ["chg_01"],
   "rejected": [],
-  "conflicts": [],
+  "conflicts": [
+    {
+      "entity_type": "item",
+      "entity_id": "item_01",
+      "resolution": "incoming_won",
+      "winner": {"change_id": "chg_01", "payload": {}},
+      "loser": {"change_id": "chg_other", "payload": {}}
+    }
+  ],
   "server_cursor": "cur_124"
 }
 ```
@@ -394,11 +410,17 @@ AI provider 返回非法结构时，接口返回 422 或回退到规则 Parser�
 
 客户端应用完整批次成功后再保存 cursor；应用失败时重试同一 cursor。
 
-当前 Flutter T1.6 已在本地 mutation transaction 中写入带 `device_id`、entity、operation、version 和 payload 的 outbox，但尚未发送网络请求或保存 pull cursor。T2.3 在 Repository/transport 边界消费这些记录；设置页的 sync 开关当前只是持久化配置，不能当成同步已实现。
+Flutter 在本地 mutation transaction 中写入带 `device_id`、entity、operation、version 和 payload 的 outbox。同步器按批 push，成功后清理 accepted 记录，临时失败执行有界指数退避，永久失败停止快速重试；pull 的完整批次与 cursor 在一个 SQLite transaction 中提交。token 只保存在平台安全存储。
 
 ### 冲突策略
 
-第一版按 `updated_at` 最后写入胜出；相同时间按 version，同一实体仍相等时按 `change_id`。删除参与比较。被覆盖的版本保留在 `sync_conflicts` 或服务端 change log，方便后续恢复。
+第一版按 `updated_at` 最后写入胜出；相同时间按 version，同一实体仍相等时按 `change_id` 的二进制字典序。删除墓碑参与完全相同的比较。只有 version 正好递增且新 change 胜出时视为普通后继；同版本、倒退、跳号或未胜出的变更记录为冲突。
+
+Worker 和 Flutter 都保存完整 winner/loser change snapshot。push 响应中的 `resolution` 为 `incoming_won` 或 `stored_won`；客户端必须先应用该权威 winner 再清理 outbox，随后用相同比较器处理 pull，因此仍未发送且排序胜出的本地版本不会被较旧远端值覆盖。
+
+### `GET /v1/sync/conflicts?limit=100`
+
+返回最近的冲突记录，包含 `conflict_id`、实体标识、`recorded_at` 以及完整 winner/loser envelope。默认 100 条，上限 500 条；这些快照用于查看和人工恢复被覆盖版本，不包含认证 token。
 
 ## 11. Import 和 Export
 

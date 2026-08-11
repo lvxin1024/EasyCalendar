@@ -25,7 +25,21 @@ void main() {
                   'message': 'invalid',
                 },
               ],
-              'conflicts': [],
+              'conflicts': [
+                {
+                  'entity_type': 'item',
+                  'entity_id': 'item_01',
+                  'resolution': 'stored_won',
+                  'winner': {
+                    ..._pendingChange().toJson(),
+                    'change_id': 'change_winner',
+                  },
+                  'loser': {
+                    ..._pendingChange().toJson(),
+                    'change_id': 'change_02',
+                  },
+                },
+              ],
               'server_cursor': 'cur_1',
             }),
             200,
@@ -50,6 +64,7 @@ void main() {
       });
       expect(result.accepted, ['change_01']);
       expect(result.rejected.single.code, 'constraint_violation');
+      expect(result.conflicts.single.winner.changeId, 'change_winner');
     },
   );
 
