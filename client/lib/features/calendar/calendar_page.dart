@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 
 import '../../application/item_controller.dart';
 import '../../domain/item.dart';
+import '../../utils/configured_time.dart';
 import 'calendar_navigation_controller.dart';
 import 'calendar_month_grid.dart';
 import 'calendar_time_grid.dart';
@@ -42,25 +43,35 @@ class _CalendarPageState extends State<CalendarPage> {
     animation: widget.navigation,
     builder: (context, _) {
       final events = widget.navigation.eventsInRange(widget.controller.items);
+      final dues =
+          widget.controller.dueItems
+              .where((item) => item.status == ItemStatus.todo)
+              .toList(growable: false)
+            ..sort((left, right) => left.dueAt!.compareTo(right.dueAt!));
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _CalendarToolbar(navigation: widget.navigation),
           const Divider(),
+          if (dues.isNotEmpty)
+            _PinnedDueStrip(items: dues, onEdit: widget.onEdit),
           Expanded(
             child: widget.navigation.mode == CalendarViewMode.month
                 ? CalendarMonthGrid(
                     navigation: widget.navigation,
-                    items: widget.controller.items,
+                    items: widget.navigation.calendarItemsInRange(
+                      widget.controller.items,
+                    ),
                     onEdit: widget.onEdit,
                   )
                 : CalendarTimeGrid(
                     dates: widget.navigation.visibleDates,
                     items: events,
+                    dueItems: dues,
                     selectedDate: widget.navigation.selectedDate,
                     hourHeight: _hourHeight,
                     onHourHeightChanged: (value) =>
-                        setState(() => _hourHeight = value.clamp(48, 120)),
+                        setState(() => _hourHeight = value.clamp(16, 120)),
                     onDateSelected: widget.navigation.selectDate,
                     onEdit: widget.onEdit,
                   ),
@@ -69,6 +80,59 @@ class _CalendarPageState extends State<CalendarPage> {
       );
     },
   );
+}
+
+class _PinnedDueStrip extends StatelessWidget {
+  const _PinnedDueStrip({required this.items, required this.onEdit});
+
+  final List<CalendarItem> items;
+  final ValueChanged<CalendarItem> onEdit;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    constraints: const BoxConstraints(maxHeight: 82),
+    padding: const EdgeInsets.fromLTRB(20, 6, 20, 8),
+    color: Theme.of(context).colorScheme.errorContainer.withAlpha(90),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 5, right: 12),
+          child: Text(
+            '未完成 Due',
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+          ),
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (final item in items)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ActionChip(
+                      avatar: const Icon(Icons.check_circle_outline, size: 16),
+                      label: Text(
+                        '${item.title} · ${_dueLabel(item.dueAt!)}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      onPressed: () => onEdit(item),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  static String _dueLabel(DateTime value) =>
+      DateFormat('M/d HH:mm', 'zh_CN').format(inConfiguredTimezone(value));
 }
 
 class _CalendarToolbar extends StatelessWidget {

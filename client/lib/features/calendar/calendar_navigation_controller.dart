@@ -135,6 +135,30 @@ class CalendarNavigationController extends ChangeNotifier {
         end: _dateOnly(date).add(const Duration(days: 1)),
       );
 
+  List<CalendarItem> calendarItemsInRange(List<CalendarItem> items) {
+    final events = eventsInRange(items);
+    final from = configuredDateTime(
+      year: rangeStart.year,
+      month: rangeStart.month,
+      day: rangeStart.day,
+    );
+    final to = configuredDateTime(
+      year: rangeEnd.year,
+      month: rangeEnd.month,
+      day: rangeEnd.day,
+    );
+    final dues = items.where((item) {
+      if (item.type != ItemType.task ||
+          item.status != ItemStatus.todo ||
+          item.dueAt == null) {
+        return false;
+      }
+      final due = inConfiguredTimezone(item.dueAt!);
+      return !due.isBefore(from) && due.isBefore(to);
+    });
+    return [...events, ...dues];
+  }
+
   void _move(int direction) {
     _selectedDate = switch (_mode) {
       CalendarViewMode.day => _selectedDate.add(Duration(days: direction)),

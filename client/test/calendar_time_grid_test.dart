@@ -45,6 +45,34 @@ void main() {
     expect(placement.startMinutes, 0);
     expect(placement.endMinutes, 75);
   });
+
+  test('reserves the last thirty minutes before an unfinished due time', () {
+    final due = CalendarItem(
+      id: 'due',
+      collectionId: 'collection_local',
+      type: ItemType.task,
+      title: 'due',
+      dueAt: tz.TZDateTime(tz.local, 2026, 8, 12, 15, 0),
+      timezone: 'Asia/Shanghai',
+      allDay: false,
+      status: ItemStatus.todo,
+      reminderEnabled: false,
+      reminderMinutes: 30,
+      tags: const [],
+      createdAt: DateTime.utc(2026, 8, 1),
+      updatedAt: DateTime.utc(2026, 8, 1),
+      version: 1,
+    );
+
+    final placement = layoutTimedEvents(
+      const [],
+      DateTime(2026, 8, 12),
+      dueItems: [due],
+    ).single;
+
+    expect(placement.startMinutes, 14 * 60 + 30);
+    expect(placement.endMinutes, 15 * 60);
+  });
 }
 
 CalendarItem _event(

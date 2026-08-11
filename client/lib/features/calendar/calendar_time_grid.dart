@@ -27,8 +27,9 @@ class CalendarEventPlacement {
 
 List<CalendarEventPlacement> layoutTimedEvents(
   List<CalendarItem> items,
-  DateTime date,
-) {
+  DateTime date, {
+  List<CalendarItem> dueItems = const [],
+}) {
   final dayStart = configuredDateTime(
     year: date.year,
     month: date.month,
@@ -50,6 +51,25 @@ List<CalendarEventPlacement> layoutTimedEvents(
     if (!start.isBefore(dayEnd) || !end.isAfter(dayStart)) continue;
     final clippedStart = start.isBefore(dayStart) ? dayStart : start;
     final clippedEnd = end.isAfter(dayEnd) ? dayEnd : end;
+    segments.add(
+      _EventSegment(
+        item: item,
+        startMinutes: clippedStart
+            .difference(dayStart)
+            .inMinutes
+            .clamp(0, 1440),
+        endMinutes: clippedEnd.difference(dayStart).inMinutes.clamp(0, 1440),
+      ),
+    );
+  }
+  for (final item in dueItems) {
+    if (item.status != ItemStatus.todo || item.dueAt == null) continue;
+    final end = inConfiguredTimezone(item.dueAt!);
+    final start = end.subtract(const Duration(minutes: 30));
+    if (!start.isBefore(dayEnd) || !end.isAfter(dayStart)) continue;
+    final clippedStart = start.isBefore(dayStart) ? dayStart : start;
+    final clippedEnd = end.isAfter(dayEnd) ? dayEnd : end;
+    if (!clippedEnd.isAfter(clippedStart)) continue;
     segments.add(
       _EventSegment(
         item: item,
@@ -111,6 +131,7 @@ class CalendarTimeGrid extends StatefulWidget {
     super.key,
     required this.dates,
     required this.items,
+    required this.dueItems,
     required this.selectedDate,
     required this.hourHeight,
     required this.onHourHeightChanged,
@@ -120,6 +141,7 @@ class CalendarTimeGrid extends StatefulWidget {
 
   final List<DateTime> dates;
   final List<CalendarItem> items;
+  final List<CalendarItem> dueItems;
   final DateTime selectedDate;
   final double hourHeight;
   final ValueChanged<double> onHourHeightChanged;
@@ -204,6 +226,7 @@ class _CalendarTimeGridState extends State<CalendarTimeGrid> {
                                         child: _DayColumn(
                                           date: date,
                                           items: widget.items,
+                                          dueItems: widget.dueItems,
                                           hourHeight: widget.hourHeight,
                                           onEdit: widget.onEdit,
                                         ),
@@ -231,7 +254,7 @@ class _CalendarTimeGridState extends State<CalendarTimeGrid> {
     final keyboard = HardwareKeyboard.instance;
     if (!keyboard.isMetaPressed && !keyboard.isControlPressed) return;
     widget.onHourHeightChanged(
-      (widget.hourHeight - event.scrollDelta.dy * 0.12).clamp(48, 120),
+      (widget.hourHeight - event.scrollDelta.dy * 0.12).clamp(16, 120),
     );
   }
 
@@ -275,16 +298,16 @@ class _ZoomControl extends StatelessWidget {
         Text('时间轴', style: Theme.of(context).textTheme.labelMedium),
         IconButton(
           tooltip: '缩小时间轴',
-          onPressed: value <= 48 ? null : () => onChanged(value - 8),
+          onPressed: value <= 16 ? null : () => onChanged(value - 8),
           icon: const Icon(Icons.zoom_out, size: 19),
         ),
         SizedBox(
           width: 120,
           child: Slider(
             value: value,
-            min: 48,
+            min: 16,
             max: 120,
-            divisions: 9,
+            divisions: 13,
             onChanged: onChanged,
           ),
         ),
@@ -450,18 +473,20 @@ class _DayColumn extends StatelessWidget {
   const _DayColumn({
     required this.date,
     required this.items,
+    required this.dueItems,
     required this.hourHeight,
     required this.onEdit,
   });
 
   final DateTime date;
   final List<CalendarItem> items;
+  final List<CalendarItem> dueItems;
   final double hourHeight;
   final ValueChanged<CalendarItem> onEdit;
 
   @override
   Widget build(BuildContext context) {
-    final placements = layoutTimedEvents(items, date);
+    final placements = layoutTimedEvents(items, date, dueItems: dueItems);
     return LayoutBuilder(
       builder: (context, constraints) => DecoratedBox(
         decoration: const BoxDecoration(
@@ -518,7 +543,9 @@ class _PositionedEvent extends StatelessWidget {
       width: math.max(8, columnWidth - gap * 2),
       height: math.max(24, rawHeight - 2),
       child: Material(
-        color: Theme.of(context).colorScheme.primaryContainer,
+        color: placement.item.type == ItemType.task
+            ? Theme.of(context).colorScheme.errorContainer
+            : Theme.of(context).colorScheme.primaryContainer,
         borderRadius: BorderRadius.circular(4),
         child: InkWell(
           borderRadius: BorderRadius.circular(4),
@@ -529,7 +556,9 @@ class _PositionedEvent extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  placement.item.title,
+                  placement.item.type == ItemType.task
+                      ? 'Due · ${placement.item.title}'
+                      : placement.item.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
@@ -581,6 +610,9 @@ Iterable<CalendarItem> _allDayItems(List<CalendarItem> items, DateTime date) {
 }
 
 String _eventTime(CalendarItem item) {
+  if (item.type == ItemType.task) {
+    return '截止 ${DateFormat('HH:mm').format(inConfiguredTimezone(item.dueAt!))}';
+  }
   final start = inConfiguredTimezone(item.startAt!);
   final end = item.endAt == null ? null : inConfiguredTimezone(item.endAt!);
   if (end == null) return DateFormat('HH:mm').format(start);
