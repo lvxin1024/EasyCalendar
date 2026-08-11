@@ -25,7 +25,16 @@ from .candidate_service import (
     CandidateParserPort,
     CandidateService,
 )
-from .ports import CandidateRepositoryPort, ItemRepositoryPort, ItemTransactionPort
+from .reminder_service import ReminderService
+from .ports import (
+    CandidateRepositoryPort,
+    ItemRepositoryPort,
+    ItemTransactionPort,
+    NotificationRequest,
+    NotificationSchedulerPort,
+    ReminderCoordinatorPort,
+    ReminderRepositoryPort,
+)
 
 __all__ = [
     "ApplicationError",
@@ -47,7 +56,12 @@ __all__ = [
     "ItemRepositoryPort",
     "ItemService",
     "ItemTransactionPort",
+    "NotificationRequest",
+    "NotificationSchedulerPort",
     "ReadonlyCollectionError",
     "ReminderDraft",
+    "ReminderCoordinatorPort",
+    "ReminderRepositoryPort",
+    "ReminderService",
     "UpdateItemCommand",
 ]

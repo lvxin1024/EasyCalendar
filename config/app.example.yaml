@@ -43,6 +43,11 @@ assistant:
   timeout_seconds: 45
   max_input_chars: 20000
 
+notifications:
+  enabled: false
+  adapter: memory
+  restore_on_start: true
+
 integrations:
   ical_output_dir: ./config/calendars
   google_credentials_file: ./config/google_credentials.json

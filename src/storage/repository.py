@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from enum import Enum
 from typing import Optional
 
 from src.domain import CandidateItem, ItemStatus, ItemType
@@ -41,6 +42,13 @@ class VersionConflictError(RepositoryError):
 
 class StorageDataError(RepositoryError):
     """Raised when persisted data cannot satisfy the domain contract."""
+
+
+class ReminderScheduleState(str, Enum):
+    """Result of the latest platform scheduling attempt."""
+
+    SCHEDULED = "scheduled"
+    FAILED = "failed"
 
 
 @dataclass(frozen=True)
@@ -148,6 +156,55 @@ class CandidateConfirmationRecord:
             raise ValueError(
                 "CandidateConfirmationRecord confirmed_at must include a timezone"
             )
+
+
+@dataclass(frozen=True)
+class ReminderScheduleRecord:
+    """Persisted derived state for one platform notification."""
+
+    reminder_id: str
+    item_id: str
+    item_version: int
+    fire_at: datetime
+    state: ReminderScheduleState
+    platform_schedule_id: Optional[str]
+    last_error: Optional[str]
+    updated_at: datetime
+
+    def __post_init__(self) -> None:
+        for field_name in ("reminder_id", "item_id"):
+            value = getattr(self, field_name)
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(
+                    f"ReminderScheduleRecord {field_name} cannot be empty"
+                )
+        if type(self.item_version) is not int or self.item_version < 1:
+            raise ValueError("ReminderScheduleRecord item_version must be at least 1")
+        for field_name in ("fire_at", "updated_at"):
+            value = getattr(self, field_name)
+            if (
+                not isinstance(value, datetime)
+                or value.tzinfo is None
+                or value.utcoffset() is None
+            ):
+                raise ValueError(
+                    f"ReminderScheduleRecord {field_name} must include a timezone"
+                )
+        object.__setattr__(self, "state", ReminderScheduleState(self.state))
+        if self.platform_schedule_id is not None and (
+            not isinstance(self.platform_schedule_id, str)
+            or not self.platform_schedule_id.strip()
+        ):
+            raise ValueError(
+                "ReminderScheduleRecord platform_schedule_id cannot be blank"
+            )
+        if self.state is ReminderScheduleState.SCHEDULED:
+            if self.platform_schedule_id is None:
+                raise ValueError("Scheduled reminders require a platform_schedule_id")
+            if self.last_error is not None:
+                raise ValueError("Scheduled reminders cannot have last_error")
+        elif not isinstance(self.last_error, str) or not self.last_error.strip():
+            raise ValueError("Failed reminders require last_error")
 
 
 @dataclass(frozen=True)

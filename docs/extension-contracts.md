@@ -132,13 +132,12 @@ interface SyncStore {
 
 ```ts
 interface NotificationScheduler {
-  schedule(item: Item, reminder: Reminder): Promise<NotificationHandle>;
-  cancel(itemId: string, reminderId?: string): Promise<void>;
-  reschedule(item: Item): Promise<void>;
+  schedule(request: NotificationRequest): Promise<string>;
+  cancel(platformScheduleId: string): Promise<void>;
 }
 ```
 
-通知是 Item 的派生行为。调度失败只记录状态，不回滚 Item 保存。每个平台可以有自己的 adapter，但不能改变 Reminder 语义。
+`NotificationRequest.notification_id` 是稳定键，adapter 的 schedule 必须可安全重试并返回平台句柄。通知是 Item 的派生行为：application 层负责计算、重调度和恢复，adapter 只调用平台 API。调度失败只记录状态，不回滚 Item 保存。每个平台可以有自己的 adapter，但不能改变 Reminder 语义。
 
 ## 7. WidgetSnapshotWriter
 

@@ -130,7 +130,9 @@ Candidate 是解析阶段对象，不是正式 Item：
 }
 ```
 
-`mode=relative` 使用 `minutes_before`，`mode=absolute` 使用 `remind_at`。客户端负责根据时区计算下一次通知。
+`mode=relative` 使用 `minutes_before`：Event 从 `start_at` 回推，Task 从 `due_at` 回推；无时间 Note 不产生相对通知。`mode=absolute` 直接使用带时区的 `remind_at`。`enabled=false`、已过期、已完成、已取消或已删除的 Item 不调度。
+
+平台调度是 Item 的派生状态，保存在 `reminder_schedules`：记录 `reminder_id`、`item_id`、Item 版本、UTC `fire_at`、`scheduled|failed`、平台句柄、最近错误和更新时间。它不进入 Item JSON 或同步 outbox；启动时根据正式 Item 强制重建。平台失败不能回滚 Item 保存。
 
 ```json
 {
@@ -218,6 +220,7 @@ sync_state
 idempotency_records
 candidate_extractions
 candidate_confirmations
+reminder_schedules
 ```
 
 存储约定：
@@ -234,5 +237,6 @@ candidate_confirmations
 - `idempotency_records` 按 `(scope, key)` 保存请求哈希和严格 Item 响应；同 key 不同请求拒绝，同请求在进程重启后仍返回原结果。
 - migration 003 的 `candidate_extractions` 保存原文、Parser 标识、严格 Candidate JSON、warning 和拒绝审计；它不属于正式 Item 查询。
 - `candidate_confirmations` 以 `(extraction_id, temp_id)` 为主键，记录唯一 Item、规范化请求哈希和确认时间；Item、outbox、确认和幂等记录在一个事务中提交。
+- migration 004 的 `reminder_schedules` 保存可重建的派生平台状态，不直接外键到会被 Item 更新替换的 Reminder 行；改期或禁用后仍能找到并取消旧平台句柄。
 
 `sync_conflicts` 以及外部事项稳定键 `(subscription_id, provider, external_id, recurrence_instance)` 随对应同步和订阅任务增加，不提前占位。

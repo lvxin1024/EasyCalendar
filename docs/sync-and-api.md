@@ -109,17 +109,20 @@ X-Request-Id: optional-client-id
     "sync": false,
     "ics_subscriptions": false,
     "assistant": false,
+    "local_reminders": true,
     "widget_snapshot": false
   },
   "configured": {
     "sync": false,
     "ics_subscriptions": true,
     "assistant": false,
+    "local_reminders": false,
     "widget_snapshot": false
   },
   "providers": {
     "parser": ["rules.zh_cn"],
-    "ai": []
+    "ai": [],
+    "notification": ["memory"]
   }
 }
 ```

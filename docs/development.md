@@ -11,6 +11,7 @@ src/domain/             # Python 原型共享的领域模型
 src/application/        # 用例、事务编排和 adapter ports
 src/storage/            # SQLite Repository、migration 和持久化契约
 src/parser/             # 规则 Parser 原型
+src/notification/       # 平台通知 adapter；当前含开发用 memory 实现
 src/calendar_client/    # 历史日历 provider，逐步迁移为 importer
 src/api/                # 当前 FastAPI 原型 API
 src/runtime.py          # 配置驱动的延迟依赖组装

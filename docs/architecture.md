@@ -50,13 +50,14 @@ Domain 不能导入：FastAPI、Flutter、Cloudflare、SQLAlchemy/Drift、Google
 
 Application 通过抽象接口调用存储、同步、通知、Importer 和 Provider。
 
-当前 `src/application/item_service.py` 已实现正式 Item 创建、查询、修改、软删除、恢复、Task 完成和 Candidate 确认。`src/application/candidate_service.py` 负责提取预览、查询和拒绝。服务通过 Repository port 访问存储；确认在同一事务内写 Item、Reminder、outbox、确认决策和幂等记录，HTTP 和 SQLite 细节不进入 domain。
+当前 `src/application/item_service.py` 已实现正式 Item 创建、查询、修改、软删除、恢复、Task 完成和 Candidate 确认。`src/application/candidate_service.py` 负责提取预览、查询和拒绝。服务通过 Repository port 访问存储；确认在同一事务内写 Item、Reminder、outbox、确认决策和幂等记录，HTTP 和 SQLite 细节不进入 domain。数据库提交后，`ReminderService` 才协调平台通知，因此调度失败不会回滚 Item。
 
 ### Adapters
 
 - API adapter：将 HTTP 请求映射到 application command/query。
 - SQLite adapter：`src/storage/` 已实现本地 Repository、migration、outbox 和 sync cursor；D1 adapter 尚未实现。
 - Parser/AI adapter：`RuleParserAdapter` 已实现规则解析 port，其他 provider 仍待实现。
+- Notification adapter：`NotificationSchedulerPort` 定义稳定调度/取消边界；当前 `memory` adapter 只用于开发和测试，系统 adapter 由各客户端平台实现。
 - ICS/Google/Microsoft adapter：输出带来源信息的 Item。
 - Notification adapter：把 Reminder 转成平台通知。
 - Widget adapter：把查询结果写成 snapshot。
@@ -96,6 +97,20 @@ text -> Parser/AiProvider -> candidate_extractions
 ```
 
 候选预览可持久化用于刷新页面、审计和重启恢复，但没有正式 `id`、`version` 或 `collection_id`，不出现在 Item 查询和同步 outbox 中。确认请求必须引用持久化 extraction；用户修改通过独立 `edit` 传入，不能篡改原 Candidate。
+
+### 本地提醒
+
+```text
+Item transaction commit
+        -> ReminderService computes fire_at
+        -> cancel stale platform schedule
+        -> NotificationScheduler.schedule/cancel
+        -> reminder_schedules records scheduled/failed state
+
+process restart -> scan persisted Items -> force reconcile -> platform adapter
+```
+
+相对提醒以 Event `start_at` 或 Task `due_at` 为基准；绝对提醒直接使用 `remind_at`。禁用提醒、过去时间、已完成/取消/删除 Item 都不应保留平台调度。平台错误只更新派生失败状态，Item 和 outbox 已经提交。
 
 ### 远端同步
 

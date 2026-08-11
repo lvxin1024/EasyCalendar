@@ -13,6 +13,8 @@
 | SQLite Repository | `src/storage/` | migration、事务、savepoint、乐观锁、软删除查询、outbox 和 cursor 已实现 |
 | Item Service | `src/application/item_service.py` | CRUD、恢复、Task 完成、outbox、持久化幂等和 cursor 分页已实现 |
 | Candidate Service | `src/application/candidate_service.py` | 候选提取、持久化预览、拒绝审计和确认编排已实现 |
+| Reminder Service | `src/application/reminder_service.py` | 相对/绝对提醒计算、持久化调度状态、改期取消、失败重试和启动恢复已实现 |
+| Notification adapter | `src/notification/` | 平台 port 已定义；`memory` adapter 可用于离线开发和测试，不发送系统通知 |
 | 解析器输出候选项 | `src/parser/rule_adapter.py` | 规则 Parser 已适配 Candidate application port，并使用请求时区和参考时间 |
 | 旧 CalendarEvent 兼容视图 | `src/parser/models.py` | 临时兼容层 |
 | FastAPI 解析 API | `src/api/routes.py` | 仍是历史 `/api/v1` 业务接口 |
@@ -31,7 +33,7 @@
 - Cloudflare Worker、D1 migrations、push/pull 同步。
 - ICS URL 订阅、ETag、RRULE 和只读 Collection。
 - Flutter Android/macOS/Windows 客户端。
-- 本地通知和 macOS WidgetKit。
+- Android、macOS、Windows 的真实系统通知 adapter 和 macOS WidgetKit。
 - AI Provider 抽象、结构化输出校验和提醒建议。
 - Web 或 Flutter 正式客户端。
 - 配置文件驱动的一键 Cloudflare/Docker 部署。
@@ -47,4 +49,4 @@
 
 ## 结论
 
-正式 Item CRUD 与 Candidate 预览、编辑确认、拒绝审计均已可用。下一步进入 T1.4 本地提醒：增加持久化调度状态、平台 adapter 接口、事项变更后的重调度和启动恢复。
+正式 Item CRUD、Candidate 确认和可恢复本地提醒协调均已可用。下一步按路线图进入 T1.5 JSON/ICS 导入导出；真实系统通知由后续 Flutter 平台 adapter 实现，核心 Reminder 语义无需改动。

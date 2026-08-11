@@ -66,6 +66,11 @@ assistant:
   timeout_seconds: 45
   max_input_chars: 20000
 
+notifications:
+  enabled: false
+  adapter: memory                  # 当前 Python 开发 adapter
+  restore_on_start: true
+
 integrations:
   ical_output_dir: ./config/calendars
   google_credentials_file: ./config/google_credentials.json
@@ -105,6 +110,9 @@ deployment:
 | `assistant.base_url` | 空 | AI/Ollama 时必填 | 否 | OpenAI-compatible 地址 |
 | `assistant.model` | 空 | AI 开启时必填 | 否 | 模型名称 |
 | `assistant.max_input_chars` | `20000` | 否 | 否 | 单次 Candidate 提取允许的最大文本字符数 |
+| `notifications.enabled` | `false` | 否 | 否 | 是否协调本地提醒；真实系统通知需对应平台 adapter |
+| `notifications.adapter` | `memory` | 否 | 否 | Python 原型 adapter；`memory` 不发送 OS 通知 |
+| `notifications.restore_on_start` | `true` | 否 | 否 | 启动时从正式 Item 强制恢复未来提醒 |
 | `integrations.*` | 示例路径 | 对应接入时必填 | 否 | 第三方配置文件路径和租户 |
 | `widget.snapshot_path` | `./data/widget/snapshot.json` | 否 | 否 | Widget 只读快照 |
 | `deployment.provider` | `docker` | 否 | 否 | 一键部署目标 |

@@ -6,6 +6,7 @@ import base64
 import binascii
 import hashlib
 import json
+import logging
 from dataclasses import asdict, dataclass, field, is_dataclass
 from datetime import datetime, timezone
 from enum import Enum
@@ -46,7 +47,10 @@ from .errors import (
     ExtractionNotFoundError,
     ExtractionRejectedError,
 )
-from .ports import ItemRepositoryPort
+from .ports import ItemRepositoryPort, ReminderCoordinatorPort
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -117,6 +121,7 @@ class ItemService:
         device_id: str,
         clock: Callable[[], datetime] = _utc_now,
         id_factory: Callable[[str], str] = _default_id_factory,
+        reminder_coordinator: Optional[ReminderCoordinatorPort] = None,
     ):
         if not device_id.strip():
             raise ValueError("device_id cannot be empty")
@@ -124,6 +129,7 @@ class ItemService:
         self.device_id = device_id.strip()
         self._clock = clock
         self._id_factory = id_factory
+        self._reminder_coordinator = reminder_coordinator
 
     def ensure_default_collection(
         self, *, collection_id: str, name: str, color: Optional[str]
@@ -203,25 +209,27 @@ class ItemService:
                 transaction, scope, idempotency_key, request_hash
             )
             if replay is not None:
-                return replay
-            self._require_writable_collection(transaction, item.collection_id)
-            transaction.create_item(item)
-            transaction.create_outbox_entry(
-                self._outbox_for(
-                    item,
-                    entity_type=SyncEntityType.ITEM,
-                    operation=ChangeOperation.CREATE,
-                    timestamp=timestamp,
+                item = replay
+            else:
+                self._require_writable_collection(transaction, item.collection_id)
+                transaction.create_item(item)
+                transaction.create_outbox_entry(
+                    self._outbox_for(
+                        item,
+                        entity_type=SyncEntityType.ITEM,
+                        operation=ChangeOperation.CREATE,
+                        timestamp=timestamp,
+                    )
                 )
-            )
-            self._record_idempotency(
-                transaction,
-                scope,
-                idempotency_key,
-                request_hash,
-                item,
-                timestamp,
-            )
+                self._record_idempotency(
+                    transaction,
+                    scope,
+                    idempotency_key,
+                    request_hash,
+                    item,
+                    timestamp,
+                )
+        self._reconcile_reminders(item)
         return item
 
     def get_item(self, item_id: str, *, include_deleted: bool = False) -> Item:
@@ -281,26 +289,28 @@ class ItemService:
                     current.version,
                 )
             updated = self._apply_patch(current, command.values)
-            if updated == current:
-                return current
-            if updated.collection_id != current.collection_id:
-                self._require_writable_collection(transaction, updated.collection_id)
-            try:
-                updated.record_update(now=timestamp)
-            except ValueError as error:
-                raise InvalidCommandError(str(error)) from error
-            transaction.update_item(
-                updated, expected_version=command.expected_version
-            )
-            transaction.create_outbox_entry(
-                self._outbox_for(
-                    updated,
-                    entity_type=SyncEntityType.ITEM,
-                    operation=ChangeOperation.UPDATE,
-                    timestamp=timestamp,
+            if updated != current:
+                if updated.collection_id != current.collection_id:
+                    self._require_writable_collection(
+                        transaction, updated.collection_id
+                    )
+                try:
+                    updated.record_update(now=timestamp)
+                except ValueError as error:
+                    raise InvalidCommandError(str(error)) from error
+                transaction.update_item(
+                    updated, expected_version=command.expected_version
                 )
-            )
-            return updated
+                transaction.create_outbox_entry(
+                    self._outbox_for(
+                        updated,
+                        entity_type=SyncEntityType.ITEM,
+                        operation=ChangeOperation.UPDATE,
+                        timestamp=timestamp,
+                    )
+                )
+        self._reconcile_reminders(updated)
+        return updated
 
     def delete_item(self, item_id: str, *, expected_version: int) -> Item:
         timestamp = self._now()
@@ -309,23 +319,25 @@ class ItemService:
             if current is None:
                 raise ItemNotFoundError(f"Item {item_id!r} was not found")
             if current.is_deleted:
-                return current
-            self._require_writable_item(transaction, current)
-            deleted = Item.from_json(current.to_json())
-            try:
-                deleted.soft_delete(now=timestamp)
-            except ValueError as error:
-                raise InvalidCommandError(str(error)) from error
-            transaction.update_item(deleted, expected_version=expected_version)
-            transaction.create_outbox_entry(
-                self._outbox_for(
-                    deleted,
-                    entity_type=SyncEntityType.ITEM,
-                    operation=ChangeOperation.DELETE,
-                    timestamp=timestamp,
+                deleted = current
+            else:
+                self._require_writable_item(transaction, current)
+                deleted = Item.from_json(current.to_json())
+                try:
+                    deleted.soft_delete(now=timestamp)
+                except ValueError as error:
+                    raise InvalidCommandError(str(error)) from error
+                transaction.update_item(deleted, expected_version=expected_version)
+                transaction.create_outbox_entry(
+                    self._outbox_for(
+                        deleted,
+                        entity_type=SyncEntityType.ITEM,
+                        operation=ChangeOperation.DELETE,
+                        timestamp=timestamp,
+                    )
                 )
-            )
-            return deleted
+        self._reconcile_reminders(deleted)
+        return deleted
 
     def restore_item(self, item_id: str, *, expected_version: int) -> Item:
         timestamp = self._now()
@@ -334,20 +346,22 @@ class ItemService:
             if current is None:
                 raise ItemNotFoundError(f"Item {item_id!r} was not found")
             if not current.is_deleted:
-                return current
-            self._require_writable_collection(transaction, current.collection_id)
-            restored = Item.from_json(current.to_json())
-            restored.restore(now=timestamp)
-            transaction.update_item(restored, expected_version=expected_version)
-            transaction.create_outbox_entry(
-                self._outbox_for(
-                    restored,
-                    entity_type=SyncEntityType.ITEM,
-                    operation=ChangeOperation.UPDATE,
-                    timestamp=timestamp,
+                restored = current
+            else:
+                self._require_writable_collection(transaction, current.collection_id)
+                restored = Item.from_json(current.to_json())
+                restored.restore(now=timestamp)
+                transaction.update_item(restored, expected_version=expected_version)
+                transaction.create_outbox_entry(
+                    self._outbox_for(
+                        restored,
+                        entity_type=SyncEntityType.ITEM,
+                        operation=ChangeOperation.UPDATE,
+                        timestamp=timestamp,
+                    )
                 )
-            )
-            return restored
+        self._reconcile_reminders(restored)
+        return restored
 
     def complete_task(
         self,
@@ -365,46 +379,49 @@ class ItemService:
                 transaction, scope, idempotency_key, request_hash
             )
             if replay is not None:
-                return replay
-            current = transaction.get_item(item_id)
-            if current is None:
-                raise ItemNotFoundError(f"Item {item_id!r} was not found")
-            self._require_writable_item(transaction, current)
-            if current.type is not ItemType.TASK:
-                raise InvalidCommandError("Only Task Items can be completed")
-            if current.status is ItemStatus.DONE:
-                self._record_idempotency(
-                    transaction,
-                    scope,
-                    idempotency_key,
-                    request_hash,
-                    current,
-                    timestamp,
-                )
-                return current
-            completed = Item.from_json(current.to_json())
-            completed.status = ItemStatus.DONE
-            completed.record_update(now=timestamp)
-            transaction.update_item(
-                completed, expected_version=expected_version
-            )
-            transaction.create_outbox_entry(
-                self._outbox_for(
-                    completed,
-                    entity_type=SyncEntityType.ITEM,
-                    operation=ChangeOperation.UPDATE,
-                    timestamp=timestamp,
-                )
-            )
-            self._record_idempotency(
-                transaction,
-                scope,
-                idempotency_key,
-                request_hash,
-                completed,
-                timestamp,
-            )
-            return completed
+                completed = replay
+            else:
+                current = transaction.get_item(item_id)
+                if current is None:
+                    raise ItemNotFoundError(f"Item {item_id!r} was not found")
+                self._require_writable_item(transaction, current)
+                if current.type is not ItemType.TASK:
+                    raise InvalidCommandError("Only Task Items can be completed")
+                if current.status is ItemStatus.DONE:
+                    completed = current
+                    self._record_idempotency(
+                        transaction,
+                        scope,
+                        idempotency_key,
+                        request_hash,
+                        completed,
+                        timestamp,
+                    )
+                else:
+                    completed = Item.from_json(current.to_json())
+                    completed.status = ItemStatus.DONE
+                    completed.record_update(now=timestamp)
+                    transaction.update_item(
+                        completed, expected_version=expected_version
+                    )
+                    transaction.create_outbox_entry(
+                        self._outbox_for(
+                            completed,
+                            entity_type=SyncEntityType.ITEM,
+                            operation=ChangeOperation.UPDATE,
+                            timestamp=timestamp,
+                        )
+                    )
+                    self._record_idempotency(
+                        transaction,
+                        scope,
+                        idempotency_key,
+                        request_hash,
+                        completed,
+                        timestamp,
+                    )
+        self._reconcile_reminders(completed)
+        return completed
 
     def confirm_candidate(
         self,
@@ -425,89 +442,77 @@ class ItemService:
         scope = "candidates:confirm"
         timestamp = self._now()
         with self.repository.transaction() as transaction:
-            replay = self._idempotent_replay(
-                transaction, scope, idempotency_key, request_hash
-            )
-            if replay is not None:
-                return replay
-
-            extraction = transaction.get_candidate_extraction(extraction_id)
-            if extraction is None:
-                raise ExtractionNotFoundError(
-                    f"Candidate extraction {extraction_id!r} was not found"
-                )
-            if extraction.rejected_at is not None:
-                raise ExtractionRejectedError(
-                    f"Candidate extraction {extraction_id!r} was rejected"
-                )
-            stored_candidate = next(
-                (
-                    value
-                    for value in extraction.candidates
-                    if value.temp_id == candidate.temp_id
-                ),
-                None,
-            )
-            if stored_candidate is None:
-                raise InvalidCommandError(
-                    f"Candidate {candidate.temp_id!r} is not in the extraction"
-                )
-            if stored_candidate.to_dict() != candidate.to_dict():
-                raise InvalidCommandError(
-                    "Submitted Candidate differs from the persisted extraction; "
-                    "put user changes in edit"
-                )
-
-            previous = transaction.get_candidate_confirmation(
-                extraction_id, candidate.temp_id
-            )
-            if previous is not None:
-                if previous.request_hash != request_hash:
-                    raise CandidateDecisionConflictError(
-                        "Candidate was already confirmed with different edits"
-                    )
-                item = transaction.get_item(
-                    previous.item_id, include_deleted=True
-                )
-                if item is None:
-                    raise ItemNotFoundError(
-                        "Confirmed Candidate Item is missing from local storage"
-                    )
-                self._record_idempotency(
-                    transaction,
-                    scope,
-                    idempotency_key,
-                    request_hash,
-                    item,
-                    timestamp,
-                )
-                return item
-
-            self._require_writable_collection(transaction, edit.collection_id)
-            item = self._candidate_to_item(
-                candidate,
-                edit,
+            item = self._confirm_candidate_in_transaction(
+                transaction,
                 extraction_id=extraction_id,
+                candidate=candidate,
+                edit=edit,
+                idempotency_key=idempotency_key,
+                request_hash=request_hash,
+                scope=scope,
                 timestamp=timestamp,
             )
-            transaction.create_item(item)
-            transaction.create_outbox_entry(
-                self._outbox_for(
-                    item,
-                    entity_type=SyncEntityType.ITEM,
-                    operation=ChangeOperation.CREATE,
-                    timestamp=timestamp,
-                )
+        self._reconcile_reminders(item)
+        return item
+
+    def _confirm_candidate_in_transaction(
+        self,
+        transaction: Any,
+        *,
+        extraction_id: str,
+        candidate: CandidateItem,
+        edit: CandidateEditCommand,
+        idempotency_key: str,
+        request_hash: str,
+        scope: str,
+        timestamp: datetime,
+    ) -> Item:
+        replay = self._idempotent_replay(
+            transaction, scope, idempotency_key, request_hash
+        )
+        if replay is not None:
+            return replay
+
+        extraction = transaction.get_candidate_extraction(extraction_id)
+        if extraction is None:
+            raise ExtractionNotFoundError(
+                f"Candidate extraction {extraction_id!r} was not found"
             )
-            transaction.create_candidate_confirmation(
-                CandidateConfirmationRecord(
-                    extraction_id=extraction_id,
-                    temp_id=candidate.temp_id,
-                    item_id=item.id,
-                    request_hash=request_hash,
-                    confirmed_at=timestamp,
-                )
+        if extraction.rejected_at is not None:
+            raise ExtractionRejectedError(
+                f"Candidate extraction {extraction_id!r} was rejected"
             )
+        stored_candidate = next(
+            (
+                value
+                for value in extraction.candidates
+                if value.temp_id == candidate.temp_id
+            ),
+            None,
+        )
+        if stored_candidate is None:
+            raise InvalidCommandError(
+                f"Candidate {candidate.temp_id!r} is not in the extraction"
+            )
+        if stored_candidate.to_dict() != candidate.to_dict():
+            raise InvalidCommandError(
+                "Submitted Candidate differs from the persisted extraction; "
+                "put user changes in edit"
+            )
+
+        previous = transaction.get_candidate_confirmation(
+            extraction_id, candidate.temp_id
+        )
+        if previous is not None:
+            if previous.request_hash != request_hash:
+                raise CandidateDecisionConflictError(
+                    "Candidate was already confirmed with different edits"
+                )
+            item = transaction.get_item(previous.item_id, include_deleted=True)
+            if item is None:
+                raise ItemNotFoundError(
+                    "Confirmed Candidate Item is missing from local storage"
+                )
             self._record_idempotency(
                 transaction,
                 scope,
@@ -517,6 +522,41 @@ class ItemService:
                 timestamp,
             )
             return item
+
+        self._require_writable_collection(transaction, edit.collection_id)
+        item = self._candidate_to_item(
+            candidate,
+            edit,
+            extraction_id=extraction_id,
+            timestamp=timestamp,
+        )
+        transaction.create_item(item)
+        transaction.create_outbox_entry(
+            self._outbox_for(
+                item,
+                entity_type=SyncEntityType.ITEM,
+                operation=ChangeOperation.CREATE,
+                timestamp=timestamp,
+            )
+        )
+        transaction.create_candidate_confirmation(
+            CandidateConfirmationRecord(
+                extraction_id=extraction_id,
+                temp_id=candidate.temp_id,
+                item_id=item.id,
+                request_hash=request_hash,
+                confirmed_at=timestamp,
+            )
+        )
+        self._record_idempotency(
+            transaction,
+            scope,
+            idempotency_key,
+            request_hash,
+            item,
+            timestamp,
+        )
+        return item
 
     def _candidate_to_item(
         self,
@@ -660,6 +700,20 @@ class ItemService:
             except ValueError as error:
                 raise InvalidCommandError(str(error)) from error
         return reminders
+
+    def _reconcile_reminders(self, item: Item) -> None:
+        if self._reminder_coordinator is None:
+            return
+        try:
+            current = self.repository.get_item(item.id, include_deleted=True)
+            if current is not None:
+                self._reminder_coordinator.reconcile_item(current)
+        except Exception:
+            logger.exception(
+                "Reminder reconciliation failed after Item %s version %s was saved",
+                item.id,
+                item.version,
+            )
 
     @staticmethod
     def _require_writable_collection(transaction: Any, collection_id: str) -> None:

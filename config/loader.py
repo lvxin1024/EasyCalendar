@@ -82,6 +82,12 @@ class AssistantSettings(StrictModel):
     max_input_chars: int = Field(default=20000, ge=1, le=1000000)
 
 
+class NotificationSettings(StrictModel):
+    enabled: bool = False
+    adapter: Literal["memory"] = "memory"
+    restore_on_start: bool = True
+
+
 class IntegrationSettings(StrictModel):
     ical_output_dir: str = "./config/calendars"
     google_credentials_file: str = "./config/google_credentials.json"
@@ -114,6 +120,7 @@ class Settings(StrictModel):
     sync: SyncSettings = Field(default_factory=SyncSettings)
     subscriptions: SubscriptionSettings = Field(default_factory=SubscriptionSettings)
     assistant: AssistantSettings = Field(default_factory=AssistantSettings)
+    notifications: NotificationSettings = Field(default_factory=NotificationSettings)
     integrations: IntegrationSettings = Field(default_factory=IntegrationSettings)
     widget: WidgetSettings = Field(default_factory=WidgetSettings)
     deployment: DeploymentSettings = Field(default_factory=DeploymentSettings)

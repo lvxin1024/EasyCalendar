@@ -55,17 +55,20 @@ def build_capabilities_payload(
             "sync": False,
             "ics_subscriptions": False,
             "assistant": True,
+            "local_reminders": True,
             "widget_snapshot": False,
         },
         "configured": {
             "sync": active_settings.sync.enabled,
             "ics_subscriptions": active_settings.subscriptions.enabled,
             "assistant": active_settings.assistant.enabled,
+            "local_reminders": active_settings.notifications.enabled,
             "widget_snapshot": active_settings.widget.enabled,
         },
         "providers": {
             "parser": ["rules.zh_cn"],
             "ai": ai_providers,
+            "notification": [active_settings.notifications.adapter],
             "calendar": {
                 "ical": _modules_available("vobject"),
                 "google": _modules_available(

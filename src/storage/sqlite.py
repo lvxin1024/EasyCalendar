@@ -22,13 +22,15 @@ from .repository import (
     IdempotencyRecord,
     ItemPosition,
     ItemQuery,
+    ReminderScheduleRecord,
+    ReminderScheduleState,
     RepositoryError,
     StorageDataError,
     VersionConflictError,
 )
 
 
-LATEST_SCHEMA_VERSION = 3
+LATEST_SCHEMA_VERSION = 4
 _MIGRATION_PACKAGE = "src.storage.migrations"
 _ITEM_SCHEDULE_SQL = """
 CASE item_type
@@ -723,6 +725,74 @@ class SQLiteSession:
             ) from error
         return record
 
+    def get_reminder_schedule(
+        self, reminder_id: str
+    ) -> Optional[ReminderScheduleRecord]:
+        row = self._connection.execute(
+            "SELECT * FROM reminder_schedules WHERE reminder_id = ?",
+            (reminder_id,),
+        ).fetchone()
+        return self._load_reminder_schedule(row) if row else None
+
+    def list_reminder_schedules(
+        self, *, item_id: Optional[str] = None
+    ) -> List[ReminderScheduleRecord]:
+        sql = "SELECT * FROM reminder_schedules"
+        parameters: tuple[Any, ...] = ()
+        if item_id is not None:
+            sql += " WHERE item_id = ?"
+            parameters = (item_id,)
+        sql += " ORDER BY fire_at, reminder_id"
+        return [
+            self._load_reminder_schedule(row)
+            for row in self._connection.execute(sql, parameters).fetchall()
+        ]
+
+    def upsert_reminder_schedule(
+        self, record: ReminderScheduleRecord
+    ) -> ReminderScheduleRecord:
+        if not isinstance(record, ReminderScheduleRecord):
+            raise ValueError("record must be a ReminderScheduleRecord")
+        try:
+            self._connection.execute(
+                """
+                INSERT INTO reminder_schedules(
+                    reminder_id, item_id, item_version, fire_at, state,
+                    platform_schedule_id, last_error, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(reminder_id) DO UPDATE SET
+                    item_id = excluded.item_id,
+                    item_version = excluded.item_version,
+                    fire_at = excluded.fire_at,
+                    state = excluded.state,
+                    platform_schedule_id = excluded.platform_schedule_id,
+                    last_error = excluded.last_error,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    record.reminder_id,
+                    record.item_id,
+                    record.item_version,
+                    _utc_text(record.fire_at),
+                    record.state.value,
+                    record.platform_schedule_id,
+                    record.last_error,
+                    _utc_text(record.updated_at),
+                ),
+            )
+        except sqlite3.IntegrityError as error:
+            raise ConstraintViolationError(
+                f"Reminder schedule {record.reminder_id!r} references a missing Item"
+            ) from error
+        return record
+
+    def delete_reminder_schedule(self, reminder_id: str) -> bool:
+        cursor = self._connection.execute(
+            "DELETE FROM reminder_schedules WHERE reminder_id = ?",
+            (reminder_id,),
+        )
+        return cursor.rowcount == 1
+
     def set_sync_state(
         self, key: str, value: Any, *, now: Optional[datetime] = None
     ) -> None:
@@ -777,6 +847,23 @@ class SQLiteSession:
         if result.tzinfo is None or result.utcoffset() is None:
             raise ValueError("Stored timestamp must include a timezone")
         return result
+
+    def _load_reminder_schedule(self, row: sqlite3.Row) -> ReminderScheduleRecord:
+        try:
+            return ReminderScheduleRecord(
+                reminder_id=row["reminder_id"],
+                item_id=row["item_id"],
+                item_version=row["item_version"],
+                fire_at=self._parse_stored_time(row["fire_at"]),
+                state=ReminderScheduleState(row["state"]),
+                platform_schedule_id=row["platform_schedule_id"],
+                last_error=row["last_error"],
+                updated_at=self._parse_stored_time(row["updated_at"]),
+            )
+        except (TypeError, ValueError) as error:
+            raise StorageDataError(
+                f"Stored reminder schedule {row['reminder_id']!r} is invalid"
+            ) from error
 
     @staticmethod
     def _append_item_cursor(
@@ -1169,6 +1256,28 @@ class SQLiteRepository:
     ) -> CandidateConfirmationRecord:
         with self.transaction() as session:
             return session.create_candidate_confirmation(record)
+
+    def get_reminder_schedule(
+        self, reminder_id: str
+    ) -> Optional[ReminderScheduleRecord]:
+        with self._read_session() as session:
+            return session.get_reminder_schedule(reminder_id)
+
+    def list_reminder_schedules(
+        self, *, item_id: Optional[str] = None
+    ) -> List[ReminderScheduleRecord]:
+        with self._read_session() as session:
+            return session.list_reminder_schedules(item_id=item_id)
+
+    def upsert_reminder_schedule(
+        self, record: ReminderScheduleRecord
+    ) -> ReminderScheduleRecord:
+        with self.transaction() as session:
+            return session.upsert_reminder_schedule(record)
+
+    def delete_reminder_schedule(self, reminder_id: str) -> bool:
+        with self.transaction() as session:
+            return session.delete_reminder_schedule(reminder_id)
 
     def set_sync_state(
         self, key: str, value: Any, *, now: Optional[datetime] = None

@@ -12,6 +12,7 @@ from .api.assistant_routes import router as assistant_router
 from .api.item_routes import router as item_router
 from .api.system import SERVICE_VERSION
 from .api.system_routes import router as system_router
+from .application import NotificationSchedulerPort
 from .runtime import RuntimeServices
 from .storage import SQLiteRepository
 from config.loader import Settings
@@ -21,10 +22,15 @@ from config.settings import API_CONFIG, SETTINGS
 def create_app(
     settings: Optional[Settings] = None,
     repository: Optional[SQLiteRepository] = None,
+    notification_scheduler: Optional[NotificationSchedulerPort] = None,
 ) -> FastAPI:
     """Create and configure FastAPI application."""
     active_settings = settings or SETTINGS
-    runtime = RuntimeServices(active_settings, repository=repository)
+    runtime = RuntimeServices(
+        active_settings,
+        repository=repository,
+        notification_scheduler=notification_scheduler,
+    )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):

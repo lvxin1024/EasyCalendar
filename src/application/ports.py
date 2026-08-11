@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from contextlib import AbstractContextManager
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional, Protocol
 
@@ -12,7 +13,22 @@ from src.storage.repository import (
     CandidateExtractionRecord,
     IdempotencyRecord,
     ItemQuery,
+    ReminderScheduleRecord,
 )
+
+
+@dataclass(frozen=True)
+class NotificationRequest:
+    """Platform-neutral notification payload with a stable identity."""
+
+    notification_id: str
+    reminder_id: str
+    item_id: str
+    item_version: int
+    title: str
+    body: Optional[str]
+    fire_at: datetime
+    timezone_name: Optional[str]
 
 
 class ItemTransactionPort(Protocol):
@@ -79,3 +95,31 @@ class CandidateRepositoryPort(ItemRepositoryPort, Protocol):
         rejected_at: datetime,
         reason: Optional[str] = None,
     ) -> CandidateExtractionRecord: ...
+
+
+class ReminderRepositoryPort(ItemRepositoryPort, Protocol):
+    def get_reminder_schedule(
+        self, reminder_id: str
+    ) -> Optional[ReminderScheduleRecord]: ...
+
+    def list_reminder_schedules(
+        self, *, item_id: Optional[str] = None
+    ) -> list[ReminderScheduleRecord]: ...
+
+    def upsert_reminder_schedule(
+        self, record: ReminderScheduleRecord
+    ) -> ReminderScheduleRecord: ...
+
+    def delete_reminder_schedule(self, reminder_id: str) -> bool: ...
+
+
+class NotificationSchedulerPort(Protocol):
+    """Adapter boundary implemented by each target notification platform."""
+
+    def schedule(self, request: NotificationRequest) -> str: ...
+
+    def cancel(self, platform_schedule_id: str) -> None: ...
+
+
+class ReminderCoordinatorPort(Protocol):
+    def reconcile_item(self, item: Item) -> None: ...
