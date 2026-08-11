@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../domain/item.dart';
+import '../../utils/tag_colors.dart';
 import 'calendar_navigation_controller.dart';
 
 class CalendarMonthGrid extends StatelessWidget {
@@ -10,11 +11,13 @@ class CalendarMonthGrid extends StatelessWidget {
     required this.navigation,
     required this.items,
     required this.onEdit,
+    this.tagColors = const {},
   });
 
   final CalendarNavigationController navigation;
   final List<CalendarItem> items;
   final ValueChanged<CalendarItem> onEdit;
+  final Map<String, int> tagColors;
 
   @override
   Widget build(BuildContext context) {
@@ -53,6 +56,7 @@ class CalendarMonthGrid extends StatelessWidget {
                       items: items,
                       navigation: navigation,
                       onEdit: onEdit,
+                      tagColors: tagColors,
                     ),
                 ],
               ),
@@ -97,6 +101,7 @@ class _MonthWeekRow extends StatelessWidget {
     required this.items,
     required this.navigation,
     required this.onEdit,
+    required this.tagColors,
   });
 
   final List<DateTime> week;
@@ -105,6 +110,7 @@ class _MonthWeekRow extends StatelessWidget {
   final List<CalendarItem> items;
   final CalendarNavigationController navigation;
   final ValueChanged<CalendarItem> onEdit;
+  final Map<String, int> tagColors;
 
   @override
   Widget build(BuildContext context) {
@@ -144,6 +150,7 @@ class _MonthWeekRow extends StatelessWidget {
                 events: navigation.eventsForDate(items, date),
                 onSelect: () => navigation.selectDate(date),
                 onEdit: onEdit,
+                tagColors: tagColors,
               ),
             ),
         ],
@@ -160,6 +167,7 @@ class _MonthDayCell extends StatelessWidget {
     required this.events,
     required this.onSelect,
     required this.onEdit,
+    required this.tagColors,
   });
 
   final DateTime date;
@@ -168,6 +176,7 @@ class _MonthDayCell extends StatelessWidget {
   final List<CalendarItem> events;
   final VoidCallback onSelect;
   final ValueChanged<CalendarItem> onEdit;
+  final Map<String, int> tagColors;
 
   @override
   Widget build(BuildContext context) => DecoratedBox(
@@ -206,7 +215,11 @@ class _MonthDayCell extends StatelessWidget {
             for (final event in events.take(3))
               Padding(
                 padding: const EdgeInsets.only(bottom: 2),
-                child: _MonthEventChip(item: event, onTap: () => onEdit(event)),
+                child: _MonthEventChip(
+                  item: event,
+                  tagColors: tagColors,
+                  onTap: () => onEdit(event),
+                ),
               ),
             if (events.length > 3)
               InkWell(
@@ -258,14 +271,21 @@ class _MonthDayCell extends StatelessWidget {
 }
 
 class _MonthEventChip extends StatelessWidget {
-  const _MonthEventChip({required this.item, required this.onTap});
+  const _MonthEventChip({
+    required this.item,
+    required this.tagColors,
+    required this.onTap,
+  });
 
   final CalendarItem item;
+  final Map<String, int> tagColors;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) => Material(
-    color: Theme.of(context).colorScheme.secondaryContainer,
+    color: item.tags.isEmpty
+        ? Theme.of(context).colorScheme.secondaryContainer
+        : colorForTag(item.tags.first, tagColors).withAlpha(50),
     borderRadius: BorderRadius.circular(3),
     child: InkWell(
       borderRadius: BorderRadius.circular(3),

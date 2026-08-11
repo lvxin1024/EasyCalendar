@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../domain/item.dart';
 import '../utils/date_formatters.dart';
+import '../utils/tag_colors.dart';
 
 class ItemTile extends StatelessWidget {
   const ItemTile({
@@ -11,6 +12,7 @@ class ItemTile extends StatelessWidget {
     required this.onDelete,
     this.onToggleCompleted,
     this.highlightOverdue = false,
+    this.tagColors = const {},
   });
 
   final CalendarItem item;
@@ -18,6 +20,7 @@ class ItemTile extends StatelessWidget {
   final VoidCallback onDelete;
   final ValueChanged<bool>? onToggleCompleted;
   final bool highlightOverdue;
+  final Map<String, int> tagColors;
 
   @override
   Widget build(BuildContext context) {
@@ -75,8 +78,8 @@ class ItemTile extends StatelessWidget {
                   ),
                 ),
               Expanded(
-                child: Text(
-                  _subtitle(item),
+                child: Text.rich(
+                  _subtitle(item, tagColors),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -127,11 +130,21 @@ class ItemTile extends StatelessWidget {
     ItemType.note => Icons.notes_outlined,
   };
 
-  static String _subtitle(CalendarItem item) {
-    final parts = <String>[formatSchedule(item)];
-    if (item.location != null) parts.add(item.location!);
-    if (item.tags.isNotEmpty) parts.add(item.tags.take(2).join(' · '));
-    return parts.join('  ·  ');
+  static TextSpan _subtitle(CalendarItem item, Map<String, int> tagColors) {
+    final spans = <InlineSpan>[TextSpan(text: formatSchedule(item))];
+    if (item.location != null) {
+      spans.add(TextSpan(text: '  ·  ${item.location}'));
+    }
+    for (final tag in item.tags.take(2)) {
+      final color = colorForTag(tag, tagColors);
+      spans.add(
+        TextSpan(
+          text: '  ·  ● $tag',
+          style: TextStyle(color: color),
+        ),
+      );
+    }
+    return TextSpan(children: spans);
   }
 }
 

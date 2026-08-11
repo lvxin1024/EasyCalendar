@@ -114,6 +114,7 @@ class ClientPreferences {
     this.windowAlwaysOnTop = false,
     this.assistantEnabled = false,
     this.aiProviders = const [],
+    this.tagColors = const {},
   });
 
   final String apiUrl;
@@ -123,6 +124,7 @@ class ClientPreferences {
   final bool windowAlwaysOnTop;
   final bool assistantEnabled;
   final List<AiProviderConfig> aiProviders;
+  final Map<String, int> tagColors;
 
   ClientPreferences copyWith({
     String? apiUrl,
@@ -132,6 +134,7 @@ class ClientPreferences {
     bool? windowAlwaysOnTop,
     bool? assistantEnabled,
     List<AiProviderConfig>? aiProviders,
+    Map<String, int>? tagColors,
   }) => ClientPreferences(
     apiUrl: apiUrl ?? this.apiUrl,
     syncEnabled: syncEnabled ?? this.syncEnabled,
@@ -140,5 +143,6 @@ class ClientPreferences {
     windowAlwaysOnTop: windowAlwaysOnTop ?? this.windowAlwaysOnTop,
     assistantEnabled: assistantEnabled ?? this.assistantEnabled,
     aiProviders: aiProviders ?? this.aiProviders,
+    tagColors: tagColors ?? this.tagColors,
   );
 }

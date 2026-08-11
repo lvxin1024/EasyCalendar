@@ -4,6 +4,7 @@ import '../../application/item_controller.dart';
 import '../../domain/item.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/item_tile.dart';
+import '../../widgets/tag_filter_bar.dart';
 
 enum ItemTypeFilter { all, event, task, note }
 
@@ -28,6 +29,7 @@ class ItemsPage extends StatefulWidget {
 class _ItemsPageState extends State<ItemsPage> {
   final _searchController = TextEditingController();
   ItemTypeFilter _filter = ItemTypeFilter.all;
+  Set<String> _selectedTags = const {};
 
   @override
   void dispose() {
@@ -38,15 +40,20 @@ class _ItemsPageState extends State<ItemsPage> {
   @override
   Widget build(BuildContext context) {
     final query = _searchController.text.trim().toLowerCase();
-    final items = widget.controller.items.where((item) {
-      final matchesType = _filter == ItemTypeFilter.all ||
-          item.type.name == _filter.name;
-      final matchesQuery = query.isEmpty ||
-          item.title.toLowerCase().contains(query) ||
-          (item.body?.toLowerCase().contains(query) ?? false) ||
-          item.tags.any((tag) => tag.toLowerCase().contains(query));
-      return matchesType && matchesQuery;
-    }).toList(growable: false);
+    final items = widget.controller.items
+        .where((item) {
+          final matchesType =
+              _filter == ItemTypeFilter.all || item.type.name == _filter.name;
+          final matchesQuery =
+              query.isEmpty ||
+              item.title.toLowerCase().contains(query) ||
+              (item.body?.toLowerCase().contains(query) ?? false) ||
+              item.tags.any((tag) => tag.toLowerCase().contains(query));
+          return matchesType &&
+              matchesQuery &&
+              matchesTagFilter(item, _selectedTags);
+        })
+        .toList(growable: false);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -95,8 +102,15 @@ class _ItemsPageState extends State<ItemsPage> {
               ),
             ],
             selected: {_filter},
-            onSelectionChanged: (value) => setState(() => _filter = value.first),
+            onSelectionChanged: (value) =>
+                setState(() => _filter = value.first),
           ),
+        ),
+        TagFilterBar(
+          tags: tagsFromItems(widget.controller.items),
+          selectedTags: _selectedTags,
+          colors: widget.controller.preferences.tagColors,
+          onChanged: (value) => setState(() => _selectedTags = value),
         ),
         Expanded(
           child: items.isEmpty
@@ -117,6 +131,7 @@ class _ItemsPageState extends State<ItemsPage> {
                       onToggleCompleted: item.type == ItemType.task
                           ? (value) => widget.onToggleCompleted(item, value)
                           : null,
+                      tagColors: widget.controller.preferences.tagColors,
                     );
                   },
                 ),

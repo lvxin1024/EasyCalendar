@@ -8,6 +8,8 @@ import '../../application/item_controller.dart';
 import '../../config/app_config.dart';
 import '../../domain/item.dart';
 import '../../sync/sync_models.dart';
+import '../../utils/tag_colors.dart';
+import '../../widgets/tag_filter_bar.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
@@ -33,6 +35,7 @@ class _SettingsPageState extends State<SettingsPage> {
   late bool _windowAlwaysOnTop;
   late bool _assistantEnabled;
   late List<AiProviderConfig> _aiProviders;
+  late Map<String, int> _tagColors;
   bool _obscureToken = true;
 
   @override
@@ -47,6 +50,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _windowAlwaysOnTop = preferences.windowAlwaysOnTop;
     _assistantEnabled = preferences.assistantEnabled;
     _aiProviders = [...preferences.aiProviders];
+    _tagColors = {...preferences.tagColors};
     widget.controller.desktopWindowController?.addListener(_windowChanged);
     unawaited(_refreshAiProviderKeys());
   }
@@ -175,6 +179,11 @@ class _SettingsPageState extends State<SettingsPage> {
                 onToggle: _toggleProvider,
                 onTest: _testProvider,
               ),
+              _TagColorSection(
+                tags: tagsFromItems(widget.controller.items),
+                colors: _tagColors,
+                onChanged: _setTagColor,
+              ),
               if (widget.controller.desktopWindowController?.available == true)
                 _DesktopWindowSection(
                   opacity: _windowOpacity,
@@ -248,6 +257,7 @@ class _SettingsPageState extends State<SettingsPage> {
           windowAlwaysOnTop: _windowAlwaysOnTop,
           assistantEnabled: _assistantEnabled,
           aiProviders: _aiProviders,
+          tagColors: _tagColors,
         ),
       );
       if (_tokenController.text.trim().isNotEmpty) {
@@ -276,6 +286,21 @@ class _SettingsPageState extends State<SettingsPage> {
       widget.controller.preferences.copyWith(
         assistantEnabled: _assistantEnabled,
         aiProviders: _aiProviders,
+      ),
+    );
+  }
+
+  void _setTagColor(String tag, Color? color) {
+    setState(() {
+      if (color == null) {
+        _tagColors.remove(tag);
+      } else {
+        _tagColors[tag] = color.toARGB32();
+      }
+    });
+    unawaited(
+      widget.controller.savePreferences(
+        widget.controller.preferences.copyWith(tagColors: _tagColors),
       ),
     );
   }
@@ -583,6 +608,72 @@ class _DesktopWindowSection extends StatelessWidget {
           ],
         ),
       ),
+    ],
+  );
+}
+
+class _TagColorSection extends StatelessWidget {
+  const _TagColorSection({
+    required this.tags,
+    required this.colors,
+    required this.onChanged,
+  });
+
+  final List<String> tags;
+  final Map<String, int> colors;
+  final void Function(String tag, Color? color) onChanged;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      const SizedBox(height: 24),
+      const _SectionLabel(label: '标签颜色'),
+      if (tags.isEmpty)
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Text('创建事项后可以在这里分配标签颜色'),
+        ),
+      for (final tag in tags)
+        ListTile(
+          leading: CircleAvatar(
+            radius: 10,
+            backgroundColor: colorForTag(tag, colors),
+          ),
+          title: Text(tag),
+          subtitle: Text(colors.containsKey(tag) ? '已自定义' : '使用默认颜色'),
+          trailing: Wrap(
+            spacing: 2,
+            children: [
+              PopupMenuButton<Color>(
+                tooltip: '选择颜色',
+                icon: const Icon(Icons.palette_outlined),
+                onSelected: (color) => onChanged(tag, color),
+                itemBuilder: (context) => [
+                  for (final color in tagPalette)
+                    PopupMenuItem(
+                      value: color,
+                      child: Row(
+                        children: [
+                          CircleAvatar(radius: 8, backgroundColor: color),
+                          const SizedBox(width: 10),
+                          Text(
+                            '#${color.toARGB32().toRadixString(16).substring(2).toUpperCase()}',
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+              if (colors.containsKey(tag))
+                IconButton(
+                  tooltip: '恢复默认颜色',
+                  onPressed: () => onChanged(tag, null),
+                  icon: const Icon(Icons.restart_alt),
+                ),
+            ],
+          ),
+        ),
     ],
   );
 }

@@ -4,6 +4,7 @@ import '../../application/item_controller.dart';
 import '../../domain/item.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/item_tile.dart';
+import '../../widgets/tag_filter_bar.dart';
 import '../../utils/configured_time.dart';
 
 enum DueFilter { open, overdue, completed }
@@ -28,19 +29,23 @@ class DuePage extends StatefulWidget {
 
 class _DuePageState extends State<DuePage> {
   DueFilter _filter = DueFilter.open;
+  Set<String> _selectedTags = const {};
 
   @override
   Widget build(BuildContext context) {
     final now = configuredNow();
-    final items = widget.controller.dueItems.where((item) {
-      final completed = item.status == ItemStatus.done;
-      final overdue = !completed && item.dueAt!.isBefore(now);
-      return switch (_filter) {
-        DueFilter.open => !completed,
-        DueFilter.overdue => overdue,
-        DueFilter.completed => completed,
-      };
-    }).toList(growable: false);
+    final items = widget.controller.dueItems
+        .where((item) {
+          final completed = item.status == ItemStatus.done;
+          final overdue = !completed && item.dueAt!.isBefore(now);
+          final matchesStatus = switch (_filter) {
+            DueFilter.open => !completed,
+            DueFilter.overdue => overdue,
+            DueFilter.completed => completed,
+          };
+          return matchesStatus && matchesTagFilter(item, _selectedTags);
+        })
+        .toList(growable: false);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -80,8 +85,15 @@ class _DuePageState extends State<DuePage> {
               ),
             ],
             selected: {_filter},
-            onSelectionChanged: (value) => setState(() => _filter = value.first),
+            onSelectionChanged: (value) =>
+                setState(() => _filter = value.first),
           ),
+        ),
+        TagFilterBar(
+          tags: tagsFromItems(widget.controller.dueItems),
+          selectedTags: _selectedTags,
+          colors: widget.controller.preferences.tagColors,
+          onChanged: (value) => setState(() => _selectedTags = value),
         ),
         Expanded(
           child: items.isEmpty
@@ -89,7 +101,9 @@ class _DuePageState extends State<DuePage> {
                   icon: _filter == DueFilter.completed
                       ? Icons.task_alt
                       : Icons.check_circle_outline,
-                  title: _filter == DueFilter.completed ? '还没有已完成 Due' : '当前没有 Due',
+                  title: _filter == DueFilter.completed
+                      ? '还没有已完成 Due'
+                      : '当前没有 Due',
                   message: '创建带截止时间的 Due 后会显示在这里。',
                 )
               : ListView.builder(
@@ -99,12 +113,14 @@ class _DuePageState extends State<DuePage> {
                     final item = items[index];
                     return ItemTile(
                       item: item,
-                      highlightOverdue: item.status != ItemStatus.done &&
+                      highlightOverdue:
+                          item.status != ItemStatus.done &&
                           item.dueAt!.isBefore(now),
                       onEdit: () => widget.onEdit(item),
                       onDelete: () => widget.onDelete(item),
                       onToggleCompleted: (value) =>
                           widget.onToggleCompleted(item, value),
+                      tagColors: widget.controller.preferences.tagColors,
                     );
                   },
                 ),

@@ -552,6 +552,7 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
         values['ai_providers'],
         defaults.aiProviders,
       ),
+      tagColors: _storedTagColors(values['tag_colors'], defaults.tagColors),
     );
   }
 
@@ -572,6 +573,7 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
         'ai_providers': jsonEncode(
           preferences.aiProviders.map((provider) => provider.toJson()).toList(),
         ),
+        'tag_colors': jsonEncode(preferences.tagColors),
       }.entries) {
         await transaction.insert('app_settings', {
           'key': entry.key,
@@ -601,6 +603,24 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
                 AiProviderConfig.fromJson(Map<String, dynamic>.from(entry)),
           )
           .toList(growable: false);
+    } catch (_) {
+      return fallback;
+    }
+  }
+
+  static Map<String, int> _storedTagColors(
+    String? value,
+    Map<String, int> fallback,
+  ) {
+    if (value == null || value.trim().isEmpty) return fallback;
+    try {
+      final decoded = jsonDecode(value);
+      if (decoded is! Map) return fallback;
+      return decoded.map<String, int>((key, value) {
+        final parsed = value is int ? value : int.tryParse('$value');
+        if (parsed == null) throw const FormatException('invalid tag color');
+        return MapEntry('$key', parsed);
+      });
     } catch (_) {
       return fallback;
     }

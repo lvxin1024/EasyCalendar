@@ -162,6 +162,21 @@ void main() {
     },
   );
 
+  test('persists tag color preferences locally', () async {
+    final defaults = ClientPreferences(
+      apiUrl: _config.apiUrl,
+      syncEnabled: _config.syncEnabled,
+      notificationsEnabled: _config.notificationsEnabled,
+    );
+    await repository.savePreferences(
+      defaults.copyWith(tagColors: {'工作': 0xFF2563EB}),
+    );
+
+    final loaded = await repository.loadPreferences(defaults);
+
+    expect(loaded.tagColors, {'工作': 0xFF2563EB});
+  });
+
   test('schema v2 upgrades with pending entity heads intact', () async {
     final directory = await Directory.systemTemp.createTemp(
       'easycalendar-sync-migration-',

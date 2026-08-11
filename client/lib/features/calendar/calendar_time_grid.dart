@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 
 import '../../domain/item.dart';
 import '../../utils/configured_time.dart';
+import '../../utils/tag_colors.dart';
 import 'calendar_navigation_controller.dart';
 
 class CalendarEventPlacement {
@@ -132,6 +133,7 @@ class CalendarTimeGrid extends StatefulWidget {
     required this.dates,
     required this.items,
     required this.dueItems,
+    this.tagColors = const {},
     required this.selectedDate,
     required this.hourHeight,
     required this.onHourHeightChanged,
@@ -142,6 +144,7 @@ class CalendarTimeGrid extends StatefulWidget {
   final List<DateTime> dates;
   final List<CalendarItem> items;
   final List<CalendarItem> dueItems;
+  final Map<String, int> tagColors;
   final DateTime selectedDate;
   final double hourHeight;
   final ValueChanged<double> onHourHeightChanged;
@@ -227,6 +230,7 @@ class _CalendarTimeGridState extends State<CalendarTimeGrid> {
                                           date: date,
                                           items: widget.items,
                                           dueItems: widget.dueItems,
+                                          tagColors: widget.tagColors,
                                           hourHeight: widget.hourHeight,
                                           onEdit: widget.onEdit,
                                         ),
@@ -474,6 +478,7 @@ class _DayColumn extends StatelessWidget {
     required this.date,
     required this.items,
     required this.dueItems,
+    required this.tagColors,
     required this.hourHeight,
     required this.onEdit,
   });
@@ -481,6 +486,7 @@ class _DayColumn extends StatelessWidget {
   final DateTime date;
   final List<CalendarItem> items;
   final List<CalendarItem> dueItems;
+  final Map<String, int> tagColors;
   final double hourHeight;
   final ValueChanged<CalendarItem> onEdit;
 
@@ -508,6 +514,7 @@ class _DayColumn extends StatelessWidget {
                 placement: placement,
                 availableWidth: constraints.maxWidth,
                 hourHeight: hourHeight,
+                tagColors: tagColors,
                 onTap: () => onEdit(placement.item),
               ),
           ],
@@ -522,12 +529,14 @@ class _PositionedEvent extends StatelessWidget {
     required this.placement,
     required this.availableWidth,
     required this.hourHeight,
+    required this.tagColors,
     required this.onTap,
   });
 
   final CalendarEventPlacement placement;
   final double availableWidth;
   final double hourHeight;
+  final Map<String, int> tagColors;
   final VoidCallback onTap;
 
   @override
@@ -545,7 +554,9 @@ class _PositionedEvent extends StatelessWidget {
       child: Material(
         color: placement.item.type == ItemType.task
             ? Theme.of(context).colorScheme.errorContainer
-            : Theme.of(context).colorScheme.primaryContainer,
+            : placement.item.tags.isEmpty
+            ? Theme.of(context).colorScheme.primaryContainer
+            : colorForTag(placement.item.tags.first, tagColors).withAlpha(50),
         borderRadius: BorderRadius.circular(4),
         child: InkWell(
           borderRadius: BorderRadius.circular(4),

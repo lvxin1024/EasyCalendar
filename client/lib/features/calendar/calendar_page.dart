@@ -7,6 +7,7 @@ import '../../utils/configured_time.dart';
 import 'calendar_navigation_controller.dart';
 import 'calendar_month_grid.dart';
 import 'calendar_time_grid.dart';
+import '../../widgets/tag_filter_bar.dart';
 
 class CalendarPage extends StatefulWidget {
   const CalendarPage({
@@ -28,6 +29,7 @@ class CalendarPage extends StatefulWidget {
 
 class _CalendarPageState extends State<CalendarPage> {
   double _hourHeight = 72;
+  Set<String> _selectedTags = const {};
 
   @override
   void didChangeDependencies() {
@@ -42,17 +44,31 @@ class _CalendarPageState extends State<CalendarPage> {
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: widget.navigation,
     builder: (context, _) {
-      final events = widget.navigation.eventsInRange(widget.controller.items);
+      final filteredItems = widget.controller.items
+          .where((item) => matchesTagFilter(item, _selectedTags))
+          .toList(growable: false);
+      final events = widget.navigation.eventsInRange(filteredItems);
       final dues =
-          widget.controller.dueItems
-              .where((item) => item.status == ItemStatus.todo)
+          filteredItems
+              .where(
+                (item) =>
+                    item.type == ItemType.task &&
+                    item.status == ItemStatus.todo,
+              )
               .toList(growable: false)
             ..sort((left, right) => left.dueAt!.compareTo(right.dueAt!));
+      final availableTags = tagsFromItems(widget.controller.items);
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _CalendarToolbar(navigation: widget.navigation),
           const Divider(),
+          TagFilterBar(
+            tags: availableTags,
+            selectedTags: _selectedTags,
+            colors: widget.controller.preferences.tagColors,
+            onChanged: (value) => setState(() => _selectedTags = value),
+          ),
           if (dues.isNotEmpty)
             _PinnedDueStrip(items: dues, onEdit: widget.onEdit),
           Expanded(
@@ -63,11 +79,13 @@ class _CalendarPageState extends State<CalendarPage> {
                       widget.controller.items,
                     ),
                     onEdit: widget.onEdit,
+                    tagColors: widget.controller.preferences.tagColors,
                   )
                 : CalendarTimeGrid(
                     dates: widget.navigation.visibleDates,
                     items: events,
                     dueItems: dues,
+                    tagColors: widget.controller.preferences.tagColors,
                     selectedDate: widget.navigation.selectedDate,
                     hourHeight: _hourHeight,
                     onHourHeightChanged: (value) =>

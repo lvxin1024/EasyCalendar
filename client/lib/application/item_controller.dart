@@ -59,6 +59,7 @@ class ItemController extends ChangeNotifier {
     notificationsEnabled: config.notificationsEnabled,
     windowOpacity: 1,
     windowAlwaysOnTop: false,
+    tagColors: const {},
   );
 
   List<AiProviderConfig> get aiProviders => preferences.aiProviders;
