@@ -11,11 +11,12 @@
 | CandidateItem / Item 基础模型 | `src/domain/models.py` | 已有基础模型，尚未持久化 |
 | 解析器输出候选项 | `src/parser/rule_parser.py` | 已完成初步分离 |
 | 旧 CalendarEvent 兼容视图 | `src/parser/models.py` | 临时兼容层 |
-| FastAPI 解析 API | `src/api/routes.py` | 仍是历史 `/api/v1` 接口 |
+| FastAPI 解析 API | `src/api/routes.py` | 仍是历史 `/api/v1` 业务接口 |
+| Health / Capabilities | `src/api/system_routes.py` | 已提供目标 `/v1` 系统端点 |
 | iCal 内存客户端 | `src/calendar_client/ical_client.py` | 原型，缓存不持久化 |
 | Google / Outlook 客户端 | `src/calendar_client/` | 代码存在，未经可靠集成验证 |
 | 静态 Web 页面 | `public/index.html` | 历史演示页面，不是目标客户端 |
-| 配置 | `config/settings.py` | 当前主要读取环境变量 |
+| 配置 | `config/loader.py` | YAML、secrets.env、环境覆盖和严格校验已接入 |
 | 部署脚本 | `deploy.sh` | 主要是 GitHub 推送辅助，不是一键产品部署 |
 
 ## 尚未实现的目标能力

@@ -1,9 +1,9 @@
-"""API routes for calendar operations."""
+"""Legacy API routes for calendar operations."""
 
+from importlib import import_module
 from typing import List, Optional
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import JSONResponse
 
 from .schemas import (
     ParseTextRequest,
@@ -21,35 +21,46 @@ from .schemas import (
 from ..parser.rule_parser import RuleParser
 from ..parser.models import CalendarEvent
 from ..domain.models import CandidateItem
-from ..calendar_client.google_calendar import GoogleCalendarClient
-from ..calendar_client.outlook_calendar import OutlookCalendarClient
-from ..calendar_client.ical_client import ICalClient
+from .system import build_health_payload
 
 
 router = APIRouter(prefix="/api/v1", tags=["calendar"])
 
-parser = RuleParser()
+CALENDAR_CLIENTS = {
+    "google": ("..calendar_client.google_calendar", "GoogleCalendarClient"),
+    "outlook": ("..calendar_client.outlook_calendar", "OutlookCalendarClient"),
+    "ical": ("..calendar_client.ical_client", "ICalClient"),
+}
 
 
 def get_calendar_client(calendar_type: str):
     """Get calendar client by type."""
-    clients = {
-        "google": GoogleCalendarClient,
-        "outlook": OutlookCalendarClient,
-        "ical": ICalClient,
-    }
-
-    client_class = clients.get(calendar_type.lower())
-    if not client_class:
+    normalized_type = calendar_type.lower()
+    client_target = CALENDAR_CLIENTS.get(normalized_type)
+    if not client_target:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid calendar type: {calendar_type}. Supported: {list(clients.keys())}",
+            detail=(
+                f"Invalid calendar type: {calendar_type}. "
+                f"Supported: {list(CALENDAR_CLIENTS.keys())}"
+            ),
         )
 
     try:
+        module_name, class_name = client_target
+        module = import_module(module_name, package=__package__)
+        client_class = getattr(module, class_name)
         return client_class()
+    except (ImportError, ModuleNotFoundError) as error:
+        raise HTTPException(
+            status_code=503,
+            detail=f"{normalized_type} calendar support is not installed",
+        ) from error
     except Exception as error:
-        raise HTTPException(status_code=500, detail=f"Failed to initialize {calendar_type} client: {str(error)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to initialize {calendar_type} client: {str(error)}",
+        ) from error
 
 
 def event_to_response(event: CalendarEvent, event_id: str) -> CalendarEventResponse:
@@ -234,5 +245,5 @@ async def export_calendar(request: ExportRequest):
 
 @router.get("/health")
 async def health_check():
-    """Health check endpoint."""
-    return {"status": "healthy", "service": "easycalendar"}
+    """Compatibility health endpoint."""
+    return build_health_payload()

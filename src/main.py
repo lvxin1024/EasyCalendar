@@ -4,32 +4,35 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .api.routes import router
-from ..config.settings import API_CONFIG
+from .api.system import SERVICE_VERSION
+from .api.system_routes import router as system_router
+from config.settings import API_CONFIG, APP_CONFIG, SERVER_CONFIG
 
 
 def create_app() -> FastAPI:
     """Create and configure FastAPI application."""
     app = FastAPI(
-        title="EasyCalendar API",
+        title=f"{APP_CONFIG['name']} API",
         description="API for parsing text to calendar events and syncing with multiple calendar providers",
-        version="1.0.0",
+        version=SERVICE_VERSION,
     )
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=SERVER_CONFIG["cors_allowed_origins"],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
 
     app.include_router(router)
+    app.include_router(system_router)
 
     @app.get("/")
     async def root():
         return {
             "message": "EasyCalendar API",
-            "version": "1.0.0",
+            "version": SERVICE_VERSION,
             "docs": "/docs",
         }
 

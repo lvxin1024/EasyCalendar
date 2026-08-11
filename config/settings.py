@@ -1,27 +1,37 @@
-"""Configuration settings for EasyCalendar."""
+"""Runtime configuration and legacy compatibility dictionaries."""
 
-import os
-from pathlib import Path
+from .loader import Settings, load_settings
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+
+SETTINGS: Settings = load_settings()
+
+APP_CONFIG = SETTINGS.app.model_dump()
+SERVER_CONFIG = SETTINGS.server.model_dump()
+API_CONFIG = {
+    "host": SETTINGS.server.host,
+    "port": SETTINGS.server.port,
+    "debug": SETTINGS.server.debug,
+}
 
 GOOGLE_CALENDAR_CONFIG = {
-    "credentials_file": os.getenv("GOOGLE_CREDENTIALS_FILE", "config/google_credentials.json"),
-    "token_file": os.getenv("GOOGLE_TOKEN_FILE", "config/google_token.json"),
+    "credentials_file": SETTINGS.integrations.google_credentials_file,
+    "token_file": SETTINGS.integrations.google_token_file,
 }
 
 OUTLOOK_CONFIG = {
-    "client_id": os.getenv("OUTLOOK_CLIENT_ID", ""),
-    "client_secret": os.getenv("OUTLOOK_CLIENT_SECRET", ""),
-    "tenant_id": os.getenv("OUTLOOK_TENANT_ID", "common"),
+    "client_id": (
+        SETTINGS.secrets.outlook_client_id.get_secret_value()
+        if SETTINGS.secrets.outlook_client_id
+        else ""
+    ),
+    "client_secret": (
+        SETTINGS.secrets.outlook_client_secret.get_secret_value()
+        if SETTINGS.secrets.outlook_client_secret
+        else ""
+    ),
+    "tenant_id": SETTINGS.integrations.outlook_tenant_id,
 }
 
 ICAL_CONFIG = {
-    "output_dir": os.getenv("ICAL_OUTPUT_DIR", "config/calendars"),
-}
-
-API_CONFIG = {
-    "host": os.getenv("API_HOST", "0.0.0.0"),
-    "port": int(os.getenv("API_PORT", "8000")),
-    "debug": os.getenv("API_DEBUG", "False").lower() == "true",
+    "output_dir": SETTINGS.integrations.ical_output_dir,
 }

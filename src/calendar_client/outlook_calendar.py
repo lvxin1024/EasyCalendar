@@ -8,7 +8,15 @@ import requests
 
 from .base_client import BaseCalendarClient
 from ..parser.models import CalendarEvent, RecurrenceType
-from ...config.settings import OUTLOOK_CONFIG
+
+try:
+    from config.settings import OUTLOOK_CONFIG
+except ImportError:
+    OUTLOOK_CONFIG = {
+        "client_id": "",
+        "client_secret": "",
+        "tenant_id": "common",
+    }
 
 
 class OutlookCalendarClient(BaseCalendarClient):

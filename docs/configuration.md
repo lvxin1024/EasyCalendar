@@ -4,7 +4,7 @@
 
 部署者只修改 `config/` 下的配置文件，不改源码、不改 Dockerfile、不改 Worker 路由。配置分为非敏感运行配置和敏感秘密配置，二者都由部署脚本读取。
 
-当前 Python 原型仍主要读取环境变量；本规范是 T0.3 要实现的目标契约。迁移完成前，文档中的“已支持”必须以实现状态为准。
+Python 原型已经通过 `config/loader.py` 读取并校验本规范中的配置。尚未实现的 Worker、Flutter 和部署脚本在接入时必须复用同一字段语义。
 
 ## 文件布局
 
@@ -62,6 +62,12 @@ assistant:
   model: deepseek-v4
   timeout_seconds: 45
 
+integrations:
+  ical_output_dir: ./config/calendars
+  google_credentials_file: ./config/google_credentials.json
+  google_token_file: ./config/google_token.json
+  outlook_tenant_id: common
+
 widget:
   enabled: false
   snapshot_path: ./data/widget/snapshot.json
@@ -90,6 +96,7 @@ deployment:
 | `assistant.provider` | `rules` | 否 | 否 | 无 key 时仍可运行规则 Parser |
 | `assistant.base_url` | 空 | AI/Ollama 时必填 | 否 | OpenAI-compatible 地址 |
 | `assistant.model` | 空 | AI 开启时必填 | 否 | 模型名称 |
+| `integrations.*` | 示例路径 | 对应接入时必填 | 否 | 第三方配置文件路径和租户 |
 | `widget.snapshot_path` | `./data/widget/snapshot.json` | 否 | 否 | Widget 只读快照 |
 | `deployment.provider` | `docker` | 否 | 否 | 一键部署目标 |
 | `ADMIN_TOKEN` | 自动生成 | 同步必填 | 是 | 单实例 Bearer token |
@@ -104,3 +111,11 @@ deployment:
 - `subscriptions.enabled=true` 时必须配置请求超时和 SSRF 规则。
 - 部署前自动生成 `ADMIN_TOKEN`，并输出一次保存提示；之后不在日志中再次打印。
 - 未知配置键默认拒绝启动，防止拼写错误导致用户以为设置生效。
+
+## 环境变量覆盖
+
+- `EASYCALENDAR_CONFIG`：指定主配置文件。
+- `EASYCALENDAR_SECRETS`：指定秘密文件。
+- `EASYCALENDAR_ENV`：加载 `config/environments/<name>.yaml`。
+- `EASYCALENDAR__SERVER__PORT=9000`：使用双下划线覆盖任意嵌套字段。
+- 现有 `API_HOST`、`API_PORT`、`API_DEBUG`、Google、Outlook 和 iCal 环境变量继续兼容。

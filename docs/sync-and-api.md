@@ -98,17 +98,24 @@ X-Request-Id: optional-client-id
 
 ### `GET /v1/capabilities`
 
-返回当前配置启用的能力，不泄露 URL、token、API key：
+`features` 表示当前代码已经实现的能力，`configured` 表示配置文件希望启用的能力。配置已开启但代码尚未实现时，两者可以不同；客户端必须以 `features` 为可调用依据。响应不泄露 URL、token、API key：
 
 ```json
 {
   "api_version": "v1",
   "features": {
-    "items": true,
-    "sync": true,
+    "parser": true,
+    "items": false,
+    "sync": false,
+    "ics_subscriptions": false,
+    "assistant": false,
+    "widget_snapshot": false
+  },
+  "configured": {
+    "sync": false,
     "ics_subscriptions": true,
     "assistant": false,
-    "widget_snapshot": true
+    "widget_snapshot": false
   },
   "providers": {
     "parser": ["rules.zh_cn"],

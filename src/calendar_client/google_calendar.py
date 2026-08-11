@@ -10,7 +10,14 @@ from googleapiclient.errors import HttpError
 
 from .base_client import BaseCalendarClient
 from ..parser.models import CalendarEvent, EventPriority, RecurrenceType
-from ...config.settings import GOOGLE_CALENDAR_CONFIG
+
+try:
+    from config.settings import GOOGLE_CALENDAR_CONFIG
+except ImportError:
+    GOOGLE_CALENDAR_CONFIG = {
+        "credentials_file": "config/google_credentials.json",
+        "token_file": "config/google_token.json",
+    }
 
 
 class GoogleCalendarClient(BaseCalendarClient):

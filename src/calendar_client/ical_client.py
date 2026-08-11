@@ -8,7 +8,13 @@ import vobject
 
 from .base_client import BaseCalendarClient
 from ..parser.models import CalendarEvent, RecurrenceType
-from ...config.settings import ICAL_CONFIG
+
+try:
+    from config.settings import ICAL_CONFIG
+except ImportError:
+    ICAL_CONFIG = {
+        "output_dir": "config/calendars",
+    }
 
 
 class ICalClient(BaseCalendarClient):
