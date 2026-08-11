@@ -89,6 +89,44 @@ class IdempotencyRecord:
 
 
 @dataclass(frozen=True)
+class SubscriptionFetchRecord:
+    """Durable audit entry for one subscription fetch attempt."""
+
+    fetch_id: str
+    subscription_id: str
+    started_at: datetime
+    finished_at: datetime
+    status: str
+    http_status: Optional[int] = None
+    etag: Optional[str] = None
+    last_modified: Optional[str] = None
+    source_hash: Optional[str] = None
+    error: Optional[str] = None
+    created_count: int = 0
+    updated_count: int = 0
+    deleted_count: int = 0
+    unchanged_count: int = 0
+
+    def __post_init__(self) -> None:
+        for field_name in ("fetch_id", "subscription_id", "status"):
+            value = getattr(self, field_name)
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"SubscriptionFetchRecord {field_name} cannot be empty")
+        for field_name in ("started_at", "finished_at"):
+            value = getattr(self, field_name)
+            if value.tzinfo is None or value.utcoffset() is None:
+                raise ValueError(f"SubscriptionFetchRecord {field_name} must include a timezone")
+        if self.finished_at < self.started_at:
+            raise ValueError("SubscriptionFetchRecord finished_at cannot be before started_at")
+        if self.http_status is not None and (type(self.http_status) is not int or self.http_status < 100):
+            raise ValueError("SubscriptionFetchRecord http_status must be a valid status")
+        for field_name in ("created_count", "updated_count", "deleted_count", "unchanged_count"):
+            value = getattr(self, field_name)
+            if type(value) is not int or value < 0:
+                raise ValueError(f"SubscriptionFetchRecord {field_name} cannot be negative")
+
+
+@dataclass(frozen=True)
 class CandidateExtractionRecord:
     """Persisted preview and optional rejection audit for parser output."""
 

@@ -52,6 +52,6 @@
 - Python 运行和测试依赖已精确锁定，`scripts/test.sh` 可在隔离环境运行全部离线测试。
 - `server/` 已提供 Worker/D1、Bearer 鉴权、幂等 push/pull、cursor 分页、确定性冲突恢复和 Cloudflare 基础部署入口。
 - Google、Microsoft 和飞书将在 T6 的 Importer SDK 之上重新实现，不复用已删除的日历客户端原型。
-- ICS 订阅的抓取、ETag/RRULE 同步、完整部署生命周期和 Docker 同步服务仍是目标能力；T3.1 的订阅配置与只读 Collection 已实现。
+- ICS 订阅配置与抓取、ETag/Last-Modified 和源哈希已经实现；RRULE/外部 ID 同步、完整部署生命周期和 Docker 同步服务仍是目标能力。
 
 完整差距见 [implementation-status.md](./implementation-status.md)，实施顺序见 [roadmap.md](./roadmap.md)。

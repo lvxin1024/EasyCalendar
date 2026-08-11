@@ -14,6 +14,7 @@ from src.storage.repository import (
     IdempotencyRecord,
     ItemQuery,
     ReminderScheduleRecord,
+    SubscriptionFetchRecord,
 )
 
 
@@ -78,6 +79,10 @@ class ItemRepositoryPort(Protocol):
 
     def list_items(self, query: Optional[ItemQuery] = None) -> list[Item]: ...
 
+    def create_item(self, item: Item) -> Item: ...
+
+    def update_item(self, item: Item, *, expected_version: int) -> Item: ...
+
 class CandidateRepositoryPort(ItemRepositoryPort, Protocol):
     def create_candidate_extraction(
         self, record: CandidateExtractionRecord
@@ -102,6 +107,10 @@ class SubscriptionTransactionPort(Protocol):
     ) -> Optional[Collection]: ...
 
     def list_items(self, query: Optional[ItemQuery] = None) -> list[Item]: ...
+
+    def create_item(self, item: Item) -> Item: ...
+
+    def update_item(self, item: Item, *, expected_version: int) -> Item: ...
 
     def create_collection(self, collection: Collection) -> Collection: ...
 
@@ -129,6 +138,10 @@ class SubscriptionTransactionPort(Protocol):
 
     def create_idempotency_record(self, record: IdempotencyRecord) -> IdempotencyRecord: ...
 
+    def create_subscription_fetch_log(
+        self, record: SubscriptionFetchRecord
+    ) -> SubscriptionFetchRecord: ...
+
 
 class SubscriptionRepositoryPort(Protocol):
     def transaction(self) -> AbstractContextManager[SubscriptionTransactionPort]: ...
@@ -144,6 +157,10 @@ class SubscriptionRepositoryPort(Protocol):
     ) -> Optional[Subscription]: ...
 
     def list_subscriptions(self, *, include_deleted: bool = False) -> list[Subscription]: ...
+
+    def list_subscription_fetch_logs(
+        self, subscription_id: str, *, limit: int = 100
+    ) -> list[SubscriptionFetchRecord]: ...
 
 
 class ReminderRepositoryPort(ItemRepositoryPort, Protocol):

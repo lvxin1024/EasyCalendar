@@ -26,11 +26,12 @@ from .repository import (
     ReminderScheduleState,
     RepositoryError,
     StorageDataError,
+    SubscriptionFetchRecord,
     VersionConflictError,
 )
 
 
-LATEST_SCHEMA_VERSION = 4
+LATEST_SCHEMA_VERSION = 5
 _MIGRATION_PACKAGE = "src.storage.migrations"
 _ITEM_SCHEDULE_SQL = """
 CASE item_type
@@ -427,6 +428,57 @@ class SQLiteSession:
                 f"Subscription {subscription.id!r} already exists"
             ) from error
         return subscription
+
+    def create_subscription_fetch_log(
+        self, record: SubscriptionFetchRecord
+    ) -> SubscriptionFetchRecord:
+        try:
+            self._connection.execute(
+                """
+                INSERT INTO subscription_fetch_logs(
+                    fetch_id, subscription_id, started_at, finished_at, status,
+                    http_status, etag, last_modified, source_hash, error,
+                    created_count, updated_count, deleted_count, unchanged_count
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    record.fetch_id,
+                    record.subscription_id,
+                    _utc_text(record.started_at),
+                    _utc_text(record.finished_at),
+                    record.status,
+                    record.http_status,
+                    record.etag,
+                    record.last_modified,
+                    record.source_hash,
+                    record.error,
+                    record.created_count,
+                    record.updated_count,
+                    record.deleted_count,
+                    record.unchanged_count,
+                ),
+            )
+        except sqlite3.IntegrityError as error:
+            raise EntityAlreadyExistsError(
+                f"Subscription fetch log {record.fetch_id!r} already exists"
+            ) from error
+        return record
+
+    def list_subscription_fetch_logs(
+        self, subscription_id: str, *, limit: int = 100
+    ) -> List[SubscriptionFetchRecord]:
+        if type(limit) is not int or not 1 <= limit <= 500:
+            raise ValueError("limit must be between 1 and 500")
+        rows = self._connection.execute(
+            """
+            SELECT * FROM subscription_fetch_logs
+            WHERE subscription_id = ?
+            ORDER BY finished_at DESC, fetch_id DESC
+            LIMIT ?
+            """,
+            (subscription_id, limit),
+        ).fetchall()
+        return [self._load_subscription_fetch_log(row) for row in rows]
 
     def update_subscription(
         self, subscription: Subscription, *, expected_version: int
@@ -1044,6 +1096,32 @@ class SQLiteSession:
         return item
 
     @staticmethod
+    def _load_subscription_fetch_log(
+        row: sqlite3.Row,
+    ) -> SubscriptionFetchRecord:
+        try:
+            return SubscriptionFetchRecord(
+                fetch_id=row["fetch_id"],
+                subscription_id=row["subscription_id"],
+                started_at=SQLiteSession._parse_stored_time(row["started_at"]),
+                finished_at=SQLiteSession._parse_stored_time(row["finished_at"]),
+                status=row["status"],
+                http_status=row["http_status"],
+                etag=row["etag"],
+                last_modified=row["last_modified"],
+                source_hash=row["source_hash"],
+                error=row["error"],
+                created_count=row["created_count"],
+                updated_count=row["updated_count"],
+                deleted_count=row["deleted_count"],
+                unchanged_count=row["unchanged_count"],
+            )
+        except (TypeError, ValueError) as error:
+            raise StorageDataError(
+                f"Stored subscription fetch log {row['fetch_id']!r} is invalid"
+            ) from error
+
+    @staticmethod
     def _load_model(row: sqlite3.Row, model: Any, label: str) -> Any:
         data = _read_json(row["payload_json"], label)
         try:
@@ -1306,6 +1384,18 @@ class SQLiteRepository:
     ) -> List[Subscription]:
         with self._read_session() as session:
             return session.list_subscriptions(include_deleted=include_deleted)
+
+    def create_subscription_fetch_log(
+        self, record: SubscriptionFetchRecord
+    ) -> SubscriptionFetchRecord:
+        with self.transaction() as session:
+            return session.create_subscription_fetch_log(record)
+
+    def list_subscription_fetch_logs(
+        self, subscription_id: str, *, limit: int = 100
+    ) -> List[SubscriptionFetchRecord]:
+        with self._read_session() as session:
+            return session.list_subscription_fetch_logs(subscription_id, limit=limit)
 
     def create_outbox_entry(self, entry: OutboxEntry) -> OutboxEntry:
         with self.transaction() as session:

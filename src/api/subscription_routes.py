@@ -121,3 +121,34 @@ def delete_subscription(
     return get_subscription_service(request).delete_subscription(
         subscription_id, expected_version=_expected_version(expected_version, if_match)
     ).to_dict()
+
+
+@subscription_router.post("/{subscription_id}/refresh")
+def refresh_subscription(
+    request: Request,
+    subscription_id: str,
+    idempotency_key: Annotated[
+        str, Header(alias="Idempotency-Key", min_length=1, max_length=200)
+    ],
+):
+    return request.app.state.runtime.refresh_service().refresh(
+        subscription_id, idempotency_key=idempotency_key
+    ).to_dict()
+
+
+@subscription_router.get("/{subscription_id}/fetch-logs")
+def list_fetch_logs(
+    request: Request,
+    subscription_id: str,
+    limit: int = Query(default=100, ge=1, le=500),
+):
+    return {
+        "data": [
+            value.__dict__
+            for value in request.app.state.runtime.refresh_service().list_fetch_logs(
+                subscription_id, limit=limit
+            )
+        ],
+        "next_cursor": None,
+        "has_more": False,
+    }

@@ -175,6 +175,7 @@ Candidate 是解析阶段对象，不是正式 Item：
   "last_success_at": "2026-08-11T08:00:00Z",
   "last_error": null,
   "etag": "abc123",
+  "last_modified": "Wed, 12 Aug 2026 00:00:00 GMT",
   "source_hash": "sha256:...",
   "metadata": {},
   "created_at": "2026-08-11T08:00:00Z",

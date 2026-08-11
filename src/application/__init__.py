@@ -35,6 +35,14 @@ from .subscription_service import (
     UpdateCollectionCommand,
     UpdateSubscriptionCommand,
 )
+from .ics_service import (
+    FetchResponse,
+    ICSFetchError,
+    ICSFetcherPort,
+    RefreshReport,
+    SubscriptionRefreshService,
+    UrllibICSFetcher,
+)
 from .ports import (
     CandidateRepositoryPort,
     ItemRepositoryPort,
@@ -77,6 +85,12 @@ __all__ = [
     "SubscriptionService",
     "UpdateCollectionCommand",
     "UpdateSubscriptionCommand",
+    "FetchResponse",
+    "ICSFetchError",
+    "ICSFetcherPort",
+    "RefreshReport",
+    "SubscriptionRefreshService",
+    "UrllibICSFetcher",
     "ItemTransactionPort",
     "NotificationRequest",
     "NotificationSchedulerPort",

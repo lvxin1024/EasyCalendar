@@ -280,7 +280,14 @@ class SubscriptionService:
                 data["metadata"] = metadata
             data.update(values)
             if data.get("url") != current.url:
-                data.update(last_fetched_at=None, last_success_at=None, last_error=None, etag=None, source_hash=None)
+                data.update(
+                    last_fetched_at=None,
+                    last_success_at=None,
+                    last_error=None,
+                    etag=None,
+                    last_modified=None,
+                    source_hash=None,
+                )
             try:
                 updated = Subscription.from_dict(data)
                 if updated != current:

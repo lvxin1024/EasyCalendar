@@ -13,6 +13,7 @@ from src.application import (
     NotificationSchedulerPort,
     ReminderService,
     SubscriptionService,
+    SubscriptionRefreshService,
 )
 from src.notification import InMemoryNotificationScheduler
 from src.parser.rule_adapter import RuleParserAdapter
@@ -38,6 +39,7 @@ class RuntimeServices:
         self._notification_scheduler = notification_scheduler
         self._reminder_service: Optional[ReminderService] = None
         self._subscription_service: Optional[SubscriptionService] = None
+        self._refresh_service: Optional[SubscriptionRefreshService] = None
         self._lock = threading.RLock()
 
     def item_service(self) -> ItemService:
@@ -121,6 +123,17 @@ class RuntimeServices:
                 )
             return self._subscription_service
 
+    def refresh_service(self) -> SubscriptionRefreshService:
+        with self._lock:
+            if self._refresh_service is None:
+                self._refresh_service = SubscriptionRefreshService(
+                    self._repository_instance(),
+                    device_id=self.settings.app.instance_name,
+                    timezone_name=self.settings.app.timezone,
+                    timeout_seconds=self.settings.subscriptions.request_timeout_seconds,
+                )
+            return self._refresh_service
+
     def close(self) -> None:
         with self._lock:
             if self._owns_repository and self._repository is not None:
@@ -130,6 +143,7 @@ class RuntimeServices:
             self._candidate_service = None
             self._import_export_service = None
             self._subscription_service = None
+            self._refresh_service = None
             self._reminder_service = None
             self._notification_scheduler = None
 

@@ -137,6 +137,7 @@ def test_initializes_versioned_schema_and_loads_path_from_settings(tmp_path):
         (2, "002_idempotency.sql"),
         (3, "003_candidate_extractions.sql"),
         (4, "004_reminder_schedules.sql"),
+        (5, "005_subscription_fetch_logs.sql"),
     ]
 
 

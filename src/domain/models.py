@@ -581,6 +581,7 @@ class Subscription(_VersionedEntity):
     last_success_at: Optional[datetime] = None
     last_error: Optional[str] = None
     etag: Optional[str] = None
+    last_modified: Optional[str] = None
     source_hash: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=_utc_now)
@@ -622,6 +623,10 @@ class Subscription(_VersionedEntity):
             value = getattr(self, field_name)
             if value is not None:
                 _require_aware(value, f"Subscription {field_name}")
+        for field_name in ("etag", "last_modified", "source_hash", "last_error"):
+            value = getattr(self, field_name)
+            if value is not None and not isinstance(value, str):
+                raise ValueError(f"Subscription {field_name} must be a string")
         if self.last_success_at is not None and self.last_fetched_at is None:
             raise ValueError("Subscription last_success_at requires last_fetched_at")
         if (
@@ -653,6 +658,7 @@ class Subscription(_VersionedEntity):
         self,
         *,
         etag: Optional[str] = None,
+        last_modified: Optional[str] = None,
         source_hash: Optional[str] = None,
         now: Optional[datetime] = None,
     ) -> None:
@@ -663,6 +669,7 @@ class Subscription(_VersionedEntity):
         self.last_success_at = timestamp
         self.last_error = None
         self.etag = etag
+        self.last_modified = last_modified
         self.source_hash = source_hash
         self._advance_version(timestamp)
 

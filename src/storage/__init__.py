@@ -13,6 +13,7 @@ from .repository import (
     ReminderScheduleState,
     RepositoryError,
     StorageDataError,
+    SubscriptionFetchRecord,
     VersionConflictError,
 )
 from .sqlite import LATEST_SCHEMA_VERSION, SQLiteRepository, SQLiteSession
@@ -33,5 +34,6 @@ __all__ = [
     "SQLiteRepository",
     "SQLiteSession",
     "StorageDataError",
+    "SubscriptionFetchRecord",
     "VersionConflictError",
 ]
