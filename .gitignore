@@ -40,6 +40,9 @@ htmlcov/
 dist/
 build/
 *.egg-info/
+server/.generated/
+server/.wrangler/
+server/node_modules/
 client/.dart_tool/
 client/.flutter-plugins
 client/.flutter-plugins-dependencies

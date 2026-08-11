@@ -4,13 +4,13 @@
 
 用户的目标操作是：准备配置、执行一条命令、得到可访问的单用户实例。用户不需要修改源码、Dockerfile、Worker 路由或数据库 SQL。所有非秘密参数放 `config/app.yaml`，秘密放 `config/secrets.env` 或平台 secret store。
 
-当前仓库没有产品部署脚本。旧的 GitHub 推送辅助脚本已经删除，目标入口将实现为：
+Cloudflare 基础部署入口已实现为：
 
 ```bash
 ./scripts/setup.sh --config config/app.yaml
 ```
 
-脚本必须支持 `validate`、`install`、`migrate`、`deploy`、`backup`、`status`、`rollback` 子命令，并且每一步可单独执行。
+当前脚本支持 `validate`、`install`、`create`、`migrate`、`deploy` 和 `status`；完整生命周期仍需补充 `backup` 和 `rollback`。
 
 ## 2. 首选：Cloudflare 一站式部署
 
@@ -116,8 +116,8 @@ cp config/secrets.example.env config/secrets.env
 
 ## 7. 当前实现差距
 
-以下项在实现前不得在 README 中宣传为“一键部署”：
+当前实现边界：
 
-- `scripts/setup.sh` 尚未实现。
-- 当前没有 Worker、D1 migration 或 Docker Compose。
-- 当前只有读取 `config/` 的本地 FastAPI 启动入口，没有迁移、备份、状态检查和回滚命令。
+- `scripts/setup.sh` 已能校验 Cloudflare 配置、创建 D1、执行 migration、部署 Worker、写入 token secret 和检查 health。
+- Worker 当前只提供服务端骨架；部署成功不代表 T2.2 push/pull 已可用。
+- 自动 D1 备份、回滚、Cron/R2、Pages 和 Docker Compose 尚未实现，因此仍不宣传为完整的一键部署生命周期。

@@ -84,6 +84,7 @@
 
 ### T2.1 Worker/D1 服务端骨架
 
+- 状态：已完成。
 - 依赖：T0.3、T1.2。
 - 内容：Cloudflare Worker、D1 migrations、单实例 token、配置校验和错误格式。
 - 验收：`setup` 命令可创建数据库并部署；错误 token 返回 401；健康检查无需 token。

@@ -4,7 +4,7 @@
 
 部署者只修改 `config/` 下的配置文件，不改源码、不改 Dockerfile、不改 Worker 路由。配置分为非敏感运行配置和敏感秘密配置，二者都由部署脚本读取。
 
-Python 服务通过 `config/loader.py` 读取并校验本规范；Flutter 通过 `config/client.json` 的 dart-define 键复用 locale、timezone、default Collection、API URL、sync 和 notification 语义。尚未实现的 Worker 和部署脚本接入时必须继续复用同一字段语义。
+Python 服务通过 `config/loader.py` 读取并校验本规范；Flutter 通过 `config/client.json` 的 dart-define 键复用 locale、timezone、default Collection、API URL、sync 和 notification 语义；Worker setup 读取同一 `app.yaml` 和秘密文件并生成忽略提交的 Wrangler 配置。
 
 ## 文件布局
 

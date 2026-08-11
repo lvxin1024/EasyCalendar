@@ -38,6 +38,7 @@ Domain 不得导入 FastAPI、Flutter、Cloudflare SDK、具体 AI SDK 或具体
 - `requirements-dev.txt` 包含全部离线测试依赖；外部日历 adapter 在 T6 实现时建立各自明确的依赖边界。
 - Node.js 在 Worker 代码进入仓库时固定 LTS 主版本并提交 lockfile；在此之前不维护空的 Node 工程。
 - Flutter 客户端固定 `3.44.9`，版本写在 `client/.fvmrc`，setup 脚本从该文件读取并校验。runner 和 `pubspec.lock` 必须提交；analyzer/单测通过不等于平台原生构建通过。
+- Worker 固定 Node.js 22，版本写在 `server/.nvmrc`，npm 依赖由 `server/package-lock.json` 精确锁定。
 - 升级依赖必须单独提交并通过全部测试；业务功能提交不顺带放宽版本范围。
 
 ## 本地命令
@@ -47,6 +48,8 @@ Domain 不得导入 FastAPI、Flutter、Cloudflare SDK、具体 AI SDK 或具体
 python run.py                 # 从 config/ 读取设置并启动 API
 ./scripts/setup-client.sh     # 生成 runner、解析依赖、analyze 和 test
 ./scripts/run-client.sh       # 使用 config/client.json 运行 Flutter
+./scripts/setup.sh install    # 安装锁定的 Worker/部署依赖
+./scripts/setup.sh validate --config config/app.yaml
 ```
 
 `scripts/test.sh` 默认使用 `.venv-test`，可以通过 `PYTHON` 选择解释器，通过 `EASYCALENDAR_TEST_VENV` 调整测试环境目录。脚本和 CI 不读取用户的第三方账户凭据。
