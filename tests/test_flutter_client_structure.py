@@ -1,4 +1,4 @@
-"""Static contracts for the Flutter client when no SDK is installed in CI."""
+"""Static contracts for the generated Flutter client project."""
 
 import json
 import os
@@ -33,12 +33,12 @@ def test_flutter_project_declares_pinned_sdk_and_offline_dependencies():
     fvm = json.loads((CLIENT / ".fvmrc").read_text(encoding="utf-8"))
     pubspec = yaml.safe_load((CLIENT / "pubspec.yaml").read_text(encoding="utf-8"))
 
-    assert fvm["flutter"] == "3.35.7"
-    assert pubspec["dependencies"]["sqflite"] == "2.4.2"
-    assert pubspec["dependencies"]["sqflite_common_ffi"] == "2.3.6"
-    assert pubspec["dependencies"]["path_provider"] == "2.1.5"
-    assert pubspec["dependencies"]["timezone"] == "0.10.1"
-    assert pubspec["dependencies"]["uuid"] == "4.5.1"
+    assert fvm["flutter"] == "3.44.9"
+    assert pubspec["dependencies"]["sqflite"] == "2.4.3"
+    assert pubspec["dependencies"]["sqflite_common_ffi"] == "2.4.2"
+    assert pubspec["dependencies"]["path_provider"] == "2.1.6"
+    assert pubspec["dependencies"]["timezone"] == "0.11.1"
+    assert pubspec["dependencies"]["uuid"] == "4.6.0"
 
 
 def test_t16_views_repository_and_platform_bootstrap_are_present():
@@ -53,15 +53,30 @@ def test_t16_views_repository_and_platform_bootstrap_are_present():
         "lib/features/editor/item_editor_page.dart",
         "lib/features/settings/settings_page.dart",
         "test/item_controller_test.dart",
+        ".metadata",
+        "pubspec.lock",
+        "android/app/build.gradle.kts",
+        "macos/Runner/Configs/AppInfo.xcconfig",
+        "windows/runner/main.cpp",
     ]
 
     assert all((CLIENT / relative).is_file() for relative in required)
     setup = (ROOT / "scripts" / "setup-client.sh").read_text(encoding="utf-8")
     assert "--platforms android,macos,windows" in setup
-    assert "flutter analyze" in setup
-    assert "flutter test" in setup
+    assert '"${FLUTTER_BIN}" analyze' in setup
+    assert '"${FLUTTER_BIN}" test' in setup
+    run = (ROOT / "scripts" / "run-client.sh").read_text(encoding="utf-8")
+    assert "Web is not a supported EasyCalendar client target" in run
     assert os.access(ROOT / "scripts" / "setup-client.sh", os.X_OK)
     assert os.access(ROOT / "scripts" / "run-client.sh", os.X_OK)
+
+
+def test_runtime_data_ignore_does_not_hide_flutter_repository_sources():
+    patterns = (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+
+    assert "/data/" in patterns
+    assert "data/" not in patterns
+    assert (CLIENT / "lib" / "data" / "local_item_repository.dart").is_file()
 
 
 def test_local_mutations_are_versioned_soft_deleted_and_write_outbox():

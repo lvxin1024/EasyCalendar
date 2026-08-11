@@ -51,14 +51,14 @@ for candidate in result.candidates:
 
 ## Flutter 客户端
 
-Flutter 固定为 `3.35.7`；首次运行会生成 Android/macOS/Windows runner、解析依赖并执行检查：
+Flutter 固定为 `3.44.9`；首次运行会生成 Android/macOS/Windows runner、解析依赖并执行检查：
 
 ```bash
 ./scripts/setup-client.sh
 ./scripts/run-client.sh
 ```
 
-客户端配置集中在未提交的 `config/client.json`，setup 会从示例创建。当前实现机器没有 Flutter SDK，因此平台编译尚未在本次提交中验证。
+客户端配置集中在未提交的 `config/client.json`，setup 会从示例创建。脚本会自动寻找 PATH 或 `~/flutter/bin/flutter`，并默认运行当前主机的桌面目标；Android 通过 `EASYCALENDAR_CLIENT_DEVICE` 指定设备。
 
 ## 产品文档
 

@@ -37,7 +37,7 @@ Domain 不得导入 FastAPI、Flutter、Cloudflare SDK、具体 AI SDK 或具体
 - `requirements.txt` 只包含启动核心 API 所需的精确版本，包括正式 ICS transfer 使用的 `icalendar`。
 - `requirements-dev.txt` 包含全部离线测试依赖；外部日历 adapter 在 T6 实现时建立各自明确的依赖边界。
 - Node.js 在 Worker 代码进入仓库时固定 LTS 主版本并提交 lockfile；在此之前不维护空的 Node 工程。
-- Flutter 客户端固定 `3.35.7`，版本写在 `client/.fvmrc` 和 `scripts/setup-client.sh`。当前实现机无 SDK，首次 setup 生成 runner 和 `pubspec.lock` 后必须一并提交，不能把静态检查当成平台构建通过。
+- Flutter 客户端固定 `3.44.9`，版本写在 `client/.fvmrc`，setup 脚本从该文件读取并校验。runner 和 `pubspec.lock` 必须提交；analyzer/单测通过不等于平台原生构建通过。
 - 升级依赖必须单独提交并通过全部测试；业务功能提交不顺带放宽版本范围。
 
 ## 本地命令

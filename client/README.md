@@ -10,13 +10,13 @@ cp config/client.example.json config/client.json
 ./scripts/run-client.sh
 ```
 
-`setup-client.sh` requires Flutter `3.35.7` (also declared in `.fvmrc`) and
+`setup-client.sh` requires Flutter `3.44.9` (also declared in `.fvmrc`) and
 generates the standard Android, macOS, and Windows runner projects before
 resolving packages. `run-client.sh` passes the selected config file through
-`--dart-define-from-file`. Set `EASYCALENDAR_CLIENT_DEVICE` when more than one
-device is available.
+`--dart-define-from-file`. It defaults to the host desktop target; set
+`EASYCALENDAR_CLIENT_DEVICE` to an Android device ID when needed. Web is not a
+supported target because the local SQLite/path-provider stack is native-only.
 
-This repository was prepared on a machine without Flutter/Dart, so the checked
-in Dart code has static contract tests but the generated platform runners,
-`pubspec.lock`, analyzer, widget tests, and platform builds must be produced by
-the setup command on a Flutter-capable machine.
+The generated platform runners and `pubspec.lock` are version controlled.
+Analyzer and unit tests run on any Flutter-capable development machine; native
+build acceptance additionally requires that platform's SDK and toolchain.

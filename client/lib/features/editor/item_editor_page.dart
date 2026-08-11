@@ -441,7 +441,7 @@ class _DateTimeField extends StatelessWidget {
                     style: Theme.of(context).textTheme.labelLarge,
                   ),
                 ),
-                if (clearButton != null) clearButton,
+                ?clearButton,
               ],
             ),
             const SizedBox(height: 4),
@@ -468,7 +468,7 @@ class _DateTimeField extends StatelessWidget {
             const SizedBox(width: 8),
             SizedBox(width: 118, child: _timeButton(context)),
           ],
-          if (clearButton != null) clearButton,
+          ?clearButton,
         ],
       );
     },

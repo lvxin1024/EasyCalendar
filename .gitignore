@@ -25,11 +25,7 @@ config/client.json
 config/environments/*.local.yaml
 
 # Runtime data
-data/
-
-# Google Calendar credentials
-config/google_credentials.json
-config/google_token.json
+/data/
 
 # Logs
 *.log
@@ -49,7 +45,12 @@ client/.flutter-plugins
 client/.flutter-plugins-dependencies
 client/.packages
 client/android/.gradle/
+client/android/local.properties
+client/android/key.properties
+client/android/**/*.jks
+client/android/**/*.keystore
 client/macos/Pods/
+client/macos/Flutter/ephemeral/
 client/windows/flutter/ephemeral/
 
 # OS

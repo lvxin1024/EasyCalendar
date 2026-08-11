@@ -64,26 +64,34 @@ app_settings
 
 ## 5. 初始化和运行
 
-客户端固定 Flutter `3.35.7`，`.fvmrc` 和 setup 脚本使用同一版本：
+客户端固定 Flutter `3.44.9`，`.fvmrc` 和 setup 脚本使用同一版本：
 
 ```bash
 ./scripts/setup-client.sh
 ./scripts/run-client.sh
 ```
 
-setup 在临时目录调用 `flutter create`，只复制缺失的 Android/macOS/Windows runner，不覆盖 `client/lib`；随后执行 `flutter pub get`、`flutter analyze` 和 `flutter test`。指定设备：
+setup 在临时目录调用 `flutter create`，只复制缺失的 Android/macOS/Windows runner，不覆盖 `client/lib`；随后执行 `flutter pub get`、`flutter analyze` 和 `flutter test`。脚本优先使用 `FLUTTER_BIN`、PATH，最后尝试 `~/flutter/bin/flutter`。指定设备：
 
 ```bash
 EASYCALENDAR_CLIENT_DEVICE=macos ./scripts/run-client.sh
 ```
 
+未指定设备时，macOS/Windows 主机默认使用本机桌面目标；Android 设备通过环境变量传入。Web 不属于当前支持范围，运行脚本会拒绝 `chrome` 和 `web-server`，避免 native SQLite/path-provider 在浏览器中产生 `MissingPluginException`。
+
 ## 6. 当前验证状态
 
-本次实现环境没有 `flutter`、`dart`、FVM、Android SDK 或现成 runner，因此不能声称 Android/macOS/Windows 已实际编译启动。已完成的验证是：
+已使用 Flutter `3.44.9` 完成：
 
-- Python 静态契约测试检查配置键、固定依赖、页面/Repository 文件和 outbox 语义。
-- shell 脚本通过 `bash -n`，缺少 SDK 时返回明确错误。
-- Dart 文件完成 delimiter 静态检查。
-- `client/test/item_controller_test.dart` 已覆盖内存 Repository 下的 CRUD、今日计算和 Due 完成，但必须在安装指定 Flutter SDK 后由 setup 实际运行。
+- 生成并纳入版本控制的 Android、macOS、Windows runner、`.metadata` 和 `pubspec.lock`。
+- `flutter analyze`：0 issues。
+- `flutter test`：2 tests passed，覆盖内存 Repository 下的 CRUD、今日计算和 Due 完成。
+- `scripts/setup-client.sh` 完整执行通过；Web 目标拒绝测试返回预期错误。
 
-`pubspec.lock` 和平台 runner 由首次成功 setup 生成；在此之前，T1.6 的代码实现已完成，但路线图中“三平台离线启动”的构建验收仍是明确剩余项。
+原生构建探测结果：
+
+- macOS：runner 已生成，但本机只有 Command Line Tools，没有完整 Xcode/CocoaPods，`xcodebuild` 不可用。
+- Android：runner 已生成，但本机没有 Android SDK，无法产出 debug APK。
+- Windows：runner 已生成；Flutter 只允许在 Windows host 上执行 Windows build。
+
+因此 T1.6 的代码、runner、依赖解析、analyzer 和单测已验收；“三平台离线启动”仍需在对应平台工具链安装完成后验收，不能标记为全部完成。

@@ -4,6 +4,8 @@ import 'package:easy_calendar/data/item_repository.dart';
 import 'package:easy_calendar/domain/item.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:timezone/data/latest.dart' as tz_data;
+import 'package:timezone/timezone.dart' as tz;
 
 void main() {
   const config = AppConfig(
@@ -19,6 +21,11 @@ void main() {
     syncEnabled: false,
     notificationsEnabled: false,
   );
+
+  setUpAll(() {
+    tz_data.initializeTimeZones();
+    tz.setLocalLocation(tz.getLocation(config.timezone));
+  });
 
   test('controller persists CRUD and computes today items', () async {
     final repository = _MemoryRepository();

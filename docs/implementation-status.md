@@ -15,7 +15,7 @@
 | Candidate Service | `src/application/candidate_service.py` | 候选提取、持久化预览、拒绝审计和确认编排已实现 |
 | Reminder Service | `src/application/reminder_service.py` | 相对/绝对提醒计算、持久化调度状态、改期取消、失败重试和启动恢复已实现 |
 | Import/Export Service | `src/application/import_export_service.py` | JSON 全量备份恢复、ICS Event 导入导出、预览、重复检测、幂等提交和整批事务已实现 |
-| Flutter 客户端 | `client/lib/` | 今日、全部、Due、编辑器、设置、SQLite Repository、软删除和 outbox 代码已实现；三平台未编译验证 |
+| Flutter 客户端 | `client/` | 今日、全部、Due、编辑器、设置、SQLite Repository、软删除和 outbox 已实现；三平台 runner/lockfile、analyzer 和单测已验收，原生 build 待平台工具链 |
 | Notification adapter | `src/notification/` | 平台 port 已定义；`memory` adapter 可用于离线开发和测试，不发送系统通知 |
 | 解析器输出候选项 | `src/parser/rule_adapter.py` | 规则 Parser 已适配 Candidate application port，并使用请求时区和参考时间 |
 | FastAPI Item API | `src/api/item_routes.py` | 已提供正式 `/v1/items` CRUD、分页、过滤和统一错误格式 |
@@ -51,8 +51,8 @@
 1. 规则 Parser 覆盖仍有限，复杂时间范围、自然语言时长和重复规则需要继续补充 fixture。
 2. SQLite 已有临时数据库和重启集成测试；同步和部署集成测试仍要随对应功能补充。
 3. `deployment.auto_migrate` 已接入 Repository；`auto_backup_before_migrate` 要在备份/部署任务中接入，目前不能视为已有自动备份。
-4. 当前机器没有 Flutter/Dart/Android SDK；`client/` 尚无 SDK 生成的 runner 和 lockfile，Android/macOS/Windows 离线启动必须在 Flutter 环境执行 `scripts/setup-client.sh` 后验收。
+4. 当前机器有 Flutter 3.44.9，但没有 Android SDK、完整 Xcode/CocoaPods；Windows build 也必须在 Windows host 执行，因此三平台原生离线启动尚未全部验收。
 
 ## 结论
 
-正式 Item CRUD、Candidate 确认、可恢复本地提醒协调、事务化 JSON/ICS transfer 和 Flutter 离线 CRUD 代码均已落地。下一步先在具备 Flutter 3.35.7 的环境完成 T1.6 三平台构建验收，再进入 T2 自托管同步；真实系统通知仍由后续平台 adapter 实现。
+正式 Item CRUD、Candidate 确认、可恢复本地提醒协调、事务化 JSON/ICS transfer 和 Flutter 离线 CRUD 均已落地。下一步可进入 T2 自托管同步；T1.6 的三平台原生启动验收作为环境任务保留，真实系统通知仍由后续平台 adapter 实现。
