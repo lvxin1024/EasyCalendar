@@ -124,6 +124,9 @@ export function validateConfig(rawConfig, rawSecrets) {
   if (!booleanAt(sync.enabled, "sync.enabled")) {
     fail("sync.enabled must be true for a Cloudflare sync server");
   }
+  if (!Number.isInteger(sync.pull_limit) || sync.pull_limit < 1 || sync.pull_limit > 1000) {
+    fail("sync.pull_limit must be an integer between 1 and 1000");
+  }
 
   const publicUrl = stringAt(server.public_url, "server.public_url");
   let parsedUrl;
@@ -168,6 +171,7 @@ export function validateConfig(rawConfig, rawSecrets) {
     locale: stringAt(app.locale, "app.locale"),
     publicUrl: publicUrl.replace(/\/$/, ""),
     corsAllowedOrigins: origins,
+    syncPullLimit: sync.pull_limit,
     adminToken,
     workerName: `${instanceName}-server`,
     databaseName: `${instanceName}-db`,
@@ -196,6 +200,7 @@ export function buildWranglerConfig(config, databaseId) {
       LOCALE: config.locale,
       CORS_ALLOWED_ORIGINS: config.corsAllowedOrigins.join(","),
       SYNC_ENABLED: "true",
+      SYNC_PULL_LIMIT: String(config.syncPullLimit),
     },
   };
   if (publicHostname.endsWith(".workers.dev")) {
@@ -281,7 +286,7 @@ async function smokeTest(config) {
   const response = await fetch(`${config.publicUrl}/v1/health`);
   if (!response.ok) fail(`Health smoke test failed with HTTP ${response.status}`);
   const payload = await response.json();
-  if (payload.status !== "ok" || payload.schema_version !== 1) {
+  if (payload.status !== "ok" || payload.schema_version !== 2) {
     fail("Health smoke test returned an incompatible response");
   }
 }

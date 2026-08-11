@@ -2,6 +2,7 @@ import { Hono } from "hono";
 
 import { requireAdminToken } from "./auth";
 import { errorResponse, requestId } from "./errors";
+import { pullChanges, pushChanges } from "./sync";
 import type { AppEnv } from "./types";
 
 export const app = new Hono<AppEnv>();
@@ -43,7 +44,7 @@ app.get("/v1/health", (c) =>
     status: "ok",
     service: "easycalendar",
     version: "0.1.0",
-    schema_version: 1,
+    schema_version: 2,
   }),
 );
 
@@ -53,7 +54,7 @@ app.get("/v1/capabilities", (c) =>
     features: {
       parser: false,
       items: false,
-      sync: false,
+      sync: true,
       ics_subscriptions: false,
       assistant: false,
       local_reminders: false,
@@ -73,10 +74,17 @@ app.get("/v1/capabilities", (c) =>
       ai: [],
       notification: [],
     },
+    limits: {
+      sync_push_batch: Number(c.env.SYNC_PULL_LIMIT || "200"),
+      sync_pull_limit: Number(c.env.SYNC_PULL_LIMIT || "200"),
+    },
   }),
 );
 
 app.use("/v1/*", requireAdminToken);
+
+app.post("/v1/sync/push", pushChanges);
+app.get("/v1/sync/pull", pullChanges);
 
 app.notFound((c) =>
   errorResponse(c, 404, "not_found", "The requested resource does not exist"),

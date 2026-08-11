@@ -91,6 +91,7 @@
 
 ### T2.2 Push / Pull 协议
 
+- 状态：已完成。
 - 依赖：T2.1、T1.1。
 - 内容：change envelope、cursor、批量限制、幂等 change_id、应用结果。
 - 验收：重复 push 不重复写入；pull cursor 可恢复；服务端重启不丢变更。

@@ -11,6 +11,7 @@ const env = {
   LOCALE: "zh-CN",
   CORS_ALLOWED_ORIGINS: "https://client.example.com",
   SYNC_ENABLED: "true",
+  SYNC_PULL_LIMIT: "200",
 } as Bindings;
 
 describe("Worker system endpoints", () => {
@@ -22,7 +23,7 @@ describe("Worker system endpoints", () => {
       status: "ok",
       service: "easycalendar",
       version: "0.1.0",
-      schema_version: 1,
+      schema_version: 2,
     });
   });
 
@@ -34,7 +35,7 @@ describe("Worker system endpoints", () => {
     expect(payload).not.toHaveProperty("admin_token");
     expect(payload).toMatchObject({
       api_version: "v1",
-      features: { sync: false },
+      features: { sync: true },
       configured: { sync: true },
     });
   });
@@ -43,7 +44,7 @@ describe("Worker system endpoints", () => {
 describe("Worker request boundary", () => {
   it("rejects a missing bearer token with the common envelope", async () => {
     const response = await app.request(
-      "/v1/sync/pull",
+      "/v1/unknown",
       { headers: { "X-Request-Id": "req_test" } },
       env,
     );
@@ -74,7 +75,7 @@ describe("Worker request boundary", () => {
 
   it("allows a valid bearer token to reach routing", async () => {
     const response = await app.request(
-      "/v1/sync/pull",
+      "/v1/unknown",
       { headers: { Authorization: `Bearer ${env.ADMIN_TOKEN}` } },
       env,
     );

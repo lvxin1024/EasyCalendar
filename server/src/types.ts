@@ -6,6 +6,7 @@ export interface Bindings {
   LOCALE: string;
   CORS_ALLOWED_ORIGINS: string;
   SYNC_ENABLED: string;
+  SYNC_PULL_LIMIT: string;
   DB: D1Database;
 }
 

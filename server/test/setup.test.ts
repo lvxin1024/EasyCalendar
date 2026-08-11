@@ -19,7 +19,7 @@ const config = {
     cors_allowed_origins: ["https://client.example.com"],
   },
   storage: { driver: "d1" },
-  sync: { enabled: true },
+  sync: { enabled: true, pull_limit: 200 },
   deployment: { provider: "cloudflare" },
 };
 const secrets = { ADMIN_TOKEN: "a-secure-token-with-at-least-32-characters" };
@@ -44,6 +44,7 @@ describe("Cloudflare setup configuration", () => {
       vars: {
         TIMEZONE: "Asia/Shanghai",
         CORS_ALLOWED_ORIGINS: "https://client.example.com",
+        SYNC_PULL_LIMIT: "200",
       },
       workers_dev: false,
       routes: [{ pattern: "calendar.example.com", custom_domain: true }],

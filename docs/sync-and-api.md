@@ -350,7 +350,7 @@ AI provider 返回非法结构时，接口返回 422 或回退到规则 Parser�
 
 ### `POST /v1/sync/push`
 
-批量上限由 capabilities 声明。`change_id` 和 `Idempotency-Key` 都必须幂等：
+批量上限由 capabilities 声明。`change_id` 和 `Idempotency-Key` 都必须幂等。`payload` 是完整实体快照；其中 `id`、`version`、`updated_at` 必须与 change envelope 一致，Item 和 Subscription 还必须携带 `collection_id`：
 
 ```json
 {

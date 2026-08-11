@@ -17,6 +17,7 @@
     "TIMEZONE": "Asia/Shanghai",
     "LOCALE": "zh-CN",
     "CORS_ALLOWED_ORIGINS": "http://localhost:8000",
-    "SYNC_ENABLED": "true"
+    "SYNC_ENABLED": "true",
+    "SYNC_PULL_LIMIT": "200"
   }
 }

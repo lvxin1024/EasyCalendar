@@ -1,9 +1,9 @@
 # EasyCalendar Cloudflare server
 
-`server/` contains the single-instance Cloudflare Worker and D1 foundation. T2.1
-provides public system endpoints, Bearer authentication, CORS enforcement, the
-common error envelope, initial D1 migrations, and the deployment entry point.
-Push/pull synchronization is intentionally deferred to T2.2.
+`server/` contains the single-instance Cloudflare Worker and D1 sync service.
+It provides public system endpoints, Bearer authentication, CORS enforcement,
+the common error envelope, idempotent push/pull with cursor pagination, D1
+migrations, and the deployment entry point.
 
 ## Prerequisites
 
