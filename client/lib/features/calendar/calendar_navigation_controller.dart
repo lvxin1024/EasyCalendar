@@ -46,6 +46,18 @@ class CalendarNavigationController extends ChangeNotifier {
     growable: false,
   );
 
+  DateTime get monthGridStart => startOfWeek(
+    DateTime(_selectedDate.year, _selectedDate.month),
+    _firstDayOfWeek,
+  );
+
+  DateTime get monthGridEnd {
+    final monthEnd = DateTime(_selectedDate.year, _selectedDate.month + 1);
+    final days = monthEnd.difference(monthGridStart).inDays;
+    final rowCount = (days + 6) ~/ 7;
+    return monthGridStart.add(Duration(days: rowCount * 7));
+  }
+
   void setMode(CalendarViewMode value) {
     if (_mode == value) return;
     _mode = value;

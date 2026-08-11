@@ -3,9 +3,8 @@ import 'package:intl/intl.dart';
 
 import '../../application/item_controller.dart';
 import '../../domain/item.dart';
-import '../../widgets/empty_state.dart';
-import '../../widgets/item_tile.dart';
 import 'calendar_navigation_controller.dart';
+import 'calendar_month_grid.dart';
 import 'calendar_time_grid.dart';
 
 class CalendarPage extends StatefulWidget {
@@ -50,11 +49,10 @@ class _CalendarPageState extends State<CalendarPage> {
           const Divider(),
           Expanded(
             child: widget.navigation.mode == CalendarViewMode.month
-                ? _RangeEventList(
-                    events: events,
+                ? CalendarMonthGrid(
                     navigation: widget.navigation,
+                    items: widget.controller.items,
                     onEdit: widget.onEdit,
-                    onDelete: widget.onDelete,
                   )
                 : CalendarTimeGrid(
                     dates: widget.navigation.visibleDates,
@@ -71,40 +69,6 @@ class _CalendarPageState extends State<CalendarPage> {
       );
     },
   );
-}
-
-class _RangeEventList extends StatelessWidget {
-  const _RangeEventList({
-    required this.events,
-    required this.navigation,
-    required this.onEdit,
-    required this.onDelete,
-  });
-
-  final List<CalendarItem> events;
-  final CalendarNavigationController navigation;
-  final ValueChanged<CalendarItem> onEdit;
-  final ValueChanged<CalendarItem> onDelete;
-
-  @override
-  Widget build(BuildContext context) => events.isEmpty
-      ? EmptyState(
-          icon: Icons.calendar_view_week_outlined,
-          title: '${_rangeTitle(navigation)}没有日程',
-          message: '新建日程后会显示在当前日期范围内。',
-        )
-      : ListView.builder(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 96),
-          itemCount: events.length,
-          itemBuilder: (context, index) {
-            final item = events[index];
-            return ItemTile(
-              item: item,
-              onEdit: () => onEdit(item),
-              onDelete: () => onDelete(item),
-            );
-          },
-        );
 }
 
 class _CalendarToolbar extends StatelessWidget {
