@@ -35,7 +35,7 @@
 
 迁移按以下顺序进行：
 
-1. 更新 README、API title、Web title、`setup.json` 和默认配置。
+1. 更新 README、API title、包元数据和默认配置。
 2. 更新 Python 包、Flutter bundle ID、Worker 名称和 Docker image 名称。
 3. 更新 GitHub 仓库、部署域名和文档链接。
 4. 保留旧环境变量和 API title 一个版本周期，并提供迁移说明。

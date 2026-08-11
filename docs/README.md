@@ -47,6 +47,7 @@
 - 规则解析器已经可以输出 `CandidateItem`，并保留旧的 `events` 兼容视图。
 - `Item` 领域模型已经有基础定义和候选确认转换方法。
 - API 仍然是历史 `/api/v1` 日历接口，尚无 SQLite、认证、正式 Item CRUD 或同步服务。
-- `deploy.sh` 目前主要是 GitHub 推送说明，不是目标产品的一键部署器。
+- 核心与可选 provider 依赖已分层锁定，`scripts/test.sh` 可在隔离环境运行离线测试。
+- 当前没有产品部署脚本；Cloudflare/Docker 一站式部署仍是目标能力。
 
 完整差距见 [implementation-status.md](./implementation-status.md)，实施顺序见 [roadmap.md](./roadmap.md)。

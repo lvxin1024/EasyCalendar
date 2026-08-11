@@ -71,8 +71,9 @@ def build_capabilities_payload(
                     "google.oauth2.credentials",
                     "google_auth_oauthlib.flow",
                     "googleapiclient.discovery",
+                    "icalendar",
                 ),
-                "microsoft": _modules_available("msal", "requests"),
+                "microsoft": _modules_available("msal", "requests", "icalendar"),
             },
         },
         "runtime": {

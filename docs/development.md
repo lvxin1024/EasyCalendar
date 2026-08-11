@@ -28,6 +28,25 @@ storage/sync/notification 通过接口连接 application/domain
 
 Domain 不得导入 FastAPI、Flutter、Cloudflare SDK、具体 AI SDK 或具体数据库驱动。
 
+## 工具链和依赖
+
+- Python 最低支持 3.11，默认开发版本由根目录 `.python-version` 固定为 3.13；CI 同时验证 3.11 和 3.13。
+- `requirements.txt` 只包含启动核心 API 所需的精确版本。
+- `requirements-dev.txt` 包含离线测试依赖；`requirements-providers.txt` 包含 Google、Microsoft 和 iCal 可选依赖。
+- Node.js 在 Worker 代码进入仓库时固定 LTS 主版本并提交 lockfile；在此之前不维护空的 Node 工程。
+- Flutter 在客户端代码进入仓库时固定 stable SDK 精确版本并提交 FVM 配置和 lockfile；在此之前不声明未经测试的版本。
+- 升级依赖必须单独提交，并同时通过核心和 provider 测试；业务功能提交不顺带放宽版本范围。
+
+## 本地命令
+
+```bash
+./scripts/test.sh             # 隔离环境中的核心测试
+./scripts/test.sh providers   # 安装可选 provider 后运行全部离线测试
+python run.py                 # 从 config/ 读取设置并启动 API
+```
+
+`scripts/test.sh` 默认使用 `.venv-test`，可以通过 `PYTHON` 选择解释器，通过 `EASYCALENDAR_TEST_VENV` 调整测试环境目录。脚本和 CI 不读取用户的第三方账户凭据。
+
 ## 配置和秘密
 
 - 用户修改 `config/app.yaml` 和未提交的 `config/secrets.env`，不改源码。

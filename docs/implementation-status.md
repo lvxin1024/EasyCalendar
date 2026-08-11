@@ -15,9 +15,9 @@
 | Health / Capabilities | `src/api/system_routes.py` | 已提供目标 `/v1` 系统端点 |
 | iCal 内存客户端 | `src/calendar_client/ical_client.py` | 原型，缓存不持久化 |
 | Google / Outlook 客户端 | `src/calendar_client/` | 代码存在，未经可靠集成验证 |
-| 静态 Web 页面 | `public/index.html` | 历史演示页面，不是目标客户端 |
 | 配置 | `config/loader.py` | YAML、secrets.env、环境覆盖和严格校验已接入 |
-| 部署脚本 | `deploy.sh` | 主要是 GitHub 推送辅助，不是一键产品部署 |
+| 本地启动入口 | `run.py` | 从统一配置读取 host、port 和 debug |
+| 测试与依赖 | `scripts/test.sh` | 核心、开发和可选 provider 依赖已分层锁定 |
 
 ## 尚未实现的目标能力
 
@@ -29,19 +29,17 @@
 - Flutter Android/macOS/Windows 客户端。
 - 本地通知和 macOS WidgetKit。
 - AI Provider 抽象、结构化输出校验和提醒建议。
+- Web 或 Flutter 正式客户端。
 - 配置文件驱动的一键 Cloudflare/Docker 部署。
 
 ## 目前必须注意的缺陷
 
-1. 当前 API 在模块加载时直接导入 Google、Outlook 客户端；缺少可选依赖时，连纯解析 API 也可能无法启动。
-2. `ICalClient` 主要使用内存缓存，进程重启后数据丢失。
-3. `ICalClient.export_calendar()` 返回文件路径，而历史 API schema 把它当成 ICS 内容返回。
-4. Google 客户端的认证刷新代码仍有未显式导入的引用风险。
-5. Outlook 客户端使用 client credentials 和 `/me` 路径的组合需要重新设计，不能直接视为可用同步实现。
-6. 当前 CORS 允许所有来源，正式自托管必须由配置限制。
-7. `deploy.sh` 会修改 Git remote 和 Git user 配置，不应继续作为产品部署入口。
-8. 当前完整测试环境缺少部分 requirements 依赖，测试基线需要先修复。
+1. `ICalClient` 主要使用内存缓存，进程重启后数据丢失。
+2. `ICalClient.export_calendar()` 返回文件路径，而历史 API schema 把它当成 ICS 内容返回。
+3. Google 客户端仍需真实 OAuth 流程验证，不能直接视为可用同步实现。
+4. Outlook 客户端使用 client credentials 和 `/me` 路径的组合需要重新设计，不能直接视为可用同步实现。
+5. 当前只有离线单测和 API 契约测试；SQLite、同步和部署集成测试要随对应功能补充。
 
 ## 结论
 
-当前代码适合作为 Parser/Calendar provider 原型，不足以作为“日程与 Due 应用”发布。下一步应先完成 T0.3、T0.4 和 T1.1，再把 API 从历史事件接口迁移到 Item 服务；不要先接 AI、Widget 或第三方 OAuth。
+当前代码适合作为 Parser/Calendar provider 原型，不足以作为“日程与 Due 应用”发布。下一步应补完 T0.2 的领域模型，再进入 T1.1 SQLite Repository；不要先接 AI、Widget 或第三方 OAuth。

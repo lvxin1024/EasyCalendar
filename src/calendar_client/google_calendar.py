@@ -2,7 +2,8 @@
 
 import os
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
+from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
@@ -44,9 +45,7 @@ class GoogleCalendarClient(BaseCalendarClient):
 
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
-                creds.refresh(
-                    google.auth.transport.requests.Request()
-                )
+                creds.refresh(Request())
             else:
                 flow = InstalledAppFlow.from_client_secrets_file(
                     self.credentials_file, self.SCOPES
@@ -225,6 +224,3 @@ class GoogleCalendarClient(BaseCalendarClient):
             cal.add_component(ical_event)
 
         return cal.to_ical().decode("utf-8")
-
-
-from datetime import timedelta

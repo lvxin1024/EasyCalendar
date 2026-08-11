@@ -8,6 +8,7 @@ venv/
 env/
 ENV/
 .venv
+.venv-test/
 
 # IDE
 .vscode/

@@ -4,7 +4,7 @@
 
 用户的目标操作是：准备配置、执行一条命令、得到可访问的单用户实例。用户不需要修改源码、Dockerfile、Worker 路由或数据库 SQL。所有非秘密参数放 `config/app.yaml`，秘密放 `config/secrets.env` 或平台 secret store。
 
-当前 `deploy.sh` 仍是 GitHub 推送辅助脚本，不能视为本方案的实现。目标入口应改为：
+当前仓库没有产品部署脚本。旧的 GitHub 推送辅助脚本已经删除，目标入口将实现为：
 
 ```bash
 ./scripts/setup.sh --config config/app.yaml
@@ -86,7 +86,7 @@ cp config/secrets.example.env config/secrets.env
 | JSON/ICS 备份 | `storage.backup_dir` | 不提交或上传加密 R2 |
 | Worker 生成配置 | 临时 build 目录 | 不提交 |
 
-`config/` 需要在项目模板中提供 `.gitkeep`、示例文件和 `.gitignore` 规则；用户可以通过备份 `config/app.yaml` 迁移实例，但秘密应重新生成或通过 secret store 迁移。
+`config/` 在项目模板中提供示例文件和 `.gitignore` 规则；用户可以通过备份 `config/app.yaml` 迁移实例，但秘密应重新生成或通过 secret store 迁移。
 
 ## 5. 升级和回滚
 
@@ -120,5 +120,4 @@ cp config/secrets.example.env config/secrets.env
 
 - `scripts/setup.sh` 尚未实现。
 - 当前没有 Worker、D1 migration 或 Docker Compose。
-- `config/settings.py` 仍以环境变量为主。
-- 当前 deploy.sh 会操作 Git remote 和 Git user，必须重写为无破坏性的配置驱动脚本。
+- 当前只有读取 `config/` 的本地 FastAPI 启动入口，没有迁移、备份、状态检查和回滚命令。
