@@ -53,9 +53,11 @@
 ## 尚未实现的目标能力
 
 - 更复杂的 ICS provider 扩展和部署级抓取调度策略。
-- Flutter 端 JSON/ICS transfer adapter 和真实平台通知 adapter。
+- Flutter 端 Collection、ICS 订阅、刷新日志和 JSON/ICS transfer 交互入口。
+- Flutter 端软删除回收站和恢复入口。
+- Flutter 端标签颜色、循环日程持久化与编辑入口。
 - Android、macOS、Windows 的真实系统通知 adapter。
-- 单日/周时间网格、月视图周序号跳转和桌面窗口透明度、置顶、点击穿透控制。
+- 日历顶部未完成 Due、时间轴 Due 占位和更低时间轴密度。
 - Cloudflare 备份/回滚和 Docker 一键部署。
 
 ## 目前必须注意的缺陷
