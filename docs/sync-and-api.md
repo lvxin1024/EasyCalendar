@@ -381,7 +381,7 @@ AI provider 返回非法结构时，接口返回 422 或回退到规则 Parser�
 
 ### 冲突策略
 
-第一版按 `updated_at` 最后写入胜出；相同时间按 version，再按 ID。删除参与比较。被覆盖的版本保留在 `sync_conflicts` 或服务端 change log，方便后续恢复。
+第一版按 `updated_at` 最后写入胜出；相同时间按 version，同一实体仍相等时按 `change_id`。删除参与比较。被覆盖的版本保留在 `sync_conflicts` 或服务端 change log，方便后续恢复。
 
 ## 11. Import 和 Export
 

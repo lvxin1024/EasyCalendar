@@ -5,10 +5,11 @@ from typing import Any, Dict, Optional
 
 from config.loader import Settings
 from config.settings import SETTINGS
+from ..domain import DOMAIN_SCHEMA_VERSION
 
 
 SERVICE_VERSION = "0.1.0"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = DOMAIN_SCHEMA_VERSION
 
 
 def _modules_available(*module_names: str) -> bool:

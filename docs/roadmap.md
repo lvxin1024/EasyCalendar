@@ -12,7 +12,7 @@
 
 ### T0.2 稳定领域模型
 
-- 状态：部分完成，commit `8d35665` 已有 `Item` 和 `CandidateItem` 基础模型。
+- 状态：已完成；commit `8d35665` 建立基础模型，当前任务补全同步实体、状态转换和序列化。
 - 内容：补齐 Collection、Subscription、Outbox、同步变更、软删除和序列化校验。
 - 验收：模型单测覆盖状态转换、时间约束、版本号、候选确认和 JSON round-trip。
 

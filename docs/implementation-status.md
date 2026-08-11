@@ -8,7 +8,8 @@
 | --- | --- | --- |
 | 中文规则日期和时间提取 | `src/parser/date_extractor.py` | 原型可用，规则覆盖有限 |
 | 事件类型、地点、参与人、优先级识别 | `src/parser/event_detector.py` | 原型可用，需继续补充测试 |
-| CandidateItem / Item 基础模型 | `src/domain/models.py` | 已有基础模型，尚未持久化 |
+| Item / CandidateItem 领域模型 | `src/domain/models.py` | 已有确认转换、时区、版本和软删除约束 |
+| Collection / Subscription / SyncChange / Outbox | `src/domain/models.py` | 已有状态转换和严格 JSON round-trip，尚未持久化 |
 | 解析器输出候选项 | `src/parser/rule_parser.py` | 已完成初步分离 |
 | 旧 CalendarEvent 兼容视图 | `src/parser/models.py` | 临时兼容层 |
 | FastAPI 解析 API | `src/api/routes.py` | 仍是历史 `/api/v1` 业务接口 |
@@ -42,4 +43,4 @@
 
 ## 结论
 
-当前代码适合作为 Parser/Calendar provider 原型，不足以作为“日程与 Due 应用”发布。下一步应补完 T0.2 的领域模型，再进入 T1.1 SQLite Repository；不要先接 AI、Widget 或第三方 OAuth。
+当前代码适合作为 Parser/Calendar provider 原型，不足以作为“日程与 Due 应用”发布。下一步应进入 T1.1 SQLite Repository，把现有领域契约落到事务、查询和 outbox 持久化；不要先接 AI、Widget 或第三方 OAuth。

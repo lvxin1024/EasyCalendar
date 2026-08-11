@@ -122,6 +122,7 @@ Google、Microsoft、AI 和 Cloudflare SDK 必须延迟加载或作为独立 ada
 ### 版本化
 
 - Domain JSON schema 有 `schema_version`。
+- Domain JSON envelope 同时包含稳定 `model` 名，反序列化拒绝未知字段和错误版本。
 - HTTP 接口有 `/v1` 前缀。
 - Sync change 保留 `version` 和 `updated_at`。
 - Plugin/Provider manifest 声明能力版本和兼容的 Item schema。

@@ -7,8 +7,22 @@
 - 时间必须带时区；没有时区的用户输入使用 `app.timezone`。
 - 每个可同步实体都有 `created_at`、`updated_at`、`deleted_at?`、`version`。
 - 删除使用软删除。实体从默认查询隐藏，但墓碑要保留到同步和备份策略允许清理。
-- `updated_at` 相等时使用 `version`，仍相等时使用稳定 ID 作为确定性 tie-breaker。
+- `updated_at` 相等时使用 `version`；同一实体仍相等时使用稳定的 `change_id` 作为确定性 tie-breaker。
 - 用户自定义字段放 `metadata`，核心查询不能依赖未知 metadata 键。
+- 正式更新、首次软删除和首次恢复各递增一次 `version`；重复删除或重复恢复是幂等操作，不重复递增。
+- `created_at`、`updated_at`、`deleted_at` 和同步时间必须带时区；解析器产生的无偏移日程时间在确认 Item 时按 `timezone` 转换。
+
+领域对象的 `to_dict/from_dict` 使用本节展示的裸资源结构。用于备份、跨进程传输和 round-trip 的 `to_json/from_json` 使用严格 envelope：
+
+```json
+{
+  "schema_version": 1,
+  "model": "item",
+  "data": {"id": "item_01J..."}
+}
+```
+
+未知资源字段、未知 envelope 字段、错误 model 或不支持的 schema version 必须拒绝，不能静默丢弃。
 
 ## 2. Item
 
@@ -135,13 +149,15 @@ Candidate 是解析阶段对象，不是存储对象：
   "kind": "local",
   "color": "#2563EB",
   "readonly": false,
+  "metadata": {},
   "created_at": "2026-08-11T08:00:00Z",
   "updated_at": "2026-08-11T08:00:00Z",
+  "deleted_at": null,
   "version": 1
 }
 ```
 
-`kind` 为 `local`、`subscription` 或 `external`。`readonly=true` 时，来源导入器是唯一更新者。
+`kind` 为 `local`、`subscription` 或 `external`。`kind=subscription` 强制 `readonly=true`，来源导入器是唯一更新者。颜色使用 `#RRGGBB`。
 
 ## 6. Subscription
 
@@ -158,13 +174,17 @@ Candidate 是解析阶段对象，不是存储对象：
   "last_error": null,
   "etag": "abc123",
   "source_hash": "sha256:...",
+  "metadata": {},
   "created_at": "2026-08-11T08:00:00Z",
   "updated_at": "2026-08-11T08:00:00Z",
+  "deleted_at": null,
   "version": 1
 }
 ```
 
 URL 必须经过 SSRF 校验；禁止访问本机、私网、云平台 metadata 地址和未经配置允许的协议。
+
+刷新失败更新 `last_fetched_at` 和 `last_error`，保留上一次 `last_success_at`；刷新成功同时更新 `last_fetched_at`、`last_success_at`、`etag` 和 `source_hash` 并清空错误。每次刷新结果都是一次正式状态变更。
 
 ## 7. SyncChange 和 Outbox
 
@@ -181,7 +201,7 @@ URL 必须经过 SSRF 校验；禁止访问本机、私网、云平台 metadata 
 }
 ```
 
-本地 `outbox` 额外保存 `created_at`、`retry_count`、`last_error`、`sent_at`。`change_id` 是幂等键，服务端必须记录已处理 ID。
+本地 `outbox` 额外保存 `created_at`、`retry_count`、`last_error`、`sent_at`。`change_id` 是幂等键，服务端必须记录已处理 ID。失败会递增 `retry_count`；首次成功设置 `sent_at` 并清空错误，重复标记成功保持幂等。
 
 ## 8. SQLite 表
 
