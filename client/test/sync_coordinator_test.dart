@@ -114,6 +114,27 @@ void main() {
       expect(transport.pullCalls, 1);
     },
   );
+
+  test('secure storage failure does not block local startup', () async {
+    final failingTokenStore = _MemoryTokenStore(null)..readFails = true;
+    final localCoordinator = SyncCoordinator(
+      repository: repository,
+      transport: transport,
+      tokenStore: failingTokenStore,
+      connectivityMonitor: connectivity,
+      deviceId: 'test-device',
+      retryLimit: 3,
+    );
+
+    await localCoordinator.start(
+      enabled: false,
+      serverUrl: 'https://sync.example.com',
+    );
+
+    expect(localCoordinator.snapshot.phase, SyncPhase.disabled);
+    expect(localCoordinator.tokenConfigured, isFalse);
+    localCoordinator.dispose();
+  });
 }
 
 PendingSyncChange _pendingChange({int retryCount = 0}) => PendingSyncChange(
@@ -260,9 +281,13 @@ class _MemoryTokenStore implements SyncTokenStore {
   _MemoryTokenStore(this.value);
 
   String? value;
+  bool readFails = false;
 
   @override
-  Future<String?> read() async => value;
+  Future<String?> read() async {
+    if (readFails) throw StateError('Keychain is unavailable');
+    return value;
+  }
 
   @override
   Future<void> write(String token) async => value = token;

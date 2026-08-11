@@ -43,7 +43,12 @@ class SyncCoordinator extends ChangeNotifier {
   bool get tokenConfigured => _tokenConfigured;
 
   Future<void> start({required bool enabled, required String serverUrl}) async {
-    _tokenConfigured = (await tokenStore.read())?.isNotEmpty ?? false;
+    try {
+      _tokenConfigured = (await tokenStore.read())?.isNotEmpty ?? false;
+    } catch (_) {
+      // Secure storage availability must not block local-first startup.
+      _tokenConfigured = false;
+    }
     configure(enabled: enabled, serverUrl: serverUrl);
     _connectivitySubscription ??= connectivityMonitor.onlineChanges.listen((
       online,

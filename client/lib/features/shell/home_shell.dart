@@ -319,7 +319,10 @@ class _StartupError extends StatelessWidget {
                 color: Theme.of(context).colorScheme.error,
               ),
               const SizedBox(height: 16),
-              Text('无法打开本地数据库', style: Theme.of(context).textTheme.titleLarge),
+              Text(
+                '无法启动 EasyCalendar',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
               const SizedBox(height: 8),
               Text(
                 error.toString(),
