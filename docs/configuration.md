@@ -23,7 +23,7 @@ config/
 
 配置合并顺序：默认值 < `app.yaml` < `environments/*.yaml` < 进程环境变量。秘密只从 `secrets.env`、部署平台 secret store 或环境变量读取。
 
-Flutter 的构建默认值来自 `client.json`，设置页保存的 API URL、sync 和 notification 开关覆盖对应默认值。Flutter 配置不包含 token；未来 token 只能进入平台安全存储。
+Flutter 的构建默认值来自 `client.json`，设置页保存的 API URL、sync、notification 和 AI Provider 非敏感字段覆盖对应默认值。Flutter 配置不包含同步 token 或 AI API key；秘密只能进入平台安全存储。
 
 ## 推荐配置示例
 
@@ -130,6 +130,12 @@ deployment:
 - 部署前自动生成 `ADMIN_TOKEN`，并输出一次保存提示；之后不在日志中再次打印。
 - 未知配置键默认拒绝启动，防止拼写错误导致用户以为设置生效。
 
+## 客户端 AI Provider 设置
+
+T6.1 在 Flutter 设置页提供设备级 Provider 配置。用户可以手动填写或导入 OpenAI-compatible 配置；可导入字段包括 Provider 类型、显示名、API 地址、模型和非敏感请求参数。API key 必须通过独立的秘密输入写入平台安全存储，即使导入文件包含 key，也不得把明文保存到 `app_settings`。
+
+Provider 配置默认不跨设备同步。JSON 备份、诊断日志和错误详情不得包含 key；设置页只显示“已配置”状态和掩码。删除 Provider 时同时删除对应安全存储项。Ollama 等不需要 key 的本地 Provider 仍必须通过 URL 校验和连接测试。
+
 ## 环境变量覆盖
 
 - `EASYCALENDAR_CONFIG`：指定主配置文件。
@@ -138,4 +144,4 @@ deployment:
 - `EASYCALENDAR__SERVER__PORT=9000`：使用双下划线覆盖任意嵌套字段。
 - 非敏感字段统一使用 `EASYCALENDAR__<SECTION>__<FIELD>`；不再维护早期 provider 和 `API_*` 环境变量别名。
 
-Google、Microsoft、飞书等外部接入的配置键会随 T6 Importer SDK 一起定义。对应实现存在之前不提前保留无消费者字段，避免示例配置给出虚假的可用性暗示。
+Google、Microsoft、飞书等外部接入的配置键会随 T7 Importer SDK 一起定义。对应实现存在之前不提前保留无消费者字段，避免示例配置给出虚假的可用性暗示。

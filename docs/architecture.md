@@ -180,5 +180,5 @@ Google、Microsoft、AI 和 Cloudflare SDK 必须延迟加载或作为独立 ada
 待完成：
 
 1. 实现 Subscription 与只读 Collection，并接入 ICS 抓取链路。
-2. 在 T6.1 建立 Importer SDK 后重新实现外部日历适配，不复用已删除原型。
+2. 在 T7.1 建立 Importer SDK 后重新实现外部日历适配，不复用已删除原型。
 3. 接入 AI、系统通知、T4.2 macOS WidgetKit 和 OAuth provider。

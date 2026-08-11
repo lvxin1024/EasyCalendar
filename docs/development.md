@@ -35,7 +35,7 @@ Domain 不得导入 FastAPI、Flutter、Cloudflare SDK、具体 AI SDK 或具体
 
 - Python 最低支持 3.11，默认开发版本由根目录 `.python-version` 固定为 3.13；CI 同时验证 3.11 和 3.13。
 - `requirements.txt` 只包含启动核心 API 所需的精确版本，包括正式 ICS transfer 使用的 `icalendar`。
-- `requirements-dev.txt` 包含全部离线测试依赖；外部日历 adapter 在 T6 实现时建立各自明确的依赖边界。
+- `requirements-dev.txt` 包含全部离线测试依赖；外部日历 adapter 在 T7 实现时建立各自明确的依赖边界。
 - Node.js 在 Worker 代码进入仓库时固定 LTS 主版本并提交 lockfile；在此之前不维护空的 Node 工程。
 - Flutter 客户端固定 `3.44.9`，版本写在 `client/.fvmrc`，setup 脚本从该文件读取并校验。runner 和 `pubspec.lock` 必须提交；analyzer/单测通过不等于平台原生构建通过。
 - Worker 固定 Node.js 22，版本写在 `server/.nvmrc`，npm 依赖由 `server/package-lock.json` 精确锁定。

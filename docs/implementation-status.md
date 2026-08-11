@@ -38,7 +38,7 @@
 | --- | --- | --- |
 | `CalendarEvent` 和 Parser `events` 视图 | 与 Candidate 确认流程重复，允许绕过正式模型 | Parser 只返回 `CandidateItem` |
 | `/api/v1` routes 和 schemas | 直接实例化旧模型和 provider，不遵守 application 边界 | 当前客户端只调用正式 `/v1` API |
-| `src/calendar_client/` | 内存持久化、吞异常、认证流程和接口设计均不可靠 | T6.1 Importer SDK、T6.2 外部适配器重写 |
+| `src/calendar_client/` | 内存持久化、吞异常、认证流程和接口设计均不可靠 | T7.1 Importer SDK、T7.2 外部适配器重写 |
 | provider requirements 和 provider 配置占位 | 没有正式消费者，却暗示功能可用 | 对应 adapter 实现时再引入最小配置和依赖 |
 | `src/utils/date_utils.py` | 全仓无消费者，与 domain/parser 时间逻辑重复 | 需要共享时间能力时在明确层级重新设计 |
 
@@ -47,6 +47,8 @@
 - 更复杂的 ICS provider 扩展和部署级抓取调度策略。
 - Flutter 端 JSON/ICS transfer adapter 和真实平台通知 adapter。
 - Android、macOS、Windows 的真实系统通知 adapter。
+- 单日/周时间网格、月视图周序号跳转和桌面窗口透明度、置顶、点击穿透控制。
+- Flutter 设置中的 AI Provider 配置、安全 API key 存储和多候选拆分确认工作台。
 - AI Provider 抽象、结构化输出校验和提醒建议。
 - Cloudflare 备份/回滚和 Docker 一键部署。
 
@@ -59,4 +61,4 @@
 
 ## 结论
 
-正式 Item CRUD、Candidate 确认、可恢复本地提醒协调、事务化 JSON/ICS transfer、Flutter 离线 CRUD、T2 的 Worker/D1 与客户端同步冲突恢复、完整 T3 ICS 订阅链路、T4.1 Widget snapshot writer 和 T4.2 macOS WidgetKit 均已落地。T1.6 的三平台原生启动验收作为环境任务保留。
+正式 Item CRUD、Candidate 确认、可恢复本地提醒协调、事务化 JSON/ICS transfer、Flutter 离线 CRUD、T2 的 Worker/D1 与客户端同步冲突恢复、完整 T3 ICS 订阅链路、T4.1 Widget snapshot writer 和 T4.2 macOS WidgetKit 均已落地。下一项产品功能是 T5.1 日历导航和查询状态；T1.6 的 Android/Windows 原生启动验收作为环境任务保留，macOS 已通过 Xcode 验收。

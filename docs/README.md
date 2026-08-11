@@ -52,7 +52,7 @@
 - Python 运行和测试依赖已精确锁定，`scripts/test.sh` 可在隔离环境运行全部离线测试。
 - `server/` 已提供 Worker/D1、Bearer 鉴权、幂等 push/pull、cursor 分页、确定性冲突恢复和 Cloudflare 基础部署入口。
 - Widget snapshot writer 已从本地 Repository 生成今日/近期 Event 和 Due 的完整 JSON 快照，并通过原子替换供只读消费者使用；macOS WidgetKit 已接入 App Group 与离线 timeline。
-- Google、Microsoft 和飞书将在 T6 的 Importer SDK 之上重新实现，不复用已删除的日历客户端原型。
+- Google、Microsoft 和飞书将在 T7 的 Importer SDK 之上重新实现，不复用已删除的日历客户端原型。
 - 完整 ICS 订阅配置、抓取、ETag/Last-Modified、源哈希和 RRULE/外部 ID 同步已经实现；完整部署生命周期和 Docker 同步服务仍是目标能力。
 
 完整差距见 [implementation-status.md](./implementation-status.md)，实施顺序见 [roadmap.md](./roadmap.md)。
