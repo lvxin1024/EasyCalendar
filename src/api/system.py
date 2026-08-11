@@ -51,7 +51,7 @@ def build_capabilities_payload(
         "schema_version": SCHEMA_VERSION,
         "features": {
             "parser": True,
-            "items": False,
+            "items": True,
             "sync": False,
             "ics_subscriptions": False,
             "assistant": False,

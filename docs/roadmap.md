@@ -40,8 +40,9 @@
 
 ### T1.2 Item Service 和正式 CRUD API
 
+- 状态：已完成。
 - 依赖：T1.1。
-- 内容：统一 Event/Task CRUD；完成 Task 的幂等命令；分页、过滤和错误格式。
+- 内容：统一 Event/Task CRUD；完成 Task 的幂等命令；持久化幂等记录；cursor 分页、过滤和统一错误格式。
 - 验收：正式 Item 的所有变更都写入 outbox；候选项不能直接绕过 Service 写库。
 
 ### T1.3 Candidate confirmation

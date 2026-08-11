@@ -138,7 +138,7 @@ def test_health_and_capabilities_are_truthful():
     assert health["service"] == "easycalendar"
     assert health["instance"] == "my-easycalendar"
     assert capabilities["features"]["parser"] is True
-    assert capabilities["features"]["items"] is False
+    assert capabilities["features"]["items"] is True
     assert capabilities["providers"]["parser"] == ["rules.zh_cn"]
 
 

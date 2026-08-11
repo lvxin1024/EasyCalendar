@@ -17,6 +17,8 @@ from .repository import (
     ConstraintViolationError,
     EntityAlreadyExistsError,
     EntityNotFoundError,
+    IdempotencyRecord,
+    ItemPosition,
     ItemQuery,
     RepositoryError,
     StorageDataError,
@@ -24,7 +26,7 @@ from .repository import (
 )
 
 
-LATEST_SCHEMA_VERSION = 1
+LATEST_SCHEMA_VERSION = 2
 _MIGRATION_PACKAGE = "src.storage.migrations"
 _ITEM_SCHEDULE_SQL = """
 CASE item_type
@@ -329,6 +331,8 @@ class SQLiteSession:
         if query.to_at is not None:
             predicates.append(f"({_ITEM_SCHEDULE_SQL}) < ?")
             parameters.append(_utc_text(query.to_at))
+        if query.after is not None:
+            self._append_item_cursor(predicates, parameters, query.after)
 
         sql = "SELECT * FROM items"
         if predicates:
@@ -504,6 +508,63 @@ class SQLiteSession:
             return None
         return _read_json(row["value_json"], f"sync state {normalized!r}")
 
+    def get_idempotency_record(
+        self, scope: str, key: str
+    ) -> Optional[IdempotencyRecord]:
+        normalized_scope, normalized_key = self._idempotency_identity(scope, key)
+        row = self._connection.execute(
+            """
+            SELECT scope, key, request_hash, response_json, created_at
+            FROM idempotency_records
+            WHERE scope = ? AND key = ?
+            """,
+            (normalized_scope, normalized_key),
+        ).fetchone()
+        if row is None:
+            return None
+        try:
+            created_at = datetime.fromisoformat(
+                str(row["created_at"]).replace("Z", "+00:00")
+            )
+            return IdempotencyRecord(
+                scope=row["scope"],
+                key=row["key"],
+                request_hash=row["request_hash"],
+                response_json=row["response_json"],
+                created_at=created_at,
+            )
+        except (TypeError, ValueError) as error:
+            raise StorageDataError(
+                f"Stored idempotency record {normalized_scope!r}/{normalized_key!r} "
+                "is invalid"
+            ) from error
+
+    def create_idempotency_record(
+        self, record: IdempotencyRecord
+    ) -> IdempotencyRecord:
+        if not isinstance(record, IdempotencyRecord):
+            raise ValueError("record must be an IdempotencyRecord")
+        try:
+            self._connection.execute(
+                """
+                INSERT INTO idempotency_records(
+                    scope, key, request_hash, response_json, created_at
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    record.scope,
+                    record.key,
+                    record.request_hash,
+                    record.response_json,
+                    _utc_text(record.created_at),
+                ),
+            )
+        except sqlite3.IntegrityError as error:
+            raise EntityAlreadyExistsError(
+                f"Idempotency record {record.scope!r}/{record.key!r} already exists"
+            ) from error
+        return record
+
     def set_sync_state(
         self, key: str, value: Any, *, now: Optional[datetime] = None
     ) -> None:
@@ -551,6 +612,26 @@ class SQLiteSession:
                 for position, reminder in enumerate(item.reminders)
             ],
         )
+
+    @staticmethod
+    def _append_item_cursor(
+        predicates: List[str],
+        parameters: List[Any],
+        position: ItemPosition,
+    ) -> None:
+        if position.schedule_at is None:
+            predicates.append(f"({_ITEM_SCHEDULE_SQL}) IS NULL AND id > ?")
+            parameters.append(position.item_id)
+            return
+        schedule_text = _utc_text(position.schedule_at)
+        predicates.append(
+            "("
+            f"({_ITEM_SCHEDULE_SQL}) IS NULL OR "
+            f"({_ITEM_SCHEDULE_SQL}) > ? OR "
+            f"(({_ITEM_SCHEDULE_SQL}) = ? AND id > ?)"
+            ")"
+        )
+        parameters.extend((schedule_text, schedule_text, position.item_id))
 
     @contextmanager
     def _atomic_operation(self) -> Iterator[None]:
@@ -688,6 +769,16 @@ class SQLiteSession:
         if not isinstance(key, str) or not key.strip():
             raise ValueError("Sync state key cannot be empty")
         return key.strip()
+
+    @staticmethod
+    def _idempotency_identity(scope: str, key: str) -> tuple[str, str]:
+        if not isinstance(scope, str) or not scope.strip():
+            raise ValueError("Idempotency scope cannot be empty")
+        if not isinstance(key, str) or not key.strip():
+            raise ValueError("Idempotency key cannot be empty")
+        if len(key.strip()) > 200:
+            raise ValueError("Idempotency key cannot exceed 200 characters")
+        return scope.strip(), key.strip()
 
 
 class SQLiteRepository:
@@ -863,6 +954,18 @@ class SQLiteRepository:
     def get_sync_state(self, key: str) -> Any:
         with self._read_session() as session:
             return session.get_sync_state(key)
+
+    def get_idempotency_record(
+        self, scope: str, key: str
+    ) -> Optional[IdempotencyRecord]:
+        with self._read_session() as session:
+            return session.get_idempotency_record(scope, key)
+
+    def create_idempotency_record(
+        self, record: IdempotencyRecord
+    ) -> IdempotencyRecord:
+        with self.transaction() as session:
+            return session.create_idempotency_record(record)
 
     def set_sync_state(
         self, key: str, value: Any, *, now: Optional[datetime] = None

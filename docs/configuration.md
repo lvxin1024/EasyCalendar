@@ -31,6 +31,9 @@ app:
   timezone: Asia/Shanghai
   locale: zh-CN
   data_dir: ./data
+  default_collection_id: collection_local
+  default_collection_name: 我的日程
+  default_collection_color: "#2563EB"
 
 server:
   mode: local                    # local | cloudflare | docker
@@ -85,6 +88,9 @@ deployment:
 | `app.name` | `EasyCalendar` | 否 | 否 | UI、日志和 API title |
 | `app.timezone` | `Asia/Shanghai` | 否 | 否 | 所有无时区输入的解释基准 |
 | `app.data_dir` | `./data` | 否 | 否 | SQLite、备份、快照目录 |
+| `app.default_collection_id` | `collection_local` | 否 | 否 | 空库首次使用时自动创建的本地 Collection ID |
+| `app.default_collection_name` | `我的日程` | 否 | 否 | 默认 Collection 显示名 |
+| `app.default_collection_color` | `#2563EB` | 否 | 否 | 默认 Collection 颜色，可设为空 |
 | `server.mode` | `local` | 否 | 否 | 运行目标 |
 | `server.public_url` | 空 | 生产必填 | 否 | 客户端同步地址 |
 | `server.port` | `8000` | 否 | 否 | 本地或 Docker 端口 |

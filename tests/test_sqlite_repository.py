@@ -116,9 +116,9 @@ def test_initializes_versioned_schema_and_loads_path_from_settings(tmp_path):
                 "SELECT name FROM sqlite_master WHERE type = 'table'"
             )
         }
-        migration = connection.execute(
-            "SELECT version, name FROM schema_migrations"
-        ).fetchone()
+        migrations = connection.execute(
+            "SELECT version, name FROM schema_migrations ORDER BY version"
+        ).fetchall()
 
     assert {
         "collections",
@@ -127,8 +127,12 @@ def test_initializes_versioned_schema_and_loads_path_from_settings(tmp_path):
         "subscriptions",
         "outbox",
         "sync_state",
+        "idempotency_records",
     } <= tables
-    assert migration == (1, "001_initial.sql")
+    assert migrations == [
+        (1, "001_initial.sql"),
+        (2, "002_idempotency.sql"),
+    ]
 
 
 def test_auto_migrate_setting_refuses_an_uninitialized_database(tmp_path):

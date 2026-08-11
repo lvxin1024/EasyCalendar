@@ -33,6 +33,15 @@ class AppSettings(StrictModel):
     timezone: str = "Asia/Shanghai"
     locale: str = "zh-CN"
     data_dir: str = "./data"
+    default_collection_id: str = Field(
+        default="collection_local", min_length=1, max_length=200
+    )
+    default_collection_name: str = Field(
+        default="我的日程", min_length=1, max_length=200
+    )
+    default_collection_color: Optional[str] = Field(
+        default="#2563EB", pattern=r"^#[0-9A-Fa-f]{6}$"
+    )
 
 
 class ServerSettings(StrictModel):

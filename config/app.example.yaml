@@ -7,6 +7,9 @@ app:
   timezone: Asia/Shanghai
   locale: zh-CN
   data_dir: ./data
+  default_collection_id: collection_local
+  default_collection_name: 我的日程
+  default_collection_color: "#2563EB"
 
 server:
   mode: local

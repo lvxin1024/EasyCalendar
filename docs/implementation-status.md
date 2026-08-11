@@ -11,9 +11,11 @@
 | Item / CandidateItem 领域模型 | `src/domain/models.py` | 已有确认转换、时区、版本和软删除约束 |
 | Collection / Subscription / SyncChange / Outbox | `src/domain/models.py` | 已有状态转换、严格 JSON round-trip 和 SQLite 持久化 |
 | SQLite Repository | `src/storage/` | migration、事务、savepoint、乐观锁、软删除查询、outbox 和 cursor 已实现 |
+| Item Service | `src/application/item_service.py` | CRUD、恢复、Task 完成、outbox、持久化幂等和 cursor 分页已实现 |
 | 解析器输出候选项 | `src/parser/rule_parser.py` | 已完成初步分离 |
 | 旧 CalendarEvent 兼容视图 | `src/parser/models.py` | 临时兼容层 |
 | FastAPI 解析 API | `src/api/routes.py` | 仍是历史 `/api/v1` 业务接口 |
+| FastAPI Item API | `src/api/item_routes.py` | 已提供正式 `/v1/items` CRUD、分页、过滤和统一错误格式 |
 | Health / Capabilities | `src/api/system_routes.py` | 已提供目标 `/v1` 系统端点 |
 | iCal 内存客户端 | `src/calendar_client/ical_client.py` | 原型，缓存不持久化 |
 | Google / Outlook 客户端 | `src/calendar_client/` | 代码存在，未经可靠集成验证 |
@@ -23,7 +25,7 @@
 
 ## 尚未实现的目标能力
 
-- 正式 Item CRUD、Candidate confirmation 和 Due 完成接口。
+- Candidate confirmation 和拒绝审计。
 - 单实例 Bearer token 鉴权。
 - Cloudflare Worker、D1 migrations、push/pull 同步。
 - ICS URL 订阅、ETag、RRULE 和只读 Collection。
@@ -44,4 +46,4 @@
 
 ## 结论
 
-领域模型与本地 SQLite 持久化基础已经可用，但还没有正式 Item 业务 API。下一步进入 T1.2 Item Service：由 service 统一生成同步变更，在同一事务中写 Item、Reminder 和 outbox，再让 FastAPI 提供版本化 CRUD；不要先接 AI、Widget 或第三方 OAuth。
+正式 Item Service 和 `/v1/items` API 已可用。下一步进入 T1.3 Candidate confirmation：把规则解析结果保持为候选，支持编辑、确认、拒绝和跨重试幂等；确认必须复用 Item Service 的事务与 outbox 规则。

@@ -50,6 +50,8 @@ Domain 不能导入：FastAPI、Flutter、Cloudflare、SQLAlchemy/Drift、Google
 
 Application 通过抽象接口调用存储、同步、通知、Importer 和 Provider。
 
+当前 `src/application/item_service.py` 已实现正式 Item 创建、查询、修改、软删除、恢复和 Task 完成。它只依赖 `ItemRepositoryPort`，所有正式变更在同一事务内写 Item、Reminder 和 outbox；HTTP、SQLite 和 ID 生成细节不进入 domain。
+
 ### Adapters
 
 - API adapter：将 HTTP 请求映射到 application command/query。

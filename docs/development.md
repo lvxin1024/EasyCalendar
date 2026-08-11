@@ -8,10 +8,12 @@
 client/                 # Flutter 客户端，未来新增
 server/                 # Cloudflare Worker/Hono，未来新增
 src/domain/             # Python 原型共享的领域模型
+src/application/        # 用例、事务编排和 adapter ports
 src/storage/            # SQLite Repository、migration 和持久化契约
 src/parser/             # 规则 Parser 原型
 src/calendar_client/    # 历史日历 provider，逐步迁移为 importer
 src/api/                # 当前 FastAPI 原型 API
+src/runtime.py          # 配置驱动的延迟依赖组装
 config/                 # 用户配置和示例，不放业务逻辑
 docs/                   # 产品和工程契约
 tests/                  # 单测和集成测试

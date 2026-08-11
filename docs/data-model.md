@@ -215,6 +215,7 @@ reminders
 subscriptions
 outbox
 sync_state
+idempotency_records
 ```
 
 存储约定：
@@ -228,5 +229,6 @@ sync_state
 - 默认查询排除 `deleted_at` 非空记录，显式 `include_deleted` 才返回墓碑。
 - 查询时间索引统一保存 UTC，domain payload 保留原始时区偏移。
 - `sync_state` 保存 JSON 值，`remote_cursor` 是当前同步 cursor 的固定键。
+- `idempotency_records` 按 `(scope, key)` 保存请求哈希和严格 Item 响应；同 key 不同请求拒绝，同请求在进程重启后仍返回原结果。
 
 `sync_conflicts`、`ai_extraction_history` 以及外部事项稳定键 `(subscription_id, provider, external_id, recurrence_instance)` 随对应同步、AI 和订阅任务增加，不在首个 migration 中提前占位。

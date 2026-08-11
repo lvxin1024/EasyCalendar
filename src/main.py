@@ -1,25 +1,45 @@
 """Main application entry point."""
 
+from contextlib import asynccontextmanager
+from typing import Optional
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .api.routes import router
+from .api.errors import register_error_handlers
+from .api.item_routes import router as item_router
 from .api.system import SERVICE_VERSION
 from .api.system_routes import router as system_router
-from config.settings import API_CONFIG, APP_CONFIG, SERVER_CONFIG
+from .runtime import RuntimeServices
+from .storage import SQLiteRepository
+from config.loader import Settings
+from config.settings import API_CONFIG, SETTINGS
 
 
-def create_app() -> FastAPI:
+def create_app(
+    settings: Optional[Settings] = None,
+    repository: Optional[SQLiteRepository] = None,
+) -> FastAPI:
     """Create and configure FastAPI application."""
+    active_settings = settings or SETTINGS
+    runtime = RuntimeServices(active_settings, repository=repository)
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI):
+        yield
+        runtime.close()
+
     app = FastAPI(
-        title=f"{APP_CONFIG['name']} API",
-        description="API for parsing text to calendar events and syncing with multiple calendar providers",
+        title=f"{active_settings.app.name} API",
+        description="Local-first schedule, task, and candidate API",
         version=SERVICE_VERSION,
+        lifespan=lifespan,
     )
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=SERVER_CONFIG["cors_allowed_origins"],
+        allow_origins=active_settings.server.cors_allowed_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -27,6 +47,10 @@ def create_app() -> FastAPI:
 
     app.include_router(router)
     app.include_router(system_router)
+    app.include_router(item_router)
+    app.state.settings = active_settings
+    app.state.runtime = runtime
+    register_error_handlers(app)
 
     @app.get("/")
     async def root():

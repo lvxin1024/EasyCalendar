@@ -186,6 +186,10 @@ Event 按 `start_at` 排序，Task 按 `due_at` 排序；无时间事项排在�
 
 需要 `expected_version` 或 `If-Match`。只写 `deleted_at`、递增 version 并产生 delete change。重复删除是幂等的。
 
+### `POST /v1/items/{item_id}/restore`
+
+请求包含 `expected_version`。恢复墓碑、递增 version 并产生 update change；未删除 Item 重复恢复时直接返回当前资源。
+
 ### `POST /v1/items/{item_id}/complete`
 
 Task 专用，使用 `Idempotency-Key`：
@@ -195,6 +199,8 @@ Task 专用，使用 `Idempotency-Key`：
 ```
 
 将 status 设为 `done`。已经是 `done` 时返回当前 Item，不重复产生业务副作用；完成 Event 返回 400。
+
+当前本地实现把 `Idempotency-Key`、规范化请求哈希和完整响应保存到 SQLite。服务重启后的同请求重试仍返回原 Item；同一个 key 对应不同请求时返回 `idempotency_conflict`。
 
 ## 7. Collections
 
