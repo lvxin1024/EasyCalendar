@@ -26,6 +26,13 @@ from .candidate_service import (
     CandidateParserPort,
     CandidateService,
 )
+from .ai_providers import (
+    OllamaProvider,
+    OpenAICompatibleProvider,
+    ProviderError,
+    ProviderRegistry,
+    decode_candidate_response,
+)
 from .reminder_service import ReminderService
 from .import_export_service import ImportExportService, ImportIssue, ImportReport
 from .subscription_service import (
@@ -65,6 +72,11 @@ __all__ = [
     "CandidateParserPort",
     "CandidateRepositoryPort",
     "CandidateService",
+    "OllamaProvider",
+    "OpenAICompatibleProvider",
+    "ProviderError",
+    "ProviderRegistry",
+    "decode_candidate_response",
     "CollectionNotFoundError",
     "SubscriptionNotFoundError",
     "CreateItemCommand",

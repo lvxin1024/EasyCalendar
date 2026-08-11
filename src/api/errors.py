@@ -19,6 +19,7 @@ from src.application import (
     InvalidCursorError,
     ItemNotFoundError,
     ReadonlyCollectionError,
+    ProviderError,
     SubscriptionNotFoundError,
 )
 from src.storage import (
@@ -69,6 +70,7 @@ def register_error_handlers(app: FastAPI) -> None:
         (InvalidCommandError, 400, "validation_error"),
         (ConstraintViolationError, 400, "validation_error"),
         (EntityAlreadyExistsError, 409, "resource_conflict"),
+        (ProviderError, 502, "provider_error"),
     ]
 
     for exception_type, status_code, code in mappings:
@@ -86,6 +88,19 @@ def register_error_handlers(app: FastAPI) -> None:
             )
 
         app.add_exception_handler(exception_type, handler)
+
+    async def provider_handler(
+        request: Request, error: ProviderError
+    ) -> JSONResponse:
+        return _response(
+            request,
+            status_code=502,
+            code=error.code,
+            message=str(error),
+            details={"retryable": error.retryable, **error.details},
+        )
+
+    app.add_exception_handler(ProviderError, provider_handler)
 
     async def version_handler(
         request: Request, error: VersionConflictError

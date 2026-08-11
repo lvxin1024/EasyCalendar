@@ -80,6 +80,8 @@ class AssistantSettings(StrictModel):
     model: Optional[str] = None
     timeout_seconds: int = Field(default=45, ge=1, le=600)
     max_input_chars: int = Field(default=20000, ge=1, le=1000000)
+    max_response_bytes: int = Field(default=2000000, ge=1024, le=10000000)
+    retry_limit: int = Field(default=2, ge=0, le=5)
 
 
 class NotificationSettings(StrictModel):

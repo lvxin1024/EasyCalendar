@@ -17,6 +17,7 @@ from src.application import (
 )
 from src.notification import InMemoryNotificationScheduler
 from src.parser.rule_adapter import RuleParserAdapter
+from src.application.ai_providers import ProviderRegistry
 from src.storage import SQLiteRepository
 from src.widget import FileWidgetSnapshotWriter, WidgetSnapshotService
 
@@ -121,7 +122,7 @@ class RuntimeServices:
             self._candidate_service = CandidateService(
                 self._repository,
                 item_service,
-                RuleParserAdapter(),
+                ProviderRegistry(self.settings),
                 max_input_chars=self.settings.assistant.max_input_chars,
             )
             return self._candidate_service

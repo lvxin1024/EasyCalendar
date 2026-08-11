@@ -71,7 +71,13 @@ class CandidateService:
             raise InvalidCommandError(
                 f"text cannot exceed {self.max_input_chars} characters"
             )
-        if parser_id not in {"auto", "rules", "rules.zh_cn"}:
+        if parser_id not in {
+            "auto",
+            "rules",
+            "rules.zh_cn",
+            "openai_compatible",
+            "ollama",
+        }:
             raise InvalidCommandError(f"Unsupported parser: {parser_id}")
         try:
             zone = ZoneInfo(timezone_name)

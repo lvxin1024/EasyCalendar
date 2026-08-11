@@ -190,12 +190,14 @@
 
 ### T6.1 客户端 Provider 设置和秘密存储
 
+- 状态：已完成；Flutter 设置页、非敏感 Provider 配置持久化、平台安全密钥存储和连接测试已接入。
 - 依赖：T1.6。
 - 内容：设置页添加/导入 OpenAI-compatible 或 Ollama 配置、模型选择、启停和连接测试；API key 写入平台安全存储，非敏感字段写入本地设置。
 - 验收：真实 key 不进入 SQLite、同步、备份和日志；无 key 或连接失败不阻塞本地功能；删除 Provider 同时清理对应 secret。
 
 ### T6.2 Provider 抽象和结构化输出校验
 
+- 状态：已完成；规则、OpenAI-compatible 和 Ollama Provider registry、响应大小/重试边界及 Candidate JSON 严格校验已接入。
 - 依赖：T0.2、T1.3、T6.1。
 - 内容：OpenAI-compatible、Ollama、本地规则 Provider；Candidate JSON schema 校验；超时、大小限制和有限重试。
 - 验收：Provider 可替换；无 key 时核心功能不受影响；非法 JSON、超时和部分无效候选不写正式 Item。

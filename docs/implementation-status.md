@@ -33,6 +33,8 @@
 | 月视图和周跳转 | `client/lib/features/calendar/calendar_month_grid.dart` | T5.3 已接入按周分行的月视图、事件摘要、溢出入口和 ISO 周序号跳转 |
 | macOS 桌面窗口控制 | `client/lib/window/desktop_window_controller.dart`、`client/macos/Runner/MainFlutterWindow.swift` | T5.4 已接入设置页透明度、置顶、点击穿透和 Dock 解锁；偏好保存在本机 app_settings |
 | Windows 桌面窗口控制 | `client/windows/runner/flutter_window.cpp` | T5.5 已接入 channel、透明度、置顶、点击穿透和 Ctrl+Alt+L 解锁；待 Windows SDK 真机编译验收 |
+| Flutter AI Provider 设置 | `client/lib/ai/`、`client/lib/features/settings/settings_page.dart` | T6.1 已接入 OpenAI-compatible/Ollama 配置、非敏感本地持久化、平台安全密钥存储和连接测试 |
+| AI Provider 抽象与校验 | `src/application/ai_providers.py` | T6.2 已接入规则/OpenAI-compatible/Ollama 可替换 Provider、超时/大小/有限重试和严格 Candidate JSON 校验 |
 | 配置 | `config/loader.py` | YAML、secrets.env、环境覆盖和严格校验已接入 |
 | 本地启动入口 | `run.py` | 从统一配置读取 host、port 和 debug |
 | 测试与依赖 | `scripts/test.sh` | 单一命令安装锁定依赖并运行全部离线 Python 测试 |
@@ -53,8 +55,7 @@
 - Flutter 端 JSON/ICS transfer adapter 和真实平台通知 adapter。
 - Android、macOS、Windows 的真实系统通知 adapter。
 - 单日/周时间网格、月视图周序号跳转和桌面窗口透明度、置顶、点击穿透控制。
-- Flutter 设置中的 AI Provider 配置、安全 API key 存储和多候选拆分确认工作台。
-- AI Provider 抽象、结构化输出校验和提醒建议。
+- Flutter 设置中的多候选拆分确认工作台。
 - Cloudflare 备份/回滚和 Docker 一键部署。
 
 ## 目前必须注意的缺陷
