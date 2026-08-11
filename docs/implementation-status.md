@@ -23,6 +23,7 @@
 | FastAPI Candidate API | `src/api/assistant_routes.py` | 已提供 `/v1/assistant/extract`、查询、拒绝和 `/v1/items/confirm-candidate` |
 | FastAPI transfer API | `src/api/import_export_routes.py` | 已提供 `/v1/import` 和 `/v1/export`，支持 JSON/ICS、scope 和统一错误格式 |
 | Health / Capabilities | `src/api/system_routes.py` | 已提供目标 `/v1` 系统端点 |
+| Subscription / 只读 Collection | `src/application/subscription_service.py`、`src/api/subscription_routes.py` | T3.1 已实现订阅与 Collection CRUD、幂等创建、启停、软删除、URL 基础 SSRF 边界和只读 Item 写入保护 |
 | 配置 | `config/loader.py` | YAML、secrets.env、环境覆盖和严格校验已接入 |
 | 本地启动入口 | `run.py` | 从统一配置读取 host、port 和 debug |
 | 测试与依赖 | `scripts/test.sh` | 单一命令安装锁定依赖并运行全部离线 Python 测试 |
@@ -39,7 +40,7 @@
 
 ## 尚未实现的目标能力
 
-- ICS URL 订阅、ETag、RRULE 和只读 Collection。
+- ICS URL 订阅的 ETag、抓取、RRULE 和外部 ID 同步。
 - Flutter 端 JSON/ICS transfer adapter 和真实平台通知 adapter。
 - Android、macOS、Windows 的真实系统通知 adapter 和 macOS WidgetKit。
 - AI Provider 抽象、结构化输出校验和提醒建议。
@@ -54,4 +55,4 @@
 
 ## 结论
 
-正式 Item CRUD、Candidate 确认、可恢复本地提醒协调、事务化 JSON/ICS transfer、Flutter 离线 CRUD，以及 T2 的 Worker/D1 与客户端同步、冲突恢复均已落地。下一项产品功能是 T3.1 Subscription 与只读 Collection；T1.6 的三平台原生启动验收作为环境任务保留。
+正式 Item CRUD、Candidate 确认、可恢复本地提醒协调、事务化 JSON/ICS transfer、Flutter 离线 CRUD、T2 的 Worker/D1 与客户端同步冲突恢复，以及 T3.1 Subscription 与只读 Collection 均已落地。下一项产品功能是 T3.2 ICS 抓取、ETag 和源哈希；T1.6 的三平台原生启动验收作为环境任务保留。

@@ -17,6 +17,10 @@ class CollectionNotFoundError(ApplicationError):
     """Raised when a command targets an unavailable Collection."""
 
 
+class SubscriptionNotFoundError(ApplicationError):
+    """Raised when a command targets an unavailable Subscription."""
+
+
 class ReadonlyCollectionError(ApplicationError):
     """Raised when a local edit targets externally owned data."""
 

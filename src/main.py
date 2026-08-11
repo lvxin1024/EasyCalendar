@@ -12,6 +12,7 @@ from .api.item_routes import router as item_router
 from .api.import_export_routes import router as import_export_router
 from .api.system import SERVICE_VERSION
 from .api.system_routes import router as system_router
+from .api.subscription_routes import collection_router, subscription_router
 from .application import NotificationSchedulerPort
 from .runtime import RuntimeServices
 from .storage import SQLiteRepository
@@ -55,6 +56,8 @@ def create_app(
     app.include_router(item_router)
     app.include_router(assistant_router)
     app.include_router(import_export_router)
+    app.include_router(collection_router)
+    app.include_router(subscription_router)
     app.state.settings = active_settings
     app.state.runtime = runtime
     register_error_handlers(app)

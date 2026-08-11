@@ -41,7 +41,7 @@ def build_capabilities_payload(
             "parser": True,
             "items": True,
             "sync": False,
-            "ics_subscriptions": False,
+            "ics_subscriptions": True,
             "assistant": True,
             "local_reminders": True,
             "json_backup": True,

@@ -4,6 +4,7 @@ from .errors import (
     ApplicationError,
     CandidateDecisionConflictError,
     CollectionNotFoundError,
+    SubscriptionNotFoundError,
     IdempotencyConflictError,
     ExtractionNotFoundError,
     ExtractionRejectedError,
@@ -27,6 +28,13 @@ from .candidate_service import (
 )
 from .reminder_service import ReminderService
 from .import_export_service import ImportExportService, ImportIssue, ImportReport
+from .subscription_service import (
+    CreateCollectionCommand,
+    CreateSubscriptionCommand,
+    SubscriptionService,
+    UpdateCollectionCommand,
+    UpdateSubscriptionCommand,
+)
 from .ports import (
     CandidateRepositoryPort,
     ItemRepositoryPort,
@@ -35,6 +43,8 @@ from .ports import (
     NotificationSchedulerPort,
     ReminderCoordinatorPort,
     ReminderRepositoryPort,
+    SubscriptionRepositoryPort,
+    SubscriptionTransactionPort,
     TransferRepositoryPort,
     TransferTransactionPort,
 )
@@ -48,6 +58,7 @@ __all__ = [
     "CandidateRepositoryPort",
     "CandidateService",
     "CollectionNotFoundError",
+    "SubscriptionNotFoundError",
     "CreateItemCommand",
     "IdempotencyConflictError",
     "ExtractionNotFoundError",
@@ -61,6 +72,11 @@ __all__ = [
     "ImportExportService",
     "ImportIssue",
     "ImportReport",
+    "CreateCollectionCommand",
+    "CreateSubscriptionCommand",
+    "SubscriptionService",
+    "UpdateCollectionCommand",
+    "UpdateSubscriptionCommand",
     "ItemTransactionPort",
     "NotificationRequest",
     "NotificationSchedulerPort",
@@ -69,6 +85,8 @@ __all__ = [
     "ReminderCoordinatorPort",
     "ReminderRepositoryPort",
     "ReminderService",
+    "SubscriptionRepositoryPort",
+    "SubscriptionTransactionPort",
     "TransferRepositoryPort",
     "TransferTransactionPort",
     "UpdateItemCommand",

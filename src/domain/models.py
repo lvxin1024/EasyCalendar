@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -599,6 +600,24 @@ class Subscription(_VersionedEntity):
         parsed_url = urlsplit(self.url)
         if parsed_url.scheme not in {"http", "https"} or not parsed_url.hostname:
             raise ValueError("Subscription url must be an absolute HTTP(S) URL")
+        if parsed_url.username is not None or parsed_url.password is not None:
+            raise ValueError("Subscription url cannot contain credentials")
+        hostname = parsed_url.hostname.rstrip(".").lower()
+        if hostname == "localhost" or hostname.endswith(".localhost"):
+            raise ValueError("Subscription url cannot target localhost")
+        try:
+            address = ipaddress.ip_address(hostname)
+        except ValueError:
+            address = None
+        if address is not None and (
+            address.is_private
+            or address.is_loopback
+            or address.is_link_local
+            or address.is_multicast
+            or address.is_unspecified
+            or address.is_reserved
+        ):
+            raise ValueError("Subscription url cannot target a private address")
         for field_name in ("last_fetched_at", "last_success_at"):
             value = getattr(self, field_name)
             if value is not None:

@@ -19,6 +19,7 @@ from src.application import (
     InvalidCursorError,
     ItemNotFoundError,
     ReadonlyCollectionError,
+    SubscriptionNotFoundError,
 )
 from src.storage import (
     ConstraintViolationError,
@@ -58,6 +59,7 @@ def register_error_handlers(app: FastAPI) -> None:
         (ItemNotFoundError, 404, "not_found"),
         (ExtractionNotFoundError, 404, "not_found"),
         (CollectionNotFoundError, 404, "not_found"),
+        (SubscriptionNotFoundError, 404, "not_found"),
         (EntityNotFoundError, 404, "not_found"),
         (ReadonlyCollectionError, 403, "readonly_collection"),
         (IdempotencyConflictError, 409, "idempotency_conflict"),

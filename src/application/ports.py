@@ -78,7 +78,6 @@ class ItemRepositoryPort(Protocol):
 
     def list_items(self, query: Optional[ItemQuery] = None) -> list[Item]: ...
 
-
 class CandidateRepositoryPort(ItemRepositoryPort, Protocol):
     def create_candidate_extraction(
         self, record: CandidateExtractionRecord
@@ -95,6 +94,56 @@ class CandidateRepositoryPort(ItemRepositoryPort, Protocol):
         rejected_at: datetime,
         reason: Optional[str] = None,
     ) -> CandidateExtractionRecord: ...
+
+
+class SubscriptionTransactionPort(Protocol):
+    def get_collection(
+        self, collection_id: str, *, include_deleted: bool = False
+    ) -> Optional[Collection]: ...
+
+    def list_items(self, query: Optional[ItemQuery] = None) -> list[Item]: ...
+
+    def create_collection(self, collection: Collection) -> Collection: ...
+
+    def update_collection(
+        self, collection: Collection, *, expected_version: int
+    ) -> Collection: ...
+
+    def get_subscription(
+        self, subscription_id: str, *, include_deleted: bool = False
+    ) -> Optional[Subscription]: ...
+
+    def list_subscriptions(self, *, include_deleted: bool = False) -> list[Subscription]: ...
+
+    def create_subscription(self, subscription: Subscription) -> Subscription: ...
+
+    def update_subscription(
+        self, subscription: Subscription, *, expected_version: int
+    ) -> Subscription: ...
+
+    def create_outbox_entry(self, entry: OutboxEntry) -> OutboxEntry: ...
+
+    def get_idempotency_record(
+        self, scope: str, key: str
+    ) -> Optional[IdempotencyRecord]: ...
+
+    def create_idempotency_record(self, record: IdempotencyRecord) -> IdempotencyRecord: ...
+
+
+class SubscriptionRepositoryPort(Protocol):
+    def transaction(self) -> AbstractContextManager[SubscriptionTransactionPort]: ...
+
+    def get_collection(
+        self, collection_id: str, *, include_deleted: bool = False
+    ) -> Optional[Collection]: ...
+
+    def list_collections(self, *, include_deleted: bool = False) -> list[Collection]: ...
+
+    def get_subscription(
+        self, subscription_id: str, *, include_deleted: bool = False
+    ) -> Optional[Subscription]: ...
+
+    def list_subscriptions(self, *, include_deleted: bool = False) -> list[Subscription]: ...
 
 
 class ReminderRepositoryPort(ItemRepositoryPort, Protocol):

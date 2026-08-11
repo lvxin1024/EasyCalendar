@@ -114,6 +114,7 @@
 
 ### T3.1 Subscription 和只读 Collection
 
+- 状态：已完成；SubscriptionService、只读边界和 `/v1/collections`、`/v1/subscriptions` 已接入。
 - 依赖：T1.2、T2.1。
 - 内容：订阅 CRUD、URL 校验、启停和权限边界。
 - 验收：订阅 Item 不能被普通编辑接口修改；关闭订阅后不再刷新。
