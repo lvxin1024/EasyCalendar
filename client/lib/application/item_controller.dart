@@ -2,6 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../ai/ai_key_store.dart';
+import '../ai/ai_provider.dart';
+import '../ai/ai_provider_connection_tester.dart';
 import '../config/app_config.dart';
 import '../data/item_repository.dart';
 import '../domain/item.dart';
@@ -18,8 +21,13 @@ class ItemController extends ChangeNotifier {
     this.syncCoordinator,
     this.widgetSnapshotWriter,
     this.desktopWindowController,
+    AiApiKeyStore? aiApiKeyStore,
+    AiProviderConnectionTester? aiProviderConnectionTester,
   }) {
     syncCoordinator?.addListener(_syncChanged);
+    _aiApiKeyStore = aiApiKeyStore ?? SecureAiApiKeyStore();
+    _aiProviderConnectionTester =
+        aiProviderConnectionTester ?? AiProviderConnectionTester();
   }
 
   final ItemRepository repository;
@@ -27,6 +35,8 @@ class ItemController extends ChangeNotifier {
   final SyncCoordinator? syncCoordinator;
   final WidgetSnapshotWriter? widgetSnapshotWriter;
   final DesktopWindowController? desktopWindowController;
+  late final AiApiKeyStore _aiApiKeyStore;
+  late final AiProviderConnectionTester _aiProviderConnectionTester;
 
   List<CalendarItem> _items = const [];
   ClientPreferences? _preferences;
@@ -50,6 +60,86 @@ class ItemController extends ChangeNotifier {
     windowOpacity: 1,
     windowAlwaysOnTop: false,
   );
+
+  List<AiProviderConfig> get aiProviders => preferences.aiProviders;
+
+  Future<List<AiProviderConfig>> refreshAiProviderKeyStatus() async {
+    final providers = preferences.aiProviders;
+    final refreshed = <AiProviderConfig>[];
+    for (final provider in providers) {
+      bool configured = false;
+      try {
+        configured =
+            (await _aiApiKeyStore.read(provider.id))?.isNotEmpty == true;
+      } catch (_) {
+        // Secure storage is optional while running on unsupported test targets.
+      }
+      refreshed.add(provider.copyWith(keyConfigured: configured));
+    }
+    if (!_sameProviders(refreshed, preferences.aiProviders)) {
+      _preferences = preferences.copyWith(aiProviders: refreshed);
+      notifyListeners();
+    }
+    return List.unmodifiable(refreshed);
+  }
+
+  Future<void> saveAiProvider(
+    AiProviderConfig provider, {
+    String? apiKey,
+  }) async {
+    final providers = [...preferences.aiProviders];
+    final index = providers.indexWhere((value) => value.id == provider.id);
+    final stored = provider.copyWith(
+      keyConfigured: apiKey?.trim().isNotEmpty == true
+          ? true
+          : provider.keyConfigured,
+    );
+    if (index < 0) {
+      providers.add(stored);
+    } else {
+      providers[index] = stored;
+    }
+    if (apiKey?.trim().isNotEmpty == true) {
+      await _aiApiKeyStore.write(provider.id, apiKey!.trim());
+    }
+    await savePreferences(
+      preferences.copyWith(assistantEnabled: true, aiProviders: providers),
+    );
+  }
+
+  Future<void> deleteAiProvider(String providerId) async {
+    await _aiApiKeyStore.clear(providerId);
+    await savePreferences(
+      preferences.copyWith(
+        aiProviders: preferences.aiProviders
+            .where((provider) => provider.id != providerId)
+            .toList(growable: false),
+      ),
+    );
+  }
+
+  Future<void> clearAiProviderKey(String providerId) async {
+    await _aiApiKeyStore.clear(providerId);
+    final providers = preferences.aiProviders
+        .map(
+          (provider) => provider.id == providerId
+              ? provider.copyWith(keyConfigured: false)
+              : provider,
+        )
+        .toList(growable: false);
+    _preferences = preferences.copyWith(aiProviders: providers);
+    notifyListeners();
+  }
+
+  Future<void> testAiProvider(AiProviderConfig provider) async {
+    String? key;
+    try {
+      key = await _aiApiKeyStore.read(provider.id);
+    } catch (_) {
+      // Connection testing can still validate local Ollama endpoints without a key.
+    }
+    await _aiProviderConnectionTester.test(provider, apiKey: key);
+  }
 
   List<CalendarItem> get todayItems {
     final now = configuredNow();
@@ -211,6 +301,18 @@ class ItemController extends ChangeNotifier {
     syncCoordinator?.removeListener(_syncChanged);
     syncCoordinator?.dispose();
     unawaited(repository.close());
+    _aiProviderConnectionTester.close();
     super.dispose();
+  }
+
+  static bool _sameProviders(
+    List<AiProviderConfig> left,
+    List<AiProviderConfig> right,
+  ) {
+    if (left.length != right.length) return false;
+    for (var index = 0; index < left.length; index++) {
+      if (left[index].keyConfigured != right[index].keyConfigured) return false;
+    }
+    return true;
   }
 }

@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
+import '../../ai/ai_provider.dart';
 import '../../application/item_controller.dart';
 import '../../config/app_config.dart';
 import '../../domain/item.dart';
@@ -29,6 +31,8 @@ class _SettingsPageState extends State<SettingsPage> {
   late bool _notificationsEnabled;
   late double _windowOpacity;
   late bool _windowAlwaysOnTop;
+  late bool _assistantEnabled;
+  late List<AiProviderConfig> _aiProviders;
   bool _obscureToken = true;
 
   @override
@@ -41,7 +45,10 @@ class _SettingsPageState extends State<SettingsPage> {
     _notificationsEnabled = preferences.notificationsEnabled;
     _windowOpacity = preferences.windowOpacity;
     _windowAlwaysOnTop = preferences.windowAlwaysOnTop;
+    _assistantEnabled = preferences.assistantEnabled;
+    _aiProviders = [...preferences.aiProviders];
     widget.controller.desktopWindowController?.addListener(_windowChanged);
+    unawaited(_refreshAiProviderKeys());
   }
 
   @override
@@ -154,6 +161,20 @@ class _SettingsPageState extends State<SettingsPage> {
                 onChanged: (value) =>
                     setState(() => _notificationsEnabled = value),
               ),
+              _AiProviderSection(
+                enabled: _assistantEnabled,
+                providers: _aiProviders,
+                onEnabledChanged: (value) async {
+                  setState(() => _assistantEnabled = value);
+                  await _saveAiPreferences();
+                },
+                onAdd: () => _showProviderEditor(),
+                onImport: _importProvider,
+                onEdit: _showProviderEditor,
+                onDelete: _deleteProvider,
+                onToggle: _toggleProvider,
+                onTest: _testProvider,
+              ),
               if (widget.controller.desktopWindowController?.available == true)
                 _DesktopWindowSection(
                   opacity: _windowOpacity,
@@ -225,6 +246,8 @@ class _SettingsPageState extends State<SettingsPage> {
           notificationsEnabled: _notificationsEnabled,
           windowOpacity: _windowOpacity,
           windowAlwaysOnTop: _windowAlwaysOnTop,
+          assistantEnabled: _assistantEnabled,
+          aiProviders: _aiProviders,
         ),
       );
       if (_tokenController.text.trim().isNotEmpty) {
@@ -240,6 +263,82 @@ class _SettingsPageState extends State<SettingsPage> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('保存失败：$error')));
+    }
+  }
+
+  Future<void> _refreshAiProviderKeys() async {
+    final providers = await widget.controller.refreshAiProviderKeyStatus();
+    if (mounted) setState(() => _aiProviders = providers);
+  }
+
+  Future<void> _saveAiPreferences() async {
+    await widget.controller.savePreferences(
+      widget.controller.preferences.copyWith(
+        assistantEnabled: _assistantEnabled,
+        aiProviders: _aiProviders,
+      ),
+    );
+  }
+
+  Future<void> _showProviderEditor([AiProviderConfig? current]) async {
+    final imported = await showDialog<AiProviderImport>(
+      context: context,
+      builder: (_) => _ProviderDialog(current: current),
+    );
+    if (imported == null) return;
+    try {
+      await widget.controller.saveAiProvider(
+        imported.config,
+        apiKey: imported.apiKey,
+      );
+      final providers = await widget.controller.refreshAiProviderKeyStatus();
+      if (mounted) setState(() => _aiProviders = providers);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Provider 保存失败：$error')));
+      }
+    }
+  }
+
+  Future<void> _importProvider() => _showProviderEditor();
+
+  Future<void> _deleteProvider(AiProviderConfig provider) async {
+    await widget.controller.deleteAiProvider(provider.id);
+    if (mounted) {
+      setState(
+        () => _aiProviders.removeWhere((item) => item.id == provider.id),
+      );
+    }
+  }
+
+  Future<void> _toggleProvider(AiProviderConfig provider, bool enabled) async {
+    await widget.controller.saveAiProvider(provider.copyWith(enabled: enabled));
+    if (mounted) {
+      setState(() {
+        final index = _aiProviders.indexWhere((item) => item.id == provider.id);
+        if (index >= 0) {
+          _aiProviders[index] = provider.copyWith(enabled: enabled);
+        }
+      });
+    }
+  }
+
+  Future<void> _testProvider(AiProviderConfig provider) async {
+    try {
+      await widget.controller.testAiProvider(provider);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('连接成功')));
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('连接失败：$error')));
+      }
     }
   }
 
@@ -486,6 +585,283 @@ class _DesktopWindowSection extends StatelessWidget {
       ),
     ],
   );
+}
+
+class _AiProviderSection extends StatelessWidget {
+  const _AiProviderSection({
+    required this.enabled,
+    required this.providers,
+    required this.onEnabledChanged,
+    required this.onAdd,
+    required this.onImport,
+    required this.onEdit,
+    required this.onDelete,
+    required this.onToggle,
+    required this.onTest,
+  });
+
+  final bool enabled;
+  final List<AiProviderConfig> providers;
+  final ValueChanged<bool> onEnabledChanged;
+  final VoidCallback onAdd;
+  final VoidCallback onImport;
+  final ValueChanged<AiProviderConfig> onEdit;
+  final ValueChanged<AiProviderConfig> onDelete;
+  final void Function(AiProviderConfig, bool) onToggle;
+  final ValueChanged<AiProviderConfig> onTest;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      const SizedBox(height: 24),
+      const _SectionLabel(label: 'AI 助手'),
+      _SettingSwitch(
+        icon: Icons.auto_awesome_outlined,
+        title: '启用 AI 助手',
+        subtitle: enabled ? '候选项仍需确认后才会写入日程' : '使用本地规则解析器',
+        value: enabled,
+        onChanged: onEnabledChanged,
+      ),
+      if (providers.isEmpty)
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Text('尚未配置 Provider'),
+        ),
+      for (final provider in providers)
+        DecoratedBox(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(bottom: BorderSide(color: Color(0xFFE4E7EC))),
+          ),
+          child: ListTile(
+            leading: Icon(
+              provider.kind == AiProviderKind.ollama
+                  ? Icons.memory_outlined
+                  : Icons.cloud_outlined,
+            ),
+            title: Text(provider.name),
+            subtitle: Text(
+              '${provider.model} · ${provider.keyConfigured ? '密钥已配置' : '未配置密钥'}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            trailing: Wrap(
+              spacing: 0,
+              children: [
+                IconButton(
+                  tooltip: '测试连接',
+                  icon: const Icon(Icons.network_check_outlined),
+                  onPressed: () => onTest(provider),
+                ),
+                IconButton(
+                  tooltip: '编辑 Provider',
+                  icon: const Icon(Icons.edit_outlined),
+                  onPressed: () => onEdit(provider),
+                ),
+                Switch(
+                  value: provider.enabled,
+                  onChanged: (value) => onToggle(provider, value),
+                ),
+                IconButton(
+                  tooltip: '删除 Provider',
+                  icon: const Icon(Icons.delete_outline),
+                  onPressed: () => onDelete(provider),
+                ),
+              ],
+            ),
+          ),
+        ),
+      Padding(
+        padding: const EdgeInsets.only(top: 10),
+        child: Wrap(
+          alignment: WrapAlignment.end,
+          spacing: 8,
+          children: [
+            OutlinedButton.icon(
+              onPressed: onImport,
+              icon: const Icon(Icons.file_upload_outlined),
+              label: const Text('导入配置'),
+            ),
+            FilledButton.tonalIcon(
+              onPressed: onAdd,
+              icon: const Icon(Icons.add),
+              label: const Text('添加 Provider'),
+            ),
+          ],
+        ),
+      ),
+    ],
+  );
+}
+
+class _ProviderDialog extends StatefulWidget {
+  const _ProviderDialog({this.current});
+
+  final AiProviderConfig? current;
+
+  @override
+  State<_ProviderDialog> createState() => _ProviderDialogState();
+}
+
+class _ProviderDialogState extends State<_ProviderDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _name;
+  late final TextEditingController _baseUrl;
+  late final TextEditingController _model;
+  late final TextEditingController _apiKey;
+  late AiProviderKind _kind;
+  bool _importMode = false;
+  final _importController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    final current = widget.current;
+    _name = TextEditingController(text: current?.name ?? '我的 AI');
+    _baseUrl = TextEditingController(
+      text: current?.baseUrl ?? 'http://localhost:11434',
+    );
+    _model = TextEditingController(text: current?.model ?? '');
+    _apiKey = TextEditingController();
+    _kind = current?.kind ?? AiProviderKind.ollama;
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _baseUrl.dispose();
+    _model.dispose();
+    _apiKey.dispose();
+    _importController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text(widget.current == null ? '添加 Provider' : '编辑 Provider'),
+    content: SizedBox(
+      width: 460,
+      child: _importMode ? _buildImport() : _buildForm(),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('取消'),
+      ),
+      TextButton(
+        onPressed: () => setState(() => _importMode = !_importMode),
+        child: Text(_importMode ? '手动填写' : '粘贴 JSON'),
+      ),
+      FilledButton(onPressed: _submit, child: const Text('保存')),
+    ],
+  );
+
+  Widget _buildForm() => Form(
+    key: _formKey,
+    child: ListView(
+      shrinkWrap: true,
+      children: [
+        DropdownButtonFormField<AiProviderKind>(
+          initialValue: _kind,
+          decoration: const InputDecoration(labelText: '类型'),
+          items: const [
+            DropdownMenuItem(
+              value: AiProviderKind.ollama,
+              child: Text('Ollama'),
+            ),
+            DropdownMenuItem(
+              value: AiProviderKind.openaiCompatible,
+              child: Text('OpenAI-compatible'),
+            ),
+          ],
+          onChanged: (value) => setState(() => _kind = value ?? _kind),
+        ),
+        const SizedBox(height: 10),
+        TextFormField(
+          controller: _name,
+          decoration: const InputDecoration(labelText: '显示名称'),
+          validator: _required,
+        ),
+        const SizedBox(height: 10),
+        TextFormField(
+          controller: _baseUrl,
+          decoration: const InputDecoration(labelText: 'API 地址'),
+          validator: _required,
+        ),
+        const SizedBox(height: 10),
+        TextFormField(
+          controller: _model,
+          decoration: const InputDecoration(labelText: '模型'),
+          validator: _required,
+        ),
+        if (_kind == AiProviderKind.openaiCompatible) ...[
+          const SizedBox(height: 10),
+          TextFormField(
+            controller: _apiKey,
+            obscureText: true,
+            decoration: const InputDecoration(labelText: 'API key（留空保持原密钥）'),
+          ),
+        ],
+      ],
+    ),
+  );
+
+  Widget _buildImport() => TextField(
+    controller: _importController,
+    minLines: 6,
+    maxLines: 10,
+    decoration: const InputDecoration(
+      labelText: 'Provider JSON',
+      hintText:
+          '{"kind":"ollama","name":"本地","base_url":"http://localhost:11434","model":"qwen"}',
+    ),
+  );
+
+  String? _required(String? value) =>
+      value?.trim().isEmpty == false ? null : '不能为空';
+
+  void _submit() {
+    try {
+      if (_importMode) {
+        final decoded = jsonDecode(_importController.text);
+        if (decoded is! Map) throw const FormatException('JSON 根节点必须是对象');
+        final imported = AiProviderImport.fromJson(
+          Map<String, dynamic>.from(decoded),
+        );
+        Navigator.pop(context, imported);
+        return;
+      }
+      if (!(_formKey.currentState?.validate() ?? false)) return;
+      final baseUrl = Uri.tryParse(_baseUrl.text.trim());
+      if (baseUrl == null ||
+          !baseUrl.hasAuthority ||
+          !{'http', 'https'}.contains(baseUrl.scheme)) {
+        throw const FormatException('请输入有效的 HTTP(S) 地址');
+      }
+      final current = widget.current;
+      Navigator.pop(
+        context,
+        AiProviderImport(
+          config: AiProviderConfig(
+            id: current?.id ?? 'ai_${DateTime.now().microsecondsSinceEpoch}',
+            name: _name.text.trim(),
+            kind: _kind,
+            baseUrl: _baseUrl.text.trim(),
+            model: _model.text.trim(),
+            enabled: current?.enabled ?? true,
+            requestParameters: current?.requestParameters ?? const {},
+            keyConfigured: current?.keyConfigured ?? false,
+          ),
+          apiKey: _apiKey.text.trim().isEmpty ? null : _apiKey.text.trim(),
+        ),
+      );
+    } catch (error) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('配置无效：$error')));
+    }
+  }
 }
 
 class _InfoRow extends StatelessWidget {

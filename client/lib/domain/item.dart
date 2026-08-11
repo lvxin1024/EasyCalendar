@@ -1,3 +1,5 @@
+import '../ai/ai_provider.dart';
+
 enum ItemType { event, task, note }
 
 enum ItemStatus { todo, done, cancelled }
@@ -110,6 +112,8 @@ class ClientPreferences {
     required this.notificationsEnabled,
     this.windowOpacity = 1,
     this.windowAlwaysOnTop = false,
+    this.assistantEnabled = false,
+    this.aiProviders = const [],
   });
 
   final String apiUrl;
@@ -117,6 +121,8 @@ class ClientPreferences {
   final bool notificationsEnabled;
   final double windowOpacity;
   final bool windowAlwaysOnTop;
+  final bool assistantEnabled;
+  final List<AiProviderConfig> aiProviders;
 
   ClientPreferences copyWith({
     String? apiUrl,
@@ -124,11 +130,15 @@ class ClientPreferences {
     bool? notificationsEnabled,
     double? windowOpacity,
     bool? windowAlwaysOnTop,
+    bool? assistantEnabled,
+    List<AiProviderConfig>? aiProviders,
   }) => ClientPreferences(
     apiUrl: apiUrl ?? this.apiUrl,
     syncEnabled: syncEnabled ?? this.syncEnabled,
     notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
     windowOpacity: windowOpacity ?? this.windowOpacity,
     windowAlwaysOnTop: windowAlwaysOnTop ?? this.windowAlwaysOnTop,
+    assistantEnabled: assistantEnabled ?? this.assistantEnabled,
+    aiProviders: aiProviders ?? this.aiProviders,
   );
 }

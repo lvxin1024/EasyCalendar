@@ -8,6 +8,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:uuid/uuid.dart';
 
 import '../config/app_config.dart';
+import '../ai/ai_provider.dart';
 import '../domain/item.dart';
 import '../sync/sync_models.dart';
 import '../sync/sync_repository.dart';
@@ -543,6 +544,14 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
         values['window_always_on_top'],
         defaults.windowAlwaysOnTop,
       ),
+      assistantEnabled: _storedBool(
+        values['assistant_enabled'],
+        defaults.assistantEnabled,
+      ),
+      aiProviders: _storedProviders(
+        values['ai_providers'],
+        defaults.aiProviders,
+      ),
     );
   }
 
@@ -559,6 +568,10 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
         'window_always_on_top': preferences.windowAlwaysOnTop
             ? 'true'
             : 'false',
+        'assistant_enabled': preferences.assistantEnabled ? 'true' : 'false',
+        'ai_providers': jsonEncode(
+          preferences.aiProviders.map((provider) => provider.toJson()).toList(),
+        ),
       }.entries) {
         await transaction.insert('app_settings', {
           'key': entry.key,
@@ -571,6 +584,26 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
   static double _storedOpacity(String? value, double fallback) {
     final parsed = double.tryParse(value ?? '');
     return (parsed ?? fallback).clamp(0.2, 1.0).toDouble();
+  }
+
+  static List<AiProviderConfig> _storedProviders(
+    String? value,
+    List<AiProviderConfig> fallback,
+  ) {
+    if (value == null || value.trim().isEmpty) return fallback;
+    try {
+      final decoded = jsonDecode(value);
+      if (decoded is! List) return fallback;
+      return decoded
+          .whereType<Map>()
+          .map(
+            (entry) =>
+                AiProviderConfig.fromJson(Map<String, dynamic>.from(entry)),
+          )
+          .toList(growable: false);
+    } catch (_) {
+      return fallback;
+    }
   }
 
   Future<void> _writeOutbox(
