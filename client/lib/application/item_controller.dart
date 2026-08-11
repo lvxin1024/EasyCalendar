@@ -8,12 +8,14 @@ import '../domain/item.dart';
 import '../sync/sync_coordinator.dart';
 import '../sync/sync_models.dart';
 import '../utils/configured_time.dart';
+import '../widget/widget_snapshot_writer.dart';
 
 class ItemController extends ChangeNotifier {
   ItemController({
     required this.repository,
     required this.config,
     this.syncCoordinator,
+    this.widgetSnapshotWriter,
   }) {
     syncCoordinator?.addListener(_syncChanged);
   }
@@ -21,6 +23,7 @@ class ItemController extends ChangeNotifier {
   final ItemRepository repository;
   final AppConfig config;
   final SyncCoordinator? syncCoordinator;
+  final WidgetSnapshotWriter? widgetSnapshotWriter;
 
   List<CalendarItem> _items = const [];
   ClientPreferences? _preferences;
@@ -147,6 +150,14 @@ class ItemController extends ChangeNotifier {
 
   Future<void> _reload({bool notify = true}) async {
     _items = await repository.listItems();
+    try {
+      await widgetSnapshotWriter?.write(
+        items: _items,
+        timezone: config.timezone,
+      );
+    } catch (_) {
+      // Widget refresh is derived state and must not block local CRUD.
+    }
     if (notify) notifyListeners();
   }
 

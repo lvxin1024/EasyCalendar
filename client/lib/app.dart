@@ -4,16 +4,19 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'application/item_controller.dart';
 import 'config/app_config.dart';
 import 'features/shell/home_shell.dart';
+import 'widget/widget_deep_link_controller.dart';
 
 class EasyCalendarApp extends StatelessWidget {
   const EasyCalendarApp({
     super.key,
     required this.config,
     required this.controller,
+    required this.widgetDeepLinks,
   });
 
   final AppConfig config;
   final ItemController controller;
+  final WidgetDeepLinkController widgetDeepLinks;
 
   @override
   Widget build(BuildContext context) {
@@ -72,7 +75,11 @@ class EasyCalendarApp extends StatelessWidget {
           ),
         ),
       ),
-      home: HomeShell(config: config, controller: controller),
+      home: HomeShell(
+        config: config,
+        controller: controller,
+        widgetDeepLinks: widgetDeepLinks,
+      ),
     );
   }
 }

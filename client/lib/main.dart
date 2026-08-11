@@ -11,6 +11,8 @@ import 'sync/connectivity_monitor.dart';
 import 'sync/http_sync_transport.dart';
 import 'sync/sync_coordinator.dart';
 import 'sync/token_store.dart';
+import 'widget/widget_deep_link_controller.dart';
+import 'widget/widget_snapshot_writer.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,7 +33,16 @@ Future<void> main() async {
     repository: repository,
     config: config,
     syncCoordinator: syncCoordinator,
+    widgetSnapshotWriter: const PlatformWidgetSnapshotWriter(),
   );
   await controller.initialize();
-  runApp(EasyCalendarApp(config: config, controller: controller));
+  final widgetDeepLinks = WidgetDeepLinkController();
+  await widgetDeepLinks.start();
+  runApp(
+    EasyCalendarApp(
+      config: config,
+      controller: controller,
+      widgetDeepLinks: widgetDeepLinks,
+    ),
+  );
 }

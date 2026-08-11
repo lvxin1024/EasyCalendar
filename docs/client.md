@@ -15,7 +15,7 @@
 - 系统安全存储中的 Bearer token、同步状态和手动同步入口。
 - 与 Worker 一致的确定性 LWW、删除墓碑、winner/loser 日志和冲突历史入口。
 
-真实系统通知尚未接入；设置页的通知开关仍只是后续 adapter 的启用意向，不代表 T4 已完成。
+真实系统通知尚未接入；设置页的通知开关仍只是后续 adapter 的启用意向。macOS WidgetKit 已通过 App Group 读取主 App 的只读快照。
 
 ## 2. 代码边界
 
@@ -26,6 +26,7 @@ client/lib/
   data/               # Repository 接口和 SQLite adapter
   application/        # 页面共享的状态与用例编排
   sync/               # HTTP transport、同步协调、网络监控和安全 token port
+  widget/             # macOS App Group 快照 writer
   features/           # today/items/due/editor/settings/shell
   widgets/            # 可复用事项行和空状态
   utils/              # 配置时区与日期显示
@@ -51,6 +52,8 @@ app_settings
 每次 create/update/complete/delete 都在一个 SQLite transaction 中更新 Item 并追加 outbox。update/delete 使用 `id + version` 乐观条件；删除写 `deleted_at` 墓碑，不硬删除。outbox 保留 `device_id`、entity、operation、version、retry/error/sent 字段，payload 使用稳定 Item domain 字段而不是 SQLite 列快照。同步器先发送默认 Collection 和本地变更，成功后删除已接受记录；临时错误写入指数退避时间，永久错误停止快速重试。pull 的整页变更和新 cursor 在同一事务提交，失败时一起回滚。
 
 Bearer token 不写 SQLite、JSON 配置或日志，而由 `flutter_secure_storage` 保存。Android 声明网络权限，macOS 声明网络 client 与 Keychain Sharing entitlement；Windows 使用插件提供的 Credential Locker adapter。
+
+macOS WidgetKit 使用 `group.io.easycalendar.easyCalendar` App Group。主 App 通过 `io.easycalendar/widget` channel 将完整 JSON 原子写入 `widget/snapshot.json`，Widget 只读该文件并每 15 分钟刷新 timeline；文件缺失显示空状态，文件损坏显示错误占位。Widget item 使用 `easycalendar://item/<id>`，整体点击使用 `easycalendar://today`。
 
 每个同步实体的当前 head 保存其完整 change envelope。远端与本地统一按 `updated_at`、`version`、`change_id` 比较；删除墓碑不特殊降级。冲突表保存完整 winner/loser 快照，设置页可打开“冲突历史”查看被覆盖版本。pull 中较旧的远端 change 不会覆盖排序胜出的未发送本地 head。
 
@@ -100,6 +103,7 @@ EASYCALENDAR_CLIENT_DEVICE=macos ./scripts/run-client.sh
 - `flutter analyze`：0 issues。
 - `flutter test`：覆盖内存 Repository 下的 CRUD、今日计算和 Due 完成，以及 HTTP envelope、重试/永久失败、网络恢复、SQLite 原子 pull/cursor、本地胜出保护和被覆盖版本恢复。
 - `scripts/setup-client.sh` 完整执行通过；Web 目标拒绝测试返回预期错误。
+- macOS WidgetKit target、App Group entitlement、离线 timeline、损坏快照占位和 deep link 已纳入版本控制，并已通过本机 Xcode 无签名构建。
 
 原生构建探测结果：
 

@@ -4,17 +4,9 @@
 <dict>
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
-	<key>com.apple.security.cs.allow-jit</key>
-	<true/>
-	<key>com.apple.security.network.server</key>
-	<true/>
-	<key>com.apple.security.network.client</key>
-	<true/>
 	<key>com.apple.security.application-groups</key>
 	<array>
 		<string>group.io.easycalendar.easyCalendar</string>
 	</array>
-	<key>keychain-access-groups</key>
-	<array/>
 </dict>
 </plist>

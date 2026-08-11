@@ -144,6 +144,7 @@
 
 ### T4.2 macOS WidgetKit
 
+- 状态：已完成；App Group、Widget timeline、快照错误占位和 `easycalendar://` 点击跳转已接入。
 - 依赖：T4.1。
 - 内容：App Group、Widget timeline、点击跳转和错误占位。
 - 验收：离线时显示最近一次快照；快照损坏不导致 Widget 崩溃。

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../application/item_controller.dart';
 import '../../config/app_config.dart';
 import '../../domain/item.dart';
+import '../../widget/widget_deep_link_controller.dart';
 import '../due/due_page.dart';
 import '../editor/item_editor_page.dart';
 import '../items/items_page.dart';
@@ -14,10 +15,12 @@ class HomeShell extends StatefulWidget {
     super.key,
     required this.config,
     required this.controller,
+    required this.widgetDeepLinks,
   });
 
   final AppConfig config;
   final ItemController controller;
+  final WidgetDeepLinkController widgetDeepLinks;
 
   @override
   State<HomeShell> createState() => _HomeShellState();
@@ -25,6 +28,29 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> {
   int _selectedIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.widgetDeepLinks.addListener(_handleWidgetDeepLink);
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _handleWidgetDeepLink(),
+    );
+  }
+
+  @override
+  void didUpdateWidget(HomeShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.widgetDeepLinks == widget.widgetDeepLinks) return;
+    oldWidget.widgetDeepLinks.removeListener(_handleWidgetDeepLink);
+    widget.widgetDeepLinks.addListener(_handleWidgetDeepLink);
+  }
+
+  @override
+  void dispose() {
+    widget.widgetDeepLinks.removeListener(_handleWidgetDeepLink);
+    super.dispose();
+  }
 
   static const _destinations = [
     NavigationDestination(
@@ -54,9 +80,7 @@ class _HomeShellState extends State<HomeShell> {
     animation: widget.controller,
     builder: (context, _) {
       if (widget.controller.loading) {
-        return const Scaffold(
-          body: Center(child: CircularProgressIndicator()),
-        );
+        return const Scaffold(body: Center(child: CircularProgressIndicator()));
       }
       if (!widget.controller.initialized && widget.controller.error != null) {
         return _StartupError(
@@ -101,7 +125,9 @@ class _HomeShellState extends State<HomeShell> {
                                 const SizedBox(width: 10),
                                 Text(
                                   widget.config.appName,
-                                  style: Theme.of(context).textTheme.titleMedium,
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.titleMedium,
                                 ),
                               ],
                             )
@@ -159,7 +185,9 @@ class _HomeShellState extends State<HomeShell> {
                 ? null
                 : FloatingActionButton(
                     tooltip: '新建事项',
-                    onPressed: widget.controller.mutating ? null : () => _openEditor(),
+                    onPressed: widget.controller.mutating
+                        ? null
+                        : () => _openEditor(),
                     child: const Icon(Icons.add),
                   ),
           );
@@ -191,6 +219,29 @@ class _HomeShellState extends State<HomeShell> {
   };
 
   void _selectDestination(int value) => setState(() => _selectedIndex = value);
+
+  Future<void> _handleWidgetDeepLink() async {
+    final target = widget.widgetDeepLinks.takePendingTarget();
+    if (target == null || !mounted) return;
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    if (target.kind == WidgetDeepLinkKind.today) {
+      setState(() => _selectedIndex = 0);
+      return;
+    }
+    CalendarItem? item;
+    for (final candidate in widget.controller.items) {
+      if (candidate.id == target.itemId) {
+        item = candidate;
+        break;
+      }
+    }
+    if (item == null) {
+      setState(() => _selectedIndex = 1);
+      _showError('该事项已不存在。');
+      return;
+    }
+    await _openEditor(item);
+  }
 
   Future<void> _openEditor([CalendarItem? item]) async {
     await Navigator.of(context).push<bool>(
@@ -240,9 +291,9 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   void _showError(Object error) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(error.toString())),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(error.toString())));
   }
 }
 
@@ -268,10 +319,7 @@ class _StartupError extends StatelessWidget {
                 color: Theme.of(context).colorScheme.error,
               ),
               const SizedBox(height: 16),
-              Text(
-                '无法打开本地数据库',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
+              Text('无法打开本地数据库', style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 8),
               Text(
                 error.toString(),
