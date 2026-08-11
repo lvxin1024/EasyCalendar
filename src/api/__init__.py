@@ -2,6 +2,9 @@
 
 from .routes import router
 from .schemas import (
+    CandidateItemResponse,
+    ReminderSuggestionResponse,
+    SourceTextSpanResponse,
     CalendarEventCreate,
     CalendarEventResponse,
     ParseTextRequest,
@@ -14,6 +17,9 @@ from .schemas import (
 
 __all__ = [
     "router",
+    "CandidateItemResponse",
+    "ReminderSuggestionResponse",
+    "SourceTextSpanResponse",
     "CalendarEventCreate",
     "CalendarEventResponse",
     "ParseTextRequest",

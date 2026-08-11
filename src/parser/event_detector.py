@@ -36,6 +36,15 @@ class EventDetector:
             r"最后期限",
             r"due",
         ],
+        "task": [
+            r"待办",
+            r"任务",
+            r"提交",
+            r"交上",
+            r"完成",
+            r"前交",
+            r"之前完成",
+        ],
         "birthday": [
             r"生日",
             r"birthday",
@@ -172,6 +181,10 @@ class EventDetector:
             if match:
                 return match.group(1).strip()
         return None
+
+    def extract_location(self, text: str) -> Optional[str]:
+        """Backward-compatible alias for the original detector API."""
+        return self.detect_location(text)
 
     def detect_attendees(self, text: str) -> List[str]:
         """Extract attendees from text."""

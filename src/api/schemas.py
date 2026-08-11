@@ -5,6 +5,43 @@ from typing import Optional, List
 from pydantic import BaseModel, Field
 
 
+class ReminderSuggestionResponse(BaseModel):
+    """A reminder suggestion that still needs user confirmation."""
+
+    mode: str = "relative"
+    minutes_before: Optional[int] = None
+    remind_at: Optional[datetime] = None
+    enabled: bool = True
+    reason: Optional[str] = None
+
+
+class SourceTextSpanResponse(BaseModel):
+    """Location of a candidate in the submitted source text."""
+
+    start: int
+    end: int
+
+
+class CandidateItemResponse(BaseModel):
+    """API representation of an unconfirmed parsed item."""
+
+    temp_id: str
+    type: str
+    title: str
+    body: Optional[str] = None
+    start_at: Optional[datetime] = None
+    end_at: Optional[datetime] = None
+    due_at: Optional[datetime] = None
+    timezone: Optional[str] = "Asia/Shanghai"
+    location: Optional[str] = None
+    attendees: List[str] = Field(default_factory=list)
+    reminders: List[ReminderSuggestionResponse] = Field(default_factory=list)
+    confidence: float
+    reasoning: Optional[str] = None
+    source_text_span: Optional[SourceTextSpanResponse] = None
+    priority: Optional[int] = None
+
+
 class CalendarEventCreate(BaseModel):
     """Schema for creating a calendar event."""
 
@@ -26,7 +63,7 @@ class CalendarEventResponse(BaseModel):
     end_time: datetime
     description: Optional[str] = None
     location: Optional[str] = None
-    attendees: List[str] = []
+    attendees: List[str] = Field(default_factory=list)
     timezone: str = "Asia/Shanghai"
 
 
@@ -40,9 +77,13 @@ class ParseTextRequest(BaseModel):
 class ParseTextResponse(BaseModel):
     """Schema for parsed text response."""
 
-    events: List[CalendarEventResponse]
+    candidates: List[CandidateItemResponse]
     confidence: float = Field(..., description="Parsing confidence score")
     original_text: str
+    events: List[CalendarEventResponse] = Field(
+        default_factory=list,
+        description="Deprecated compatibility view; candidates are not confirmed events.",
+    )
 
 
 class SyncRequest(BaseModel):

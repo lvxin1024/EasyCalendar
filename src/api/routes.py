@@ -8,6 +8,9 @@ from fastapi.responses import JSONResponse
 from .schemas import (
     ParseTextRequest,
     ParseTextResponse,
+    CandidateItemResponse,
+    ReminderSuggestionResponse,
+    SourceTextSpanResponse,
     CalendarEventCreate,
     CalendarEventResponse,
     SyncRequest,
@@ -17,6 +20,7 @@ from .schemas import (
 )
 from ..parser.rule_parser import RuleParser
 from ..parser.models import CalendarEvent
+from ..domain.models import CandidateItem
 from ..calendar_client.google_calendar import GoogleCalendarClient
 from ..calendar_client.outlook_calendar import OutlookCalendarClient
 from ..calendar_client.ical_client import ICalClient
@@ -62,28 +66,55 @@ def event_to_response(event: CalendarEvent, event_id: str) -> CalendarEventRespo
     )
 
 
+def candidate_to_response(candidate: CandidateItem) -> CandidateItemResponse:
+    """Convert a parser candidate to the API response shape."""
+    return CandidateItemResponse(
+        temp_id=candidate.temp_id,
+        type=candidate.type.value,
+        title=candidate.title,
+        body=candidate.body,
+        start_at=candidate.start_at,
+        end_at=candidate.end_at,
+        due_at=candidate.due_at,
+        timezone=candidate.timezone,
+        location=candidate.location,
+        attendees=candidate.attendees,
+        reminders=[
+            ReminderSuggestionResponse(
+                mode=suggestion.mode.value,
+                minutes_before=suggestion.minutes_before,
+                remind_at=suggestion.remind_at,
+                enabled=suggestion.enabled,
+                reason=suggestion.reason,
+            )
+            for suggestion in candidate.reminders
+        ],
+        confidence=candidate.confidence,
+        reasoning=candidate.reasoning,
+        source_text_span=(
+            SourceTextSpanResponse(
+                start=candidate.source_text_span.start,
+                end=candidate.source_text_span.end,
+            )
+            if candidate.source_text_span
+            else None
+        ),
+        priority=candidate.priority,
+    )
+
+
 @router.post("/parse", response_model=ParseTextResponse)
 async def parse_text(request: ParseTextRequest):
-    """Parse text into calendar events."""
+    """Parse text into unconfirmed candidate items."""
     try:
-        result = parser.parse(request.text)
+        request_parser = RuleParser(request.reference_date)
+        result = request_parser.parse(request.text)
 
-        events = []
-        for event in result.events:
-            events.append(
-                CalendarEventResponse(
-                    id=event.source_text or f"parsed_{len(events)}",
-                    title=event.title,
-                    start_time=event.start_time,
-                    end_time=event.end_time,
-                    description=event.description,
-                    location=event.location,
-                    attendees=event.attendees,
-                    timezone=event.timezone,
-                )
-            )
+        candidates = [candidate_to_response(candidate) for candidate in result.candidates]
+        events = [event_to_response(event, f"legacy_{index:03d}") for index, event in enumerate(result.events, start=1)]
 
         return ParseTextResponse(
+            candidates=candidates,
             events=events,
             confidence=result.confidence,
             original_text=result.original_text,
