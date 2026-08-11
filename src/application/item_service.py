@@ -35,6 +35,7 @@ from src.storage import (
     ItemQuery,
     VersionConflictError,
 )
+from src.domain.recurrence import expand_item
 
 from .errors import (
     CandidateDecisionConflictError,
@@ -266,7 +267,57 @@ class ItemService:
             )
         except ValueError as error:
             raise InvalidCommandError(str(error)) from error
-        results = self.repository.list_items(query)
+        if from_at is not None or to_at is not None:
+            base_query = ItemQuery(
+                collection_id=collection_id,
+                item_type=item_type,
+                status=status,
+                include_deleted=include_deleted,
+                after=None,
+                limit=1000,
+            )
+            base_results = self.repository.list_items(base_query)
+            results = []
+            for item in base_results:
+                if item.recurrence is not None:
+                    results.extend(
+                        occurrence
+                        for occurrence in expand_item(
+                            item, from_at=from_at, to_at=to_at
+                        )
+                        if (from_at is None or (self._schedule_at(occurrence) is not None and self._schedule_at(occurrence) >= from_at))
+                        and (to_at is None or (self._schedule_at(occurrence) is not None and self._schedule_at(occurrence) < to_at))
+                    )
+                else:
+                    schedule_at = self._schedule_at(item)
+                    if (from_at is None or (schedule_at is not None and schedule_at >= from_at)) and (
+                        to_at is None or (schedule_at is not None and schedule_at < to_at)
+                    ):
+                        results.append(item)
+            results.sort(key=lambda value: (self._schedule_at(value) is None, self._schedule_at(value), value.id))
+            if after is not None:
+                results = [
+                    value
+                    for value in results
+                    if (
+                        self._schedule_at(value) is None
+                        and after.schedule_at is None
+                        and value.id > after.item_id
+                    )
+                    or (
+                        self._schedule_at(value) is not None
+                        and after.schedule_at is not None
+                        and (
+                            self._schedule_at(value) > after.schedule_at
+                            or (
+                                self._schedule_at(value) == after.schedule_at
+                                and value.id > after.item_id
+                            )
+                        )
+                    )
+                ]
+        else:
+            results = self.repository.list_items(query)
         has_more = len(results) > limit
         items = results[:limit]
         next_cursor = self._encode_cursor(items[-1]) if has_more and items else None

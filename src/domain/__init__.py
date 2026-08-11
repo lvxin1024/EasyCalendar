@@ -22,6 +22,7 @@ from .models import (
     SyncEntityType,
 )
 from .serialization import DOMAIN_SCHEMA_VERSION, SerializableDomainModel
+from .recurrence import expand_item, parse_recurrence_datetime
 
 __all__ = [
     "CandidateItem",
@@ -39,6 +40,8 @@ __all__ = [
     "ReminderMode",
     "ReminderSuggestion",
     "SerializableDomainModel",
+    "expand_item",
+    "parse_recurrence_datetime",
     "SourceRef",
     "SourceTextSpan",
     "Subscription",
