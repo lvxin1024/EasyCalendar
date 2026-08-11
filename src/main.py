@@ -6,7 +6,6 @@ from typing import Optional
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .api.routes import router
 from .api.errors import register_error_handlers
 from .api.assistant_routes import router as assistant_router
 from .api.item_routes import router as item_router
@@ -16,8 +15,7 @@ from .api.system_routes import router as system_router
 from .application import NotificationSchedulerPort
 from .runtime import RuntimeServices
 from .storage import SQLiteRepository
-from config.loader import Settings
-from config.settings import API_CONFIG, SETTINGS
+from config.loader import Settings, load_settings
 
 
 def create_app(
@@ -26,7 +24,7 @@ def create_app(
     notification_scheduler: Optional[NotificationSchedulerPort] = None,
 ) -> FastAPI:
     """Create and configure FastAPI application."""
-    active_settings = settings or SETTINGS
+    active_settings = settings or load_settings()
     runtime = RuntimeServices(
         active_settings,
         repository=repository,
@@ -53,7 +51,6 @@ def create_app(
         allow_headers=["*"],
     )
 
-    app.include_router(router)
     app.include_router(system_router)
     app.include_router(item_router)
     app.include_router(assistant_router)
@@ -79,9 +76,10 @@ app = create_app()
 if __name__ == "__main__":
     import uvicorn
 
+    server = app.state.settings.server
     uvicorn.run(
         "src.main:app",
-        host=API_CONFIG["host"],
-        port=API_CONFIG["port"],
-        reload=API_CONFIG["debug"],
+        host=server.host,
+        port=server.port,
+        reload=server.debug,
     )

@@ -26,8 +26,15 @@
 ### T0.4 测试和依赖基线
 
 - 状态：已完成。
-- 内容：锁定 Python/Node/Flutter 版本策略；修复可选日历依赖导致的导入失败；建立单测、API 测试和集成测试命令。
+- 内容：锁定 Python/Node/Flutter 版本策略；隔离核心运行依赖；建立单测、API 测试和集成测试命令。
 - 验收：干净环境可以一条命令安装依赖并运行测试；测试不依赖真实 Google、Microsoft 或 AI 账户。
+
+### T0.5 Legacy 原型清理
+
+- 状态：已完成。
+- 依赖：T0.2、T0.3、T1.2、T1.5。
+- 内容：删除 `CalendarEvent`、旧 `/api/v1`、内存日历客户端、无消费者配置和 provider 依赖；Parser 固定为 Candidate-only contract。
+- 验收：正式 `/v1`、JSON/ICS transfer 和启动流程通过全部离线测试；仓库不再导入或宣传已删除原型。
 
 ## 1. 本地优先 MVP
 

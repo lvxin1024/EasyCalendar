@@ -12,7 +12,6 @@ src/application/        # 用例、事务编排和 adapter ports
 src/storage/            # SQLite Repository、migration 和持久化契约
 src/parser/             # 规则 Parser 原型
 src/notification/       # 平台通知 adapter；当前含开发用 memory 实现
-src/calendar_client/    # 历史日历 provider，逐步迁移为 importer
 src/api/                # 当前 FastAPI 原型 API
 src/runtime.py          # 配置驱动的延迟依赖组装
 config/                 # 用户配置和示例，不放业务逻辑
@@ -36,16 +35,15 @@ Domain 不得导入 FastAPI、Flutter、Cloudflare SDK、具体 AI SDK 或具体
 
 - Python 最低支持 3.11，默认开发版本由根目录 `.python-version` 固定为 3.13；CI 同时验证 3.11 和 3.13。
 - `requirements.txt` 只包含启动核心 API 所需的精确版本，包括正式 ICS transfer 使用的 `icalendar`。
-- `requirements-dev.txt` 包含离线测试依赖；`requirements-providers.txt` 包含 Google、Microsoft 和历史日历客户端的可选依赖。
+- `requirements-dev.txt` 包含全部离线测试依赖；外部日历 adapter 在 T6 实现时建立各自明确的依赖边界。
 - Node.js 在 Worker 代码进入仓库时固定 LTS 主版本并提交 lockfile；在此之前不维护空的 Node 工程。
 - Flutter 客户端固定 `3.35.7`，版本写在 `client/.fvmrc` 和 `scripts/setup-client.sh`。当前实现机无 SDK，首次 setup 生成 runner 和 `pubspec.lock` 后必须一并提交，不能把静态检查当成平台构建通过。
-- 升级依赖必须单独提交，并同时通过核心和 provider 测试；业务功能提交不顺带放宽版本范围。
+- 升级依赖必须单独提交并通过全部测试；业务功能提交不顺带放宽版本范围。
 
 ## 本地命令
 
 ```bash
-./scripts/test.sh             # 隔离环境中的核心测试
-./scripts/test.sh providers   # 安装可选 provider 后运行全部离线测试
+./scripts/test.sh             # 隔离环境中的全部 Python 测试
 python run.py                 # 从 config/ 读取设置并启动 API
 ./scripts/setup-client.sh     # 生成 runner、解析依赖、analyze 和 test
 ./scripts/run-client.sh       # 使用 config/client.json 运行 Flutter

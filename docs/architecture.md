@@ -4,7 +4,7 @@
 
 产品采用单用户、自托管、local-first 架构。客户端拥有本地数据的编辑体验；同步服务只保存该实例的 canonical copy 和变更日志。服务端不承担多租户、团队权限或实时协作。
 
-当前仓库的 Python/FastAPI 代码是 Parser 和日历客户端原型。目标架构会保留可复用的 Parser 逻辑，但不能把现有 `CalendarEvent`、内存缓存或第三方客户端直接当成最终数据层。
+当前仓库已用 `Item`/`CandidateItem`、application service 和 SQLite Repository 取代早期 `CalendarEvent` 与内存日历客户端原型。规则 Parser 仍是覆盖有限的本地实现，但它只通过 Candidate contract 进入正式流程。
 
 ## 2. 运行拓扑
 
@@ -58,8 +58,7 @@ Application 通过抽象接口调用存储、同步、通知、Importer 和 Prov
 - SQLite adapter：`src/storage/` 已实现本地 Repository、migration、outbox 和 sync cursor；D1 adapter 尚未实现。
 - Parser/AI adapter：`RuleParserAdapter` 已实现规则解析 port，其他 provider 仍待实现。
 - Notification adapter：`NotificationSchedulerPort` 定义稳定调度/取消边界；当前 `memory` adapter 只用于开发和测试，系统 adapter 由各客户端平台实现。
-- ICS/Google/Microsoft adapter：输出带来源信息的 Item。
-- Notification adapter：把 Reminder 转成平台通知。
+- ICS/Google/Microsoft adapter：未来通过 Importer contract 输出带来源信息的 Item。
 - Widget adapter：把查询结果写成 snapshot。
 
 ### Client UI / Platform
@@ -167,11 +166,18 @@ Google、Microsoft、AI 和 Cloudflare SDK 必须延迟加载或作为独立 ada
 - Sync change 保留 `version` 和 `updated_at`。
 - Plugin/Provider manifest 声明能力版本和兼容的 Item schema。
 
-## 7. 当前仓库到目标架构的迁移
+## 7. 当前迁移状态
 
-1. 把现有 Parser 输出固定为 Candidate contract。
-2. 添加 SQLite Repository 和 application service。
-3. 让 FastAPI 只调用 service，不直接创建 `CalendarEvent` 或 client。
-4. 将 `src/calendar_client/` 重构为 Importer/Exporter adapter。
-5. 新增 `server/` 和 `client/`，两者共享文档化 JSON contract，而不是共享 Python 实现。
-6. 最后再接 AI、Widget 和 OAuth provider。
+已完成：
+
+1. Parser 输出固定为 Candidate contract。
+2. SQLite Repository、application service 和正式 `/v1` API 已落地。
+3. FastAPI 只调用 application service，不直接创建日历客户端对象。
+4. 早期 `CalendarEvent`、`/api/v1` 和 `src/calendar_client/` 原型已删除。
+5. `client/` 与 Python 核心通过文档化 JSON contract 协作，不共享数据库文件或 Python 实现。
+
+待完成：
+
+1. 新增 `server/` 的 Worker/D1 同步实现。
+2. 在 T6.1 建立 Importer SDK 后重新实现外部日历适配，不复用已删除原型。
+3. 接入 AI、系统通知、Widget 和 OAuth provider。

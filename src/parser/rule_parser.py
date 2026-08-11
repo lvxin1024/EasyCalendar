@@ -1,17 +1,17 @@
-"""Rule-based parser for extracting calendar events from text."""
+"""Rule-based parser for extracting schedule candidates from text."""
 
 import re
 from datetime import datetime, timedelta
 from typing import List, Optional
 from .base import BaseParser
-from .models import ParsedSchedule, EventPriority, RecurrenceType
+from .models import ParsedSchedule, RecurrenceType
 from ..domain.models import CandidateItem, ItemType, RecurrenceRule, SourceTextSpan
 from .date_extractor import DateExtractor
 from .event_detector import EventDetector
 
 
 class RuleParser(BaseParser):
-    """Rule-based parser for extracting calendar events."""
+    """Rule-based parser for extracting unconfirmed schedule candidates."""
 
     EVENT_SEPARATOR_PATTERNS = [
         r"[,，;；]\s*(?:然后|接着|之后|also|and then)",
@@ -24,7 +24,7 @@ class RuleParser(BaseParser):
         self.event_detector = EventDetector()
 
     def parse(self, text: str) -> ParsedSchedule:
-        """Parse text into calendar events."""
+        """Parse text into unconfirmed schedule candidates."""
         segments = self._split_into_segments(text)
         candidates = []
 

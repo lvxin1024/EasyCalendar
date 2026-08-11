@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from src.parser.rule_parser import RuleParser
 from src.parser.date_extractor import DateExtractor
 from src.parser.event_detector import EventDetector
-from src.parser.models import CalendarEvent, RecurrenceType
+from src.parser.models import EventPriority
 
 
 class TestDateExtractor:
@@ -80,7 +80,6 @@ class TestEventDetector:
 
     def test_detect_priority_high(self):
         """Test detecting high priority."""
-        from src.parser.models import EventPriority
         priority = self.detector.detect_priority("紧急会议")
         assert priority == EventPriority.HIGH
 
@@ -91,7 +90,7 @@ class TestEventDetector:
 
     def test_extract_location(self):
         """Test extracting location."""
-        location = self.detector.extract_location("在A栋会议室开会")
+        location = self.detector.detect_location("在A栋会议室开会")
         assert location is not None
 
     def test_extract_title(self):
@@ -113,42 +112,43 @@ class TestRuleParser:
         text = "明天上午9点开会"
         result = self.parser.parse(text)
 
-        assert len(result.events) >= 1
-        event = result.events[0]
-        assert "开会" in event.title or "会议" in event.title
-        assert event.start_time is not None
+        assert len(result.candidates) >= 1
+        assert not hasattr(result, "events")
+        candidate = result.candidates[0]
+        assert "开会" in candidate.title or "会议" in candidate.title
+        assert candidate.start_at is not None
 
     def test_parse_event_with_date(self):
         """Test parsing event with explicit date."""
         text = "2024年3月20日下午2点在会议室开会"
         result = self.parser.parse(text)
 
-        assert len(result.events) >= 1
-        event = result.events[0]
-        assert event.start_time.year == 2024
-        assert event.start_time.month == 3
-        assert event.start_time.day == 20
+        assert len(result.candidates) >= 1
+        candidate = result.candidates[0]
+        assert candidate.start_at.year == 2024
+        assert candidate.start_at.month == 3
+        assert candidate.start_at.day == 20
 
     def test_parse_multiple_events(self):
         """Test parsing multiple events."""
         text = "明天上午9点开会, 然后下午3点讨论项目"
         result = self.parser.parse(text)
 
-        assert len(result.events) >= 2
+        assert len(result.candidates) >= 2
 
     def test_parse_empty_text(self):
         """Test parsing empty text."""
         result = self.parser.parse("")
-        assert len(result.events) == 0
+        assert len(result.candidates) == 0
 
     def test_parse_event_duration(self):
         """Test that parsed events have proper duration."""
         text = "今天下午2点到4点开会"
         result = self.parser.parse(text)
 
-        assert len(result.events) >= 1
-        event = result.events[0]
-        assert event.end_time > event.start_time
+        assert len(result.candidates) >= 1
+        candidate = result.candidates[0]
+        assert candidate.end_at > candidate.start_at
 
     def test_parse_multiple_texts(self):
         """Test parsing multiple texts."""
@@ -159,42 +159,7 @@ class TestRuleParser:
         results = self.parser.parse_multiple(texts)
 
         assert len(results) == 2
-        assert all(len(r.events) >= 1 for r in results)
-
-
-class TestCalendarEvent:
-    """Test cases for CalendarEvent model."""
-
-    def test_event_creation(self):
-        """Test creating a calendar event."""
-        start = datetime(2024, 3, 20, 9, 0)
-        end = datetime(2024, 3, 20, 10, 0)
-
-        event = CalendarEvent(
-            title="团队会议",
-            start_time=start,
-            end_time=end,
-            description="讨论项目进度",
-            location="会议室A"
-        )
-
-        assert event.title == "团队会议"
-        assert event.start_time == start
-        assert event.end_time == end
-        assert event.location == "会议室A"
-
-    def test_event_auto_fix_end_time(self):
-        """Test that end time is auto-fixed if before start time."""
-        start = datetime(2024, 3, 20, 10, 0)
-        end = datetime(2024, 3, 20, 9, 0)
-
-        event = CalendarEvent(
-            title="测试会议",
-            start_time=start,
-            end_time=end
-        )
-
-        assert event.end_time >= event.start_time
+        assert all(len(r.candidates) >= 1 for r in results)
 
 
 if __name__ == "__main__":

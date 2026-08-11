@@ -29,10 +29,9 @@ def test_default_settings_are_local_and_safe():
     assert settings.transfer.max_import_bytes == 10485760
 
 
-def test_environment_overrides_and_legacy_names_are_supported():
+def test_nested_environment_overrides_are_supported():
     settings = load_settings(
         environ={
-            "API_PORT": "8100",
             "EASYCALENDAR__SERVER__PORT": "8200",
             "EASYCALENDAR__APP__TIMEZONE": "UTC",
             "EASYCALENDAR__SERVER__CORS_ALLOWED_ORIGINS": '["https://app.example.com"]',
@@ -42,6 +41,12 @@ def test_environment_overrides_and_legacy_names_are_supported():
     assert settings.server.port == 8200
     assert settings.app.timezone == "UTC"
     assert settings.server.cors_allowed_origins == ["https://app.example.com"]
+
+
+def test_removed_legacy_environment_alias_is_ignored():
+    settings = load_settings(environ={"API_PORT": "8100"})
+
+    assert settings.server.port == 8000
 
 
 def test_secrets_file_is_loaded_but_never_exposed(tmp_path):
@@ -130,7 +135,7 @@ def test_example_yaml_matches_the_runtime_schema():
     )
 
     assert settings.app.name == "EasyCalendar"
-    assert settings.integrations.outlook_tenant_id == "common"
+    assert settings.transfer.max_import_bytes == 10485760
 
 
 def test_health_and_capabilities_are_truthful():
@@ -152,7 +157,7 @@ def test_health_and_capabilities_are_truthful():
     assert capabilities["providers"]["parser"] == ["rules.zh_cn"]
 
 
-def test_versioned_system_endpoints_start_without_optional_providers():
+def test_versioned_system_endpoints_start_with_core_dependencies():
     from fastapi.testclient import TestClient
 
     from src.main import create_app
@@ -167,24 +172,5 @@ def test_versioned_system_endpoints_start_without_optional_providers():
     assert health_response.json()["service"] == "easycalendar"
     assert capabilities_response.status_code == 200
     assert capabilities_response.json()["features"]["parser"] is True
-
-
-def test_missing_optional_calendar_provider_returns_503(monkeypatch):
-    from fastapi.testclient import TestClient
-
-    from src.api import routes
-    from src.main import create_app
-
-    monkeypatch.setitem(
-        routes.CALENDAR_CLIENTS,
-        "google",
-        ("..calendar_client.missing_google", "GoogleCalendarClient"),
-    )
-
-    response = TestClient(create_app()).get(
-        "/api/v1/events",
-        params={"calendar_type": "google"},
-    )
-
-    assert response.status_code == 503
-    assert response.json() == {"detail": "google calendar support is not installed"}
+    assert "calendar" not in capabilities_response.json()["providers"]
+    assert client.get("/api/v1/health").status_code == 404

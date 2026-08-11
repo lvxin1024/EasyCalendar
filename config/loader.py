@@ -92,13 +92,6 @@ class TransferSettings(StrictModel):
     max_import_bytes: int = Field(default=10485760, ge=1024, le=104857600)
 
 
-class IntegrationSettings(StrictModel):
-    ical_output_dir: str = "./config/calendars"
-    google_credentials_file: str = "./config/google_credentials.json"
-    google_token_file: str = "./config/google_token.json"
-    outlook_tenant_id: str = "common"
-
-
 class WidgetSettings(StrictModel):
     enabled: bool = False
     snapshot_path: str = "./data/widget/snapshot.json"
@@ -113,8 +106,6 @@ class DeploymentSettings(StrictModel):
 class SecretSettings(StrictModel):
     admin_token: Optional[SecretStr] = None
     ai_api_key: Optional[SecretStr] = None
-    outlook_client_id: Optional[SecretStr] = None
-    outlook_client_secret: Optional[SecretStr] = None
 
 
 class Settings(StrictModel):
@@ -126,7 +117,6 @@ class Settings(StrictModel):
     assistant: AssistantSettings = Field(default_factory=AssistantSettings)
     notifications: NotificationSettings = Field(default_factory=NotificationSettings)
     transfer: TransferSettings = Field(default_factory=TransferSettings)
-    integrations: IntegrationSettings = Field(default_factory=IntegrationSettings)
     widget: WidgetSettings = Field(default_factory=WidgetSettings)
     deployment: DeploymentSettings = Field(default_factory=DeploymentSettings)
     secrets: SecretSettings = Field(default_factory=SecretSettings, exclude=True)
@@ -158,21 +148,6 @@ class Settings(StrictModel):
             raise ValueError("server.cors_allowed_origins cannot contain '*' outside local mode")
 
         return self
-
-
-LEGACY_ENV_OVERRIDES = {
-    "API_HOST": ("server", "host"),
-    "API_PORT": ("server", "port"),
-    "API_DEBUG": ("server", "debug"),
-    "DEFAULT_TIMEZONE": ("app", "timezone"),
-    "AI_PROVIDER": ("assistant", "provider"),
-    "AI_BASE_URL": ("assistant", "base_url"),
-    "AI_MODEL": ("assistant", "model"),
-    "ICAL_OUTPUT_DIR": ("integrations", "ical_output_dir"),
-    "GOOGLE_CREDENTIALS_FILE": ("integrations", "google_credentials_file"),
-    "GOOGLE_TOKEN_FILE": ("integrations", "google_token_file"),
-    "OUTLOOK_TENANT_ID": ("integrations", "outlook_tenant_id"),
-}
 
 
 def _deep_merge(base: Dict[str, Any], override: Mapping[str, Any]) -> Dict[str, Any]:
@@ -287,10 +262,6 @@ def load_settings(
         }
     effective_env = {**secret_file_values, **process_env}
 
-    for env_name, path in LEGACY_ENV_OVERRIDES.items():
-        if env_name in effective_env:
-            _set_nested(values, path, _parse_env_value(effective_env[env_name]))
-
     prefix = "EASYCALENDAR__"
     for env_name, value in effective_env.items():
         if env_name.startswith(prefix):
@@ -299,7 +270,7 @@ def load_settings(
                 raise ConfigurationError(f"Invalid environment override: {env_name}")
             if path[0] == "secrets":
                 raise ConfigurationError(
-                    "Use ADMIN_TOKEN, AI_API_KEY, or provider-specific secret variables"
+                    "Use ADMIN_TOKEN or AI_API_KEY for secret values"
                 )
             _set_nested(values, path, _parse_env_value(value))
 
@@ -309,8 +280,6 @@ def load_settings(
             "secrets": {
                 "admin_token": effective_env.get("ADMIN_TOKEN") or None,
                 "ai_api_key": effective_env.get("AI_API_KEY") or None,
-                "outlook_client_id": effective_env.get("OUTLOOK_CLIENT_ID") or None,
-                "outlook_client_secret": effective_env.get("OUTLOOK_CLIENT_SECRET") or None,
             }
         },
     )

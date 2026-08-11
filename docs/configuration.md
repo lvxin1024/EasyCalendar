@@ -16,7 +16,6 @@ config/
   client.json            # Flutter 用户配置，不提交
   secrets.example.env    # 提交字段名，不放真实值
   secrets.env            # 用户填写的秘密，不提交
-  calendars/             # 本地 ICS 输出或 fixture
   environments/
     local.yaml            # 可选，本地覆盖
     production.yaml       # 可选，生产非敏感覆盖
@@ -65,8 +64,8 @@ subscriptions:
 assistant:
   enabled: false
   provider: rules                 # rules | openai_compatible | ollama
-  base_url: http://localhost:11434/v1
-  model: deepseek-v4
+  base_url: null
+  model: null
   timeout_seconds: 45
   max_input_chars: 20000
 
@@ -77,12 +76,6 @@ notifications:
 
 transfer:
   max_import_bytes: 10485760
-
-integrations:
-  ical_output_dir: ./config/calendars
-  google_credentials_file: ./config/google_credentials.json
-  google_token_file: ./config/google_token.json
-  outlook_tenant_id: common
 
 widget:
   enabled: false
@@ -121,14 +114,12 @@ deployment:
 | `notifications.adapter` | `memory` | 否 | 否 | Python 原型 adapter；`memory` 不发送 OS 通知 |
 | `notifications.restore_on_start` | `true` | 否 | 否 | 启动时从正式 Item 强制恢复未来提醒 |
 | `transfer.max_import_bytes` | `10485760` | 否 | 否 | JSON/ICS 单次导入 UTF-8 内容上限，范围 1 KiB 到 100 MiB |
-| `integrations.*` | 示例路径 | 对应接入时必填 | 否 | 第三方配置文件路径和租户 |
 | `widget.snapshot_path` | `./data/widget/snapshot.json` | 否 | 否 | Widget 只读快照 |
 | `deployment.provider` | `docker` | 否 | 否 | 一键部署目标 |
 | `deployment.auto_migrate` | `true` | 否 | 否 | SQLite Repository 启动时执行向前 migration；关闭时 schema 不是最新版则拒绝启动 |
 | `deployment.auto_backup_before_migrate` | `true` | 否 | 否 | 迁移前自动备份开关，当前尚未接入执行器 |
 | `ADMIN_TOKEN` | 自动生成 | 同步必填 | 是 | 单实例 Bearer token |
 | `AI_API_KEY` | 空 | 云端 AI 时必填 | 是 | AI Provider 密钥 |
-| `GOOGLE_CLIENT_SECRET` | 空 | Google 接入时必填 | 是 | 仅放 secret store |
 
 ## 配置校验要求
 
@@ -145,4 +136,6 @@ deployment:
 - `EASYCALENDAR_SECRETS`：指定秘密文件。
 - `EASYCALENDAR_ENV`：加载 `config/environments/<name>.yaml`。
 - `EASYCALENDAR__SERVER__PORT=9000`：使用双下划线覆盖任意嵌套字段。
-- 现有 `API_HOST`、`API_PORT`、`API_DEBUG`、Google、Outlook 和 iCal 环境变量继续兼容。
+- 非敏感字段统一使用 `EASYCALENDAR__<SECTION>__<FIELD>`；不再维护早期 provider 和 `API_*` 环境变量别名。
+
+Google、Microsoft、飞书等外部接入的配置键会随 T6 Importer SDK 一起定义。对应实现存在之前不提前保留无消费者字段，避免示例配置给出虚假的可用性暗示。

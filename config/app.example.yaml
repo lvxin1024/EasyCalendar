@@ -51,12 +51,6 @@ notifications:
 transfer:
   max_import_bytes: 10485760
 
-integrations:
-  ical_output_dir: ./config/calendars
-  google_credentials_file: ./config/google_credentials.json
-  google_token_file: ./config/google_token.json
-  outlook_tenant_id: common
-
 widget:
   enabled: false
   snapshot_path: ./data/widget/snapshot.json

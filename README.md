@@ -6,9 +6,9 @@ EasyCalendar 是一个本地优先、可自托管的个人日程与 Due 管理�
 
 - 使用本地规则把中文文本解析为 `CandidateItem`，核心流程不依赖 AI。
 - 通过 `config/app.yaml`、`config/secrets.env` 和环境变量统一配置。
-- 提供正式 Item/Candidate API、JSON/ICS 导入导出、health/capabilities 和历史兼容接口。
+- 提供正式 `/v1` Item/Candidate API、JSON/ICS 导入导出和 health/capabilities。
 - Flutter 客户端包含今日、全部、Due、编辑、设置和 SQLite 离线 CRUD；三平台构建状态见 `docs/client.md`。
-- Google、Microsoft 和 iCal provider 为可选原型，不安装时不影响核心 API 启动。
+- 外部日历接入将在 Importer SDK 完成后按统一契约重新实现；仓库不保留未经验证的 provider 原型。
 
 真实实现状态见 [docs/implementation-status.md](docs/implementation-status.md)。
 
@@ -27,19 +27,13 @@ cp config/app.example.yaml config/app.yaml
 
 ## 运行测试
 
-一条命令会创建隔离的 `.venv-test`、安装锁定依赖并运行不需要第三方账户的核心测试：
+一条命令会创建隔离的 `.venv-test`、安装锁定依赖并运行全部离线测试：
 
 ```bash
 ./scripts/test.sh
 ```
 
-验证全部可选日历 provider：
-
-```bash
-./scripts/test.sh providers
-```
-
-两种测试模式都不访问真实 Google 或 Microsoft 账户。
+测试不访问真实 Google、Microsoft 或 AI 账户。
 
 ## 解析示例
 
@@ -65,14 +59,6 @@ Flutter 固定为 `3.35.7`；首次运行会生成 Android/macOS/Windows runner�
 ```
 
 客户端配置集中在未提交的 `config/client.json`，setup 会从示例创建。当前实现机器没有 Flutter SDK，因此平台编译尚未在本次提交中验证。
-
-## 可选日历依赖
-
-Google、Microsoft 和历史 iCal client 不属于核心运行依赖。需要验证或开发这些 provider 时安装：
-
-```bash
-.venv/bin/python -m pip install -r requirements-providers.txt
-```
 
 ## 产品文档
 

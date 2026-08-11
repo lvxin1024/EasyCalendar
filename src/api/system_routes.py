@@ -10,7 +10,7 @@ router = APIRouter(prefix="/v1", tags=["system"])
 
 @router.get("/health")
 async def health_check(request: Request):
-    """Return service liveness without contacting optional providers."""
+    """Return service liveness without contacting external services."""
     return build_health_payload(request.app.state.settings)
 
 

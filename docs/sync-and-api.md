@@ -2,8 +2,7 @@
 
 ## 1. API 约定
 
-- 目标前缀：`/v1`。
-- 当前 Python 原型前缀：`/api/v1`，迁移完成前保留兼容层。
+- 当前和目标前缀均为 `/v1`。
 - 请求和响应使用 JSON，时间使用带时区的 ISO 8601。
 - 写操作使用 `Idempotency-Key`，查询使用 cursor 分页。
 - 错误使用统一结构，不直接把第三方 SDK 异常返回给客户端。
@@ -451,15 +450,6 @@ JSON 导出包含 schema_version、Collection、Item、Reminder、Subscription �
 
 本地 App 应优先实现本地导入导出；服务端接口用于远程备份和跨设备迁移。
 
-## 12. 当前兼容接口
+## 12. 当前版本边界
 
-仓库当前已存在：
-
-- `POST /api/v1/parse`
-- `POST /api/v1/events`
-- `GET /api/v1/events`
-- `POST /api/v1/sync`
-- `POST /api/v1/export`
-- `GET /api/v1/health`
-
-这些接口面向历史 `CalendarEvent` 和 provider client，不能作为目标 Item API 的最终契约。迁移时保留解析兼容响应一段时间，并在 OpenAPI 中标记 deprecated；新客户端只使用 `/v1`。
+早期 `/api/v1`、`CalendarEvent` 和 provider client 接口已删除，不属于受支持契约。当前客户端只使用本文列出的 `/v1` 端点；未来破坏性变更按 `/v2` 和迁移周期规则处理。

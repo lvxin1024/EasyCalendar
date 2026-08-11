@@ -1,7 +1,7 @@
 """Event type detection utilities."""
 
 import re
-from typing import List, Dict, Optional, Tuple
+from typing import List, Optional
 from .models import EventPriority, RecurrenceType
 
 
@@ -122,14 +122,6 @@ class EventDetector:
         r"2小时": 120,
     }
 
-    def __init__(self):
-        self.event_type = "general"
-        self.priority = EventPriority.NORMAL
-        self.recurrence = RecurrenceType.NONE
-        self.duration = 60
-        self.location = None
-        self.attendees = []
-
     def detect_event_type(self, text: str) -> str:
         """Detect the type of event."""
         for event_type, patterns in self.EVENT_TYPE_PATTERNS.items():
@@ -181,10 +173,6 @@ class EventDetector:
             if match:
                 return match.group(1).strip()
         return None
-
-    def extract_location(self, text: str) -> Optional[str]:
-        """Backward-compatible alias for the original detector API."""
-        return self.detect_location(text)
 
     def detect_attendees(self, text: str) -> List[str]:
         """Extract attendees from text."""

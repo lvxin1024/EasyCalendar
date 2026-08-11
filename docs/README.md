@@ -45,11 +45,12 @@
 
 本仓库包含 Python/FastAPI 核心和 Flutter 客户端实现：
 
-- 规则解析器已经可以输出 `CandidateItem`，并保留旧的 `events` 兼容视图。
+- 规则解析器只输出待确认的 `CandidateItem`，不再暴露旧 `CalendarEvent` 视图。
 - `Item` 领域模型、SQLite Repository、正式 CRUD、候选确认、提醒协调和 JSON/ICS transfer 已实现。
-- 正式 `/v1/items`、`/v1/assistant`、`/v1/import`、`/v1/export` 已提供；历史 `/api/v1` 保留兼容。
+- 正式 `/v1/items`、`/v1/assistant`、`/v1/import`、`/v1/export` 已提供；旧 `/api/v1` 原型已删除。
 - `client/` 已实现离线 SQLite CRUD 和核心页面；本机无 Flutter SDK，三平台 runner/build 验收状态见 `client.md`。
-- 核心与可选 provider 依赖已分层锁定，`scripts/test.sh` 可在隔离环境运行离线测试。
+- Python 运行和测试依赖已精确锁定，`scripts/test.sh` 可在隔离环境运行全部离线测试。
+- Google、Microsoft 和飞书将在 T6 的 Importer SDK 之上重新实现，不复用已删除的日历客户端原型。
 - Cloudflare/Docker 同步服务和一站式部署仍是目标能力。
 
 完整差距见 [implementation-status.md](./implementation-status.md)，实施顺序见 [roadmap.md](./roadmap.md)。

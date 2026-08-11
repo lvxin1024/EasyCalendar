@@ -1,7 +1,6 @@
 """Base parser interface."""
 
 from abc import ABC, abstractmethod
-from typing import List
 from .models import ParsedSchedule
 
 
@@ -10,24 +9,24 @@ class BaseParser(ABC):
 
     @abstractmethod
     def parse(self, text: str) -> ParsedSchedule:
-        """Parse text into calendar events.
+        """Parse text into unconfirmed schedule candidates.
 
         Args:
-            text: Input text containing event information
+            text: Input text containing schedule information
 
         Returns:
-            ParsedSchedule containing extracted events
+            ParsedSchedule containing extracted candidates
         """
         pass
 
     @abstractmethod
-    def parse_multiple(self, texts: List[str]) -> List[ParsedSchedule]:
-        """Parse multiple text segments into calendar events.
+    def parse_multiple(self, texts: list[str]) -> list[ParsedSchedule]:
+        """Parse multiple text segments into schedule candidates.
 
         Args:
-            texts: List of input texts
+            texts: Input texts
 
         Returns:
-            List of ParsedSchedule objects
+            Parsed results in input order
         """
         pass

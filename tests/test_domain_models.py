@@ -122,7 +122,7 @@ def test_rule_parser_returns_event_and_due_candidates():
         result.candidates[1].source_text_span.start
         > result.candidates[0].source_text_span.end
     )
-    assert len(result.events) == 2
+    assert len(result.candidates) == 2
 
 
 def test_item_normalizes_schedule_timezone_and_rejects_invalid_ranges():
