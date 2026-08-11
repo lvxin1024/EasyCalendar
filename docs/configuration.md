@@ -4,7 +4,7 @@
 
 部署者只修改 `config/` 下的配置文件，不改源码、不改 Dockerfile、不改 Worker 路由。配置分为非敏感运行配置和敏感秘密配置，二者都由部署脚本读取。
 
-Python 原型已经通过 `config/loader.py` 读取并校验本规范中的配置。尚未实现的 Worker、Flutter 和部署脚本在接入时必须复用同一字段语义。
+Python 服务通过 `config/loader.py` 读取并校验本规范；Flutter 通过 `config/client.json` 的 dart-define 键复用 locale、timezone、default Collection、API URL、sync 和 notification 语义。尚未实现的 Worker 和部署脚本接入时必须继续复用同一字段语义。
 
 ## 文件布局
 
@@ -12,6 +12,8 @@ Python 原型已经通过 `config/loader.py` 读取并校验本规范中的配�
 config/
   app.example.yaml       # 提交到 Git，完整字段和安全默认值
   app.yaml               # 用户复制后修改，不提交
+  client.example.json    # Flutter dart-define 安全默认值
+  client.json            # Flutter 用户配置，不提交
   secrets.example.env    # 提交字段名，不放真实值
   secrets.env            # 用户填写的秘密，不提交
   calendars/             # 本地 ICS 输出或 fixture
@@ -21,6 +23,8 @@ config/
 ```
 
 配置合并顺序：默认值 < `app.yaml` < `environments/*.yaml` < 进程环境变量。秘密只从 `secrets.env`、部署平台 secret store 或环境变量读取。
+
+Flutter 的构建默认值来自 `client.json`，设置页保存的 API URL、sync 和 notification 开关覆盖对应默认值。Flutter 配置不包含 token；未来 token 只能进入平台安全存储。
 
 ## 推荐配置示例
 

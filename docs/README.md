@@ -28,6 +28,7 @@
 | [implementation-status.md](./implementation-status.md) | 当前代码盘点、已知缺陷和文档与实现的差距 |
 | [development.md](./development.md) | 本地开发、测试、提交和扩展开发约定 |
 | [naming.md](./naming.md) | 产品命名候选、推荐和改名迁移步骤 |
+| [client.md](./client.md) | Flutter 客户端结构、配置、本地数据和平台验证状态 |
 
 ## 产品定位
 
@@ -42,12 +43,13 @@
 
 ## 当前阶段
 
-本仓库还不是完整客户端，而是 Python/FastAPI 原型：
+本仓库包含 Python/FastAPI 核心和 Flutter 客户端实现：
 
 - 规则解析器已经可以输出 `CandidateItem`，并保留旧的 `events` 兼容视图。
-- `Item` 领域模型已经有基础定义和候选确认转换方法。
-- API 仍然是历史 `/api/v1` 日历接口，尚无 SQLite、认证、正式 Item CRUD 或同步服务。
+- `Item` 领域模型、SQLite Repository、正式 CRUD、候选确认、提醒协调和 JSON/ICS transfer 已实现。
+- 正式 `/v1/items`、`/v1/assistant`、`/v1/import`、`/v1/export` 已提供；历史 `/api/v1` 保留兼容。
+- `client/` 已实现离线 SQLite CRUD 和核心页面；本机无 Flutter SDK，三平台 runner/build 验收状态见 `client.md`。
 - 核心与可选 provider 依赖已分层锁定，`scripts/test.sh` 可在隔离环境运行离线测试。
-- 当前没有产品部署脚本；Cloudflare/Docker 一站式部署仍是目标能力。
+- Cloudflare/Docker 同步服务和一站式部署仍是目标能力。
 
 完整差距见 [implementation-status.md](./implementation-status.md)，实施顺序见 [roadmap.md](./roadmap.md)。

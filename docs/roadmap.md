@@ -68,6 +68,7 @@
 
 ### T1.6 Flutter 客户端骨架
 
+- 状态：代码实现已完成；当前环境无 Flutter SDK，Android/macOS/Windows 实际构建启动验收待执行 `scripts/setup-client.sh`。
 - 依赖：T1.2。
 - 内容：今日视图、列表视图、Due 过滤、编辑表单、设置页和本地 Repository 适配。
 - 验收：Android、macOS、Windows 至少能离线启动并完成核心增删改查。

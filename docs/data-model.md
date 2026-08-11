@@ -266,3 +266,9 @@ Item 内嵌完整 Reminder。备份保留同步实体的 ID、version、时间�
 `replace` 先完成所有 JSON、domain、重复 ID、外键和 outbox 引用校验，再在单事务中清空可恢复数据并写入；失败会回滚到原数据库。`merge` 对相同 ID 且内容完全相同的资源记为 skipped，不同内容记为 conflict，并拒绝整批写入。
 
 `sync_conflicts` 以及外部事项稳定键 `(subscription_id, provider, external_id, recurrence_instance)` 随对应同步和订阅任务增加，不提前占位。
+
+## 10. Flutter 本地 schema
+
+T1.6 的 Flutter `LocalItemRepository` 使用独立 SQLite 文件和版本 1 migration，包含 `collections`、`items`、`outbox`、`app_settings`。Item 的 type/status/time/timezone/all-day/location/priority/reminder/tags/lifecycle/version 均为可查询列；每次本地 mutation 与 outbox 在同一 transaction 提交。
+
+Flutter schema 当前只覆盖离线核心编辑所需子集，不与 Python SQLite 文件做文件级兼容。稳定交换格式是 T1.5 JSON envelope；Flutter transfer adapter 接入时按 domain 字段转换，不直接复制数据库。后续 schema 变更必须使用 migration，不能在启动时丢表重建。

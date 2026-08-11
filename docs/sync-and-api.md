@@ -395,6 +395,8 @@ AI provider 返回非法结构时，接口返回 422 或回退到规则 Parser�
 
 客户端应用完整批次成功后再保存 cursor；应用失败时重试同一 cursor。
 
+当前 Flutter T1.6 已在本地 mutation transaction 中写入带 `device_id`、entity、operation、version 和 payload 的 outbox，但尚未发送网络请求或保存 pull cursor。T2.3 在 Repository/transport 边界消费这些记录；设置页的 sync 开关当前只是持久化配置，不能当成同步已实现。
+
 ### 冲突策略
 
 第一版按 `updated_at` 最后写入胜出；相同时间按 version，同一实体仍相等时按 `change_id`。删除参与比较。被覆盖的版本保留在 `sync_conflicts` 或服务端 change log，方便后续恢复。

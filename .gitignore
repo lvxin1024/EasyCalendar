@@ -21,6 +21,7 @@ ENV/
 .env.local
 config/app.yaml
 config/secrets.env
+config/client.json
 config/environments/*.local.yaml
 
 # Runtime data
@@ -43,6 +44,13 @@ htmlcov/
 dist/
 build/
 *.egg-info/
+client/.dart_tool/
+client/.flutter-plugins
+client/.flutter-plugins-dependencies
+client/.packages
+client/android/.gradle/
+client/macos/Pods/
+client/windows/flutter/ephemeral/
 
 # OS
 .DS_Store

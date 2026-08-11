@@ -64,7 +64,7 @@ Application 通过抽象接口调用存储、同步、通知、Importer 和 Prov
 
 ### Client UI / Platform
 
-Flutter 负责跨端 UI、本地数据库访问编排和设置。macOS WidgetKit、Android alarm、Windows toast 通过 platform adapter 接入。Widget 和通知都不能拥有第二份 Item 业务逻辑。
+Flutter 负责跨端 UI、本地数据库访问编排和设置。当前 `client/` 已按 `Widget -> ItemController -> ItemRepository -> LocalItemRepository` 落地，SQLite 支持离线 CRUD、乐观 version、软删除和 outbox。macOS WidgetKit、Android alarm、Windows toast 通过后续 platform adapter 接入。Widget 和通知都不能拥有第二份 Item 业务逻辑。
 
 ### SQLite 事务边界
 
