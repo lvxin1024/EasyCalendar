@@ -4,11 +4,12 @@ import '../../application/item_controller.dart';
 import '../../config/app_config.dart';
 import '../../domain/item.dart';
 import '../../widget/widget_deep_link_controller.dart';
+import '../calendar/calendar_navigation_controller.dart';
+import '../calendar/calendar_page.dart';
 import '../due/due_page.dart';
 import '../editor/item_editor_page.dart';
 import '../items/items_page.dart';
 import '../settings/settings_page.dart';
-import '../today/today_page.dart';
 
 class HomeShell extends StatefulWidget {
   const HomeShell({
@@ -28,10 +29,12 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> {
   int _selectedIndex = 0;
+  late final CalendarNavigationController _calendarNavigation;
 
   @override
   void initState() {
     super.initState();
+    _calendarNavigation = CalendarNavigationController();
     widget.widgetDeepLinks.addListener(_handleWidgetDeepLink);
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _handleWidgetDeepLink(),
@@ -49,14 +52,15 @@ class _HomeShellState extends State<HomeShell> {
   @override
   void dispose() {
     widget.widgetDeepLinks.removeListener(_handleWidgetDeepLink);
+    _calendarNavigation.dispose();
     super.dispose();
   }
 
   static const _destinations = [
     NavigationDestination(
-      icon: Icon(Icons.today_outlined),
-      selectedIcon: Icon(Icons.today),
-      label: '今天',
+      icon: Icon(Icons.calendar_view_week_outlined),
+      selectedIcon: Icon(Icons.calendar_view_week),
+      label: '日历',
     ),
     NavigationDestination(
       icon: Icon(Icons.view_list_outlined),
@@ -141,9 +145,9 @@ class _HomeShellState extends State<HomeShell> {
                     ),
                     destinations: const [
                       NavigationRailDestination(
-                        icon: Icon(Icons.today_outlined),
-                        selectedIcon: Icon(Icons.today),
-                        label: Text('今天'),
+                        icon: Icon(Icons.calendar_view_week_outlined),
+                        selectedIcon: Icon(Icons.calendar_view_week),
+                        label: Text('日历'),
                       ),
                       NavigationRailDestination(
                         icon: Icon(Icons.view_list_outlined),
@@ -197,11 +201,11 @@ class _HomeShellState extends State<HomeShell> {
   );
 
   Widget _currentPage() => switch (_selectedIndex) {
-    0 => TodayPage(
+    0 => CalendarPage(
       controller: widget.controller,
+      navigation: _calendarNavigation,
       onEdit: _openEditor,
       onDelete: _confirmDelete,
-      onToggleCompleted: _toggleCompleted,
     ),
     1 => ItemsPage(
       controller: widget.controller,
@@ -225,6 +229,7 @@ class _HomeShellState extends State<HomeShell> {
     if (target == null || !mounted) return;
     Navigator.of(context).popUntil((route) => route.isFirst);
     if (target.kind == WidgetDeepLinkKind.today) {
+      _calendarNavigation.goToToday(useDayView: true);
       setState(() => _selectedIndex = 0);
       return;
     }
