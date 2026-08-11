@@ -1,4 +1,4 @@
-"""Configuration settings for text2calendar."""
+"""Configuration settings for EasyCalendar."""
 
 import os
 from pathlib import Path

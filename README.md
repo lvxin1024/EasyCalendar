@@ -1,6 +1,6 @@
-# text2calendar - Text to Calendar Event Parser
+# EasyCalendar - Personal Calendar and Due Manager
 
-A Python library for parsing natural language text into calendar events, with support for multiple calendar providers.
+An evolving local-first, self-hostable personal calendar and due manager, built from a Python natural-language calendar parsing prototype.
 
 ## Features
 

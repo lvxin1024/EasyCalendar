@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Simple example script to demonstrate text2calendar usage."""
+"""Simple example script to demonstrate EasyCalendar parsing."""
 
 from datetime import datetime
 from src.parser.rule_parser import RuleParser
@@ -9,7 +9,7 @@ from src.calendar_client.ical_client import ICalClient
 def main():
     """Run example usage."""
     print("=" * 60)
-    print("text2calendar 示例使用")
+    print("EasyCalendar 示例使用")
     print("=" * 60)
 
     parser = RuleParser()

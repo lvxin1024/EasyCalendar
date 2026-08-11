@@ -235,4 +235,4 @@ async def export_calendar(request: ExportRequest):
 @router.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "healthy", "service": "text2calendar"}
+    return {"status": "healthy", "service": "easycalendar"}

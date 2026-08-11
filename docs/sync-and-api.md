@@ -90,7 +90,7 @@ X-Request-Id: optional-client-id
 ```json
 {
   "status": "ok",
-  "service": "dayweave",
+  "service": "easycalendar",
   "version": "0.1.0",
   "schema_version": 1
 }

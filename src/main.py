@@ -10,7 +10,7 @@ from ..config.settings import API_CONFIG
 def create_app() -> FastAPI:
     """Create and configure FastAPI application."""
     app = FastAPI(
-        title="text2calendar API",
+        title="EasyCalendar API",
         description="API for parsing text to calendar events and syncing with multiple calendar providers",
         version="1.0.0",
     )
@@ -28,7 +28,7 @@ def create_app() -> FastAPI:
     @app.get("/")
     async def root():
         return {
-            "message": "text2calendar API",
+            "message": "EasyCalendar API",
             "version": "1.0.0",
             "docs": "/docs",
         }

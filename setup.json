@@ -1,7 +1,7 @@
 {
-  "name": "text2calendar",
+  "name": "EasyCalendar",
   "version": "1.0.0",
-  "description": "智能日程解析器 - 将自然语言文本转换为日历事件",
+  "description": "本地优先、可自托管的个人日程与 Due 管理工具",
   "author": "lvxin1024",
   "license": "MIT",
   "keywords": [

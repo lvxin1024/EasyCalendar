@@ -1,8 +1,8 @@
 #!/bin/bash
-# text2calendar 一键部署脚本
+# EasyCalendar 部署辅助脚本
 
 echo "======================================="
-echo " text2calendar GitHub 部署工具"
+echo " EasyCalendar GitHub 部署工具"
 echo "======================================="
 
 PROJECT_DIR=$(dirname "$0")

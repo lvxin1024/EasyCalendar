@@ -1,11 +1,11 @@
-# text2calendar 项目部署指南
+# EasyCalendar 项目部署指南
 =====================================
 
 项目位置: ~/ws/text2calendar 或 /workspace/text2calendar
 
 一、项目已创建完成！
 ---------------------------------------------------
-✅ 项目已完整创建
+✅ EasyCalendar 原型已创建
 ✅ 包括所有核心功能:
    - 文字日程解析（纯规则，无需AI）
    - Google/Outlook/iCal 日历接口

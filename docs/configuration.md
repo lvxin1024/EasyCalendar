@@ -26,8 +26,8 @@ config/
 
 ```yaml
 app:
-  name: Dayweave
-  instance_name: my-dayweave
+  name: EasyCalendar
+  instance_name: my-easycalendar
   timezone: Asia/Shanghai
   locale: zh-CN
   data_dir: ./data
@@ -76,7 +76,7 @@ deployment:
 
 | 键 | 默认 | 必填 | 敏感 | 说明 |
 | --- | --- | --- | --- | --- |
-| `app.name` | `Dayweave` | 否 | 否 | UI、日志和 API title |
+| `app.name` | `EasyCalendar` | 否 | 否 | UI、日志和 API title |
 | `app.timezone` | `Asia/Shanghai` | 否 | 否 | 所有无时区输入的解释基准 |
 | `app.data_dir` | `./data` | 否 | 否 | SQLite、备份、快照目录 |
 | `server.mode` | `local` | 否 | 否 | 运行目标 |
