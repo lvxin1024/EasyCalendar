@@ -5,9 +5,9 @@ from __future__ import annotations
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional, Protocol
+from typing import Any, Optional, Protocol
 
-from src.domain import Collection, Item, OutboxEntry
+from src.domain import Collection, Item, OutboxEntry, Subscription
 from src.storage.repository import (
     CandidateConfirmationRecord,
     CandidateExtractionRecord,
@@ -123,3 +123,41 @@ class NotificationSchedulerPort(Protocol):
 
 class ReminderCoordinatorPort(Protocol):
     def reconcile_item(self, item: Item) -> None: ...
+
+
+class TransferTransactionPort(ItemTransactionPort, Protocol):
+    """Persistence operations needed for atomic backup restore and imports."""
+
+    def list_collections(self, *, include_deleted: bool = False) -> list[Collection]: ...
+
+    def list_items(self, query: Optional[ItemQuery] = None) -> list[Item]: ...
+
+    def get_subscription(
+        self, subscription_id: str, *, include_deleted: bool = False
+    ) -> Optional[Subscription]: ...
+
+    def list_subscriptions(
+        self, *, include_deleted: bool = False
+    ) -> list[Subscription]: ...
+
+    def restore_collection(self, collection: Collection) -> Collection: ...
+
+    def restore_item(self, item: Item) -> Item: ...
+
+    def restore_subscription(self, subscription: Subscription) -> Subscription: ...
+
+    def list_outbox_entries(self) -> list[OutboxEntry]: ...
+
+    def get_outbox_entry(self, change_id: str) -> Optional[OutboxEntry]: ...
+
+    def list_sync_state(self) -> list[dict[str, Any]]: ...
+
+    def restore_sync_state(
+        self, key: str, value: Any, *, updated_at: datetime
+    ) -> None: ...
+
+    def clear_user_data(self) -> None: ...
+
+
+class TransferRepositoryPort(Protocol):
+    def transaction(self) -> AbstractContextManager[TransferTransactionPort]: ...

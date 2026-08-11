@@ -48,6 +48,9 @@ notifications:
   adapter: memory
   restore_on_start: true
 
+transfer:
+  max_import_bytes: 10485760
+
 integrations:
   ical_output_dir: ./config/calendars
   google_credentials_file: ./config/google_credentials.json

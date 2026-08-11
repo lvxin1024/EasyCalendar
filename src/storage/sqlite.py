@@ -249,6 +249,34 @@ class SQLiteSession:
             for row in self._connection.execute(sql).fetchall()
         ]
 
+    def restore_collection(self, collection: Collection) -> Collection:
+        """Insert a validated backup entity without rewriting its lifecycle."""
+        payload = _json_text(self._validated_payload(collection, "Collection"))
+        try:
+            self._connection.execute(
+                """
+                INSERT INTO collections(
+                    id, name, kind, readonly, updated_at, deleted_at, version,
+                    payload_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    collection.id,
+                    collection.name,
+                    collection.kind.value,
+                    int(collection.readonly),
+                    _utc_text(collection.updated_at),
+                    _utc_text(collection.deleted_at) if collection.deleted_at else None,
+                    collection.version,
+                    payload,
+                ),
+            )
+        except sqlite3.IntegrityError as error:
+            raise EntityAlreadyExistsError(
+                f"Collection {collection.id!r} already exists"
+            ) from error
+        return collection
+
     def create_item(self, item: Item) -> Item:
         self._require_new_entity(item, "Item")
         payload = self._validated_payload(item, "Item")
@@ -351,6 +379,32 @@ class SQLiteSession:
             for row in self._connection.execute(sql, parameters).fetchall()
         ]
 
+    def restore_item(self, item: Item) -> Item:
+        """Insert a validated Item backup, including reminders and tombstones."""
+        payload = self._validated_payload(item, "Item")
+        payload["reminders"] = []
+        try:
+            with self._atomic_operation():
+                self._connection.execute(
+                    """
+                    INSERT INTO items(
+                        id, collection_id, item_type, status, start_at, due_at,
+                        updated_at, deleted_at, version, payload_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    self._item_values(item, payload),
+                )
+                self._replace_reminders(item)
+        except sqlite3.IntegrityError as error:
+            if "FOREIGN KEY" in str(error).upper():
+                raise ConstraintViolationError(
+                    f"Item {item.id!r} references a missing collection"
+                ) from error
+            raise EntityAlreadyExistsError(
+                f"Item {item.id!r} or one of its reminders already exists"
+            ) from error
+        return item
+
     def create_subscription(self, subscription: Subscription) -> Subscription:
         self._require_new_entity(subscription, "Subscription")
         payload = self._validated_payload(subscription, "Subscription")
@@ -420,6 +474,29 @@ class SQLiteSession:
             self._load_model(row, Subscription, "subscription")
             for row in self._connection.execute(sql).fetchall()
         ]
+
+    def restore_subscription(self, subscription: Subscription) -> Subscription:
+        """Insert a validated Subscription backup at its original version."""
+        payload = self._validated_payload(subscription, "Subscription")
+        try:
+            self._connection.execute(
+                """
+                INSERT INTO subscriptions(
+                    id, collection_id, subscription_type, enabled, updated_at,
+                    deleted_at, version, payload_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                self._subscription_values(subscription, payload),
+            )
+        except sqlite3.IntegrityError as error:
+            if "FOREIGN KEY" in str(error).upper():
+                raise ConstraintViolationError(
+                    f"Subscription {subscription.id!r} references a missing collection"
+                ) from error
+            raise EntityAlreadyExistsError(
+                f"Subscription {subscription.id!r} already exists"
+            ) from error
+        return subscription
 
     def create_outbox_entry(self, entry: OutboxEntry) -> OutboxEntry:
         payload = self._validated_payload(entry, "OutboxEntry")
@@ -503,6 +580,12 @@ class SQLiteSession:
         ).fetchall()
         return [self._load_model(row, OutboxEntry, "outbox entry") for row in rows]
 
+    def list_outbox_entries(self) -> List[OutboxEntry]:
+        rows = self._connection.execute(
+            "SELECT * FROM outbox ORDER BY created_at, change_id"
+        ).fetchall()
+        return [self._load_model(row, OutboxEntry, "outbox entry") for row in rows]
+
     def get_sync_state(self, key: str) -> Any:
         normalized = self._state_key(key)
         row = self._connection.execute(
@@ -511,6 +594,43 @@ class SQLiteSession:
         if row is None:
             return None
         return _read_json(row["value_json"], f"sync state {normalized!r}")
+
+    def list_sync_state(self) -> List[Dict[str, Any]]:
+        rows = self._connection.execute(
+            "SELECT key, value_json, updated_at FROM sync_state ORDER BY key"
+        ).fetchall()
+        return [
+            {
+                "key": row["key"],
+                "value": _read_json(row["value_json"], f"sync state {row['key']!r}"),
+                "updated_at": self._parse_stored_time(row["updated_at"]),
+            }
+            for row in rows
+        ]
+
+    def restore_sync_state(
+        self, key: str, value: Any, *, updated_at: datetime
+    ) -> None:
+        normalized = self._state_key(key)
+        self._connection.execute(
+            "INSERT INTO sync_state(key, value_json, updated_at) VALUES (?, ?, ?)",
+            (normalized, _json_text(value), _utc_text(updated_at)),
+        )
+
+    def clear_user_data(self) -> None:
+        """Clear restorable user data inside the caller's transaction."""
+        for table in (
+            "reminder_schedules",
+            "candidate_confirmations",
+            "candidate_extractions",
+            "idempotency_records",
+            "outbox",
+            "subscriptions",
+            "items",
+            "collections",
+            "sync_state",
+        ):
+            self._connection.execute(f"DELETE FROM {table}")
 
     def get_idempotency_record(
         self, scope: str, key: str

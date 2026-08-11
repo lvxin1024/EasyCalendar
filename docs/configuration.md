@@ -71,6 +71,9 @@ notifications:
   adapter: memory                  # 当前 Python 开发 adapter
   restore_on_start: true
 
+transfer:
+  max_import_bytes: 10485760
+
 integrations:
   ical_output_dir: ./config/calendars
   google_credentials_file: ./config/google_credentials.json
@@ -113,6 +116,7 @@ deployment:
 | `notifications.enabled` | `false` | 否 | 否 | 是否协调本地提醒；真实系统通知需对应平台 adapter |
 | `notifications.adapter` | `memory` | 否 | 否 | Python 原型 adapter；`memory` 不发送 OS 通知 |
 | `notifications.restore_on_start` | `true` | 否 | 否 | 启动时从正式 Item 强制恢复未来提醒 |
+| `transfer.max_import_bytes` | `10485760` | 否 | 否 | JSON/ICS 单次导入 UTF-8 内容上限，范围 1 KiB 到 100 MiB |
 | `integrations.*` | 示例路径 | 对应接入时必填 | 否 | 第三方配置文件路径和租户 |
 | `widget.snapshot_path` | `./data/widget/snapshot.json` | 否 | 否 | Widget 只读快照 |
 | `deployment.provider` | `docker` | 否 | 否 | 一键部署目标 |

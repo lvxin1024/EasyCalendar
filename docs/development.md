@@ -35,8 +35,8 @@ Domain 不得导入 FastAPI、Flutter、Cloudflare SDK、具体 AI SDK 或具体
 ## 工具链和依赖
 
 - Python 最低支持 3.11，默认开发版本由根目录 `.python-version` 固定为 3.13；CI 同时验证 3.11 和 3.13。
-- `requirements.txt` 只包含启动核心 API 所需的精确版本。
-- `requirements-dev.txt` 包含离线测试依赖；`requirements-providers.txt` 包含 Google、Microsoft 和 iCal 可选依赖。
+- `requirements.txt` 只包含启动核心 API 所需的精确版本，包括正式 ICS transfer 使用的 `icalendar`。
+- `requirements-dev.txt` 包含离线测试依赖；`requirements-providers.txt` 包含 Google、Microsoft 和历史日历客户端的可选依赖。
 - Node.js 在 Worker 代码进入仓库时固定 LTS 主版本并提交 lockfile；在此之前不维护空的 Node 工程。
 - Flutter 在客户端代码进入仓库时固定 stable SDK 精确版本并提交 FVM 配置和 lockfile；在此之前不声明未经测试的版本。
 - 升级依赖必须单独提交，并同时通过核心和 provider 测试；业务功能提交不顺带放宽版本范围。
@@ -64,8 +64,9 @@ python run.py                 # 从 config/ 读取设置并启动 API
 2. Parser/Importer fixture 测试：输入固定，输出稳定。
 3. Repository 集成测试：临时 SQLite，验证事务和重启恢复。
 4. API 契约测试：请求、响应、错误、鉴权和幂等键。
-5. Sync 集成测试：双设备 outbox、cursor、冲突和重试。
-6. 部署 smoke test：从空目录加载配置、启动、健康检查和迁移。
+5. Transfer 集成测试：临时 SQLite 间 JSON 等价恢复、ICS fixture、重复检测和失败批次回滚。
+6. Sync 集成测试：双设备 outbox、cursor、冲突和重试。
+7. 部署 smoke test：从空目录加载配置、启动、健康检查和迁移。
 
 单测不得要求网络。第三方集成测试必须显式使用环境变量启用。
 

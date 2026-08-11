@@ -56,6 +56,8 @@ def build_capabilities_payload(
             "ics_subscriptions": False,
             "assistant": True,
             "local_reminders": True,
+            "json_backup": True,
+            "ics_transfer": True,
             "widget_snapshot": False,
         },
         "configured": {

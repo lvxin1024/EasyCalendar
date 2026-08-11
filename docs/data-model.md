@@ -82,7 +82,7 @@
 
 - `event` 至少应有 `start_at`；`end_at` 可以由 UI 给出默认时长。
 - `task` 至少应有 `due_at` 或明确标记为无截止日期的待办。
-- `source=ics` 的 Item 由订阅拥有，普通编辑接口只能读，刷新器负责更新。
+- `source=ics` 表示 ICS 来源；是否只读由所属 Collection 决定。手动导入到本地 Collection 的 Event 可编辑，订阅 Collection 中的 Item 只能由刷新器更新。
 - `deleted_at` 非空的 Item 不应出现在默认列表，但可被同步和管理员导出。
 
 ## 3. CandidateItem
@@ -229,7 +229,7 @@ reminder_schedules
 - `collections`、`items`、`subscriptions` 和 `outbox` 同时保存核心查询列与严格 `payload_json`。查询不需要扫描 JSON，完整资源仍按 domain contract 还原。
 - Reminder 独立存放并保留列表位置；创建或更新 Item 时与 Item 主记录在同一个 savepoint 中替换。
 - 可同步实体写入使用 `expected_version` 乐观检查；待写实体必须正好是 `expected_version + 1`。
-- 本地 `create` 只接受 `version=1` 且未删除的新实体；高版本备份恢复和远端应用使用后续独立接口，不能绕过创建语义。
+- 本地 `create` 只接受 `version=1` 且未删除的新实体；备份恢复使用独立 `restore_*` 接口，在严格 domain 校验后保留原 version 和墓碑，不能伪装成本地创建。
 - 每次写入前重新执行严格 domain 校验，防止可变对象在构造后被改成非法状态并污染数据库。
 - 默认查询排除 `deleted_at` 非空记录，显式 `include_deleted` 才返回墓碑。
 - 查询时间索引统一保存 UTC，domain payload 保留原始时区偏移。
@@ -238,5 +238,31 @@ reminder_schedules
 - migration 003 的 `candidate_extractions` 保存原文、Parser 标识、严格 Candidate JSON、warning 和拒绝审计；它不属于正式 Item 查询。
 - `candidate_confirmations` 以 `(extraction_id, temp_id)` 为主键，记录唯一 Item、规范化请求哈希和确认时间；Item、outbox、确认和幂等记录在一个事务中提交。
 - migration 004 的 `reminder_schedules` 保存可重建的派生平台状态，不直接外键到会被 Item 更新替换的 Reminder 行；改期或禁用后仍能找到并取消旧平台句柄。
+
+## 9. JSON 备份 envelope
+
+完整备份使用独立于单模型 envelope 的严格结构：
+
+```json
+{
+  "schema_version": 1,
+  "exported_at": "2026-08-11T08:00:00Z",
+  "collections": [],
+  "items": [],
+  "subscriptions": [],
+  "outbox": [],
+  "sync_state": [
+    {
+      "key": "remote_cursor",
+      "value": "cur_42",
+      "updated_at": "2026-08-11T08:00:00Z"
+    }
+  ]
+}
+```
+
+Item 内嵌完整 Reminder。备份保留同步实体的 ID、version、时间、墓碑和 outbox 发送状态，以便在新数据库中等价恢复。备份不包含 token/API key/OAuth secret、Candidate extraction、candidate confirmation、idempotency record 和 `reminder_schedules` 派生状态。
+
+`replace` 先完成所有 JSON、domain、重复 ID、外键和 outbox 引用校验，再在单事务中清空可恢复数据并写入；失败会回滚到原数据库。`merge` 对相同 ID 且内容完全相同的资源记为 skipped，不同内容记为 conflict，并拒绝整批写入。
 
 `sync_conflicts` 以及外部事项稳定键 `(subscription_id, provider, external_id, recurrence_instance)` 随对应同步和订阅任务增加，不提前占位。

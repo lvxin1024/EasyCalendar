@@ -88,6 +88,10 @@ class NotificationSettings(StrictModel):
     restore_on_start: bool = True
 
 
+class TransferSettings(StrictModel):
+    max_import_bytes: int = Field(default=10485760, ge=1024, le=104857600)
+
+
 class IntegrationSettings(StrictModel):
     ical_output_dir: str = "./config/calendars"
     google_credentials_file: str = "./config/google_credentials.json"
@@ -121,6 +125,7 @@ class Settings(StrictModel):
     subscriptions: SubscriptionSettings = Field(default_factory=SubscriptionSettings)
     assistant: AssistantSettings = Field(default_factory=AssistantSettings)
     notifications: NotificationSettings = Field(default_factory=NotificationSettings)
+    transfer: TransferSettings = Field(default_factory=TransferSettings)
     integrations: IntegrationSettings = Field(default_factory=IntegrationSettings)
     widget: WidgetSettings = Field(default_factory=WidgetSettings)
     deployment: DeploymentSettings = Field(default_factory=DeploymentSettings)

@@ -26,6 +26,7 @@ from .candidate_service import (
     CandidateService,
 )
 from .reminder_service import ReminderService
+from .import_export_service import ImportExportService, ImportIssue, ImportReport
 from .ports import (
     CandidateRepositoryPort,
     ItemRepositoryPort,
@@ -34,6 +35,8 @@ from .ports import (
     NotificationSchedulerPort,
     ReminderCoordinatorPort,
     ReminderRepositoryPort,
+    TransferRepositoryPort,
+    TransferTransactionPort,
 )
 
 __all__ = [
@@ -55,6 +58,9 @@ __all__ = [
     "ItemPage",
     "ItemRepositoryPort",
     "ItemService",
+    "ImportExportService",
+    "ImportIssue",
+    "ImportReport",
     "ItemTransactionPort",
     "NotificationRequest",
     "NotificationSchedulerPort",
@@ -63,5 +69,7 @@ __all__ = [
     "ReminderCoordinatorPort",
     "ReminderRepositoryPort",
     "ReminderService",
+    "TransferRepositoryPort",
+    "TransferTransactionPort",
     "UpdateItemCommand",
 ]

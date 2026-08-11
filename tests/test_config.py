@@ -26,6 +26,7 @@ def test_default_settings_are_local_and_safe():
     assert settings.assistant.max_input_chars == 20000
     assert settings.notifications.enabled is False
     assert settings.notifications.adapter == "memory"
+    assert settings.transfer.max_import_bytes == 10485760
 
 
 def test_environment_overrides_and_legacy_names_are_supported():
@@ -144,6 +145,8 @@ def test_health_and_capabilities_are_truthful():
     assert capabilities["features"]["items"] is True
     assert capabilities["features"]["assistant"] is True
     assert capabilities["features"]["local_reminders"] is True
+    assert capabilities["features"]["json_backup"] is True
+    assert capabilities["features"]["ics_transfer"] is True
     assert capabilities["configured"]["local_reminders"] is False
     assert capabilities["providers"]["notification"] == ["memory"]
     assert capabilities["providers"]["parser"] == ["rules.zh_cn"]

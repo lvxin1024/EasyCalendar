@@ -14,12 +14,14 @@
 | Item Service | `src/application/item_service.py` | CRUD、恢复、Task 完成、outbox、持久化幂等和 cursor 分页已实现 |
 | Candidate Service | `src/application/candidate_service.py` | 候选提取、持久化预览、拒绝审计和确认编排已实现 |
 | Reminder Service | `src/application/reminder_service.py` | 相对/绝对提醒计算、持久化调度状态、改期取消、失败重试和启动恢复已实现 |
+| Import/Export Service | `src/application/import_export_service.py` | JSON 全量备份恢复、ICS Event 导入导出、预览、重复检测、幂等提交和整批事务已实现 |
 | Notification adapter | `src/notification/` | 平台 port 已定义；`memory` adapter 可用于离线开发和测试，不发送系统通知 |
 | 解析器输出候选项 | `src/parser/rule_adapter.py` | 规则 Parser 已适配 Candidate application port，并使用请求时区和参考时间 |
 | 旧 CalendarEvent 兼容视图 | `src/parser/models.py` | 临时兼容层 |
 | FastAPI 解析 API | `src/api/routes.py` | 仍是历史 `/api/v1` 业务接口 |
 | FastAPI Item API | `src/api/item_routes.py` | 已提供正式 `/v1/items` CRUD、分页、过滤和统一错误格式 |
 | FastAPI Candidate API | `src/api/assistant_routes.py` | 已提供 `/v1/assistant/extract`、查询、拒绝和 `/v1/items/confirm-candidate` |
+| FastAPI transfer API | `src/api/import_export_routes.py` | 已提供 `/v1/import` 和 `/v1/export`，支持 JSON/ICS、scope 和统一错误格式 |
 | Health / Capabilities | `src/api/system_routes.py` | 已提供目标 `/v1` 系统端点 |
 | iCal 内存客户端 | `src/calendar_client/ical_client.py` | 原型，缓存不持久化 |
 | Google / Outlook 客户端 | `src/calendar_client/` | 代码存在，未经可靠集成验证 |
@@ -49,4 +51,4 @@
 
 ## 结论
 
-正式 Item CRUD、Candidate 确认和可恢复本地提醒协调均已可用。下一步按路线图进入 T1.5 JSON/ICS 导入导出；真实系统通知由后续 Flutter 平台 adapter 实现，核心 Reminder 语义无需改动。
+正式 Item CRUD、Candidate 确认、可恢复本地提醒协调和事务化 JSON/ICS transfer 均已可用。下一步按路线图进入 T1.6 Flutter 客户端骨架；真实系统通知由后续 Flutter 平台 adapter 实现，核心 Reminder 语义无需改动。

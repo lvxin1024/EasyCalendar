@@ -8,6 +8,7 @@ from typing import Optional
 from config.loader import Settings
 from src.application import (
     CandidateService,
+    ImportExportService,
     ItemService,
     NotificationSchedulerPort,
     ReminderService,
@@ -32,6 +33,7 @@ class RuntimeServices:
         self._owns_repository = repository is None
         self._item_service: Optional[ItemService] = None
         self._candidate_service: Optional[CandidateService] = None
+        self._import_export_service: Optional[ImportExportService] = None
         self._notification_scheduler = notification_scheduler
         self._reminder_service: Optional[ReminderService] = None
         self._lock = threading.RLock()
@@ -94,6 +96,20 @@ class RuntimeServices:
             )
             return self._candidate_service
 
+    def import_export_service(self) -> ImportExportService:
+        with self._lock:
+            if self._import_export_service is not None:
+                return self._import_export_service
+            self.item_service()
+            self._import_export_service = ImportExportService(
+                self._repository_instance(),
+                device_id=self.settings.app.instance_name,
+                timezone_name=self.settings.app.timezone,
+                default_collection_id=self.settings.app.default_collection_id,
+                max_import_bytes=self.settings.transfer.max_import_bytes,
+            )
+            return self._import_export_service
+
     def close(self) -> None:
         with self._lock:
             if self._owns_repository and self._repository is not None:
@@ -101,6 +117,7 @@ class RuntimeServices:
             self._repository = None
             self._item_service = None
             self._candidate_service = None
+            self._import_export_service = None
             self._reminder_service = None
             self._notification_scheduler = None
 

@@ -50,7 +50,7 @@ Domain 不能导入：FastAPI、Flutter、Cloudflare、SQLAlchemy/Drift、Google
 
 Application 通过抽象接口调用存储、同步、通知、Importer 和 Provider。
 
-当前 `src/application/item_service.py` 已实现正式 Item 创建、查询、修改、软删除、恢复、Task 完成和 Candidate 确认。`src/application/candidate_service.py` 负责提取预览、查询和拒绝。服务通过 Repository port 访问存储；确认在同一事务内写 Item、Reminder、outbox、确认决策和幂等记录，HTTP 和 SQLite 细节不进入 domain。数据库提交后，`ReminderService` 才协调平台通知，因此调度失败不会回滚 Item。
+当前 `src/application/item_service.py` 已实现正式 Item 创建、查询、修改、软删除、恢复、Task 完成和 Candidate 确认。`src/application/candidate_service.py` 负责提取预览、查询和拒绝。`src/application/import_export_service.py` 负责 JSON 备份恢复、ICS Event 映射、导入预览、重复检测和幂等提交。服务通过 Repository port 访问存储；跨资源导入在一个事务内写 Collection、Item/Reminder、Subscription、outbox 和 sync state，HTTP 和 SQLite 细节不进入 domain。数据库提交后，`ReminderService` 才协调平台通知，因此调度失败不会回滚 Item。
 
 ### Adapters
 
@@ -118,6 +118,18 @@ process restart -> scan persisted Items -> force reconcile -> platform adapter
 outbox -> SyncTransport.push -> server apply idempotently
 server changes -> SyncTransport.pull(cursor) -> conflict policy -> SQLite
 ```
+
+### 备份与导入
+
+```text
+JSON/ICS -> parse + domain validation + reference validation
+         -> preview duplicate/conflict report
+         -> one SQLite transaction
+            |- replace: clear restorable data, then restore original versions
+            `- merge: insert missing entities or skip byte-equivalent entities
+```
+
+任何逐项错误或冲突都会拒绝整个提交。JSON 备份不包含 secret、Candidate 临时数据、幂等记录或可重建的提醒调度状态；ICS 只表达 Event，不作为完整备份格式。
 
 ## 5. 服务端职责
 

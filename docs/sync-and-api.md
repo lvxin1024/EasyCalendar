@@ -105,11 +105,13 @@ X-Request-Id: optional-client-id
   "api_version": "v1",
   "features": {
     "parser": true,
-    "items": false,
+    "items": true,
     "sync": false,
     "ics_subscriptions": false,
-    "assistant": false,
+    "assistant": true,
     "local_reminders": true,
+    "json_backup": true,
+    "ics_transfer": true,
     "widget_snapshot": false
   },
   "configured": {
@@ -401,11 +403,49 @@ AI provider 返回非法结构时，接口返回 422 或回退到规则 Parser�
 
 ### `POST /v1/import`
 
-支持 `format=json`、`format=ics`，先返回预览或在 `mode=commit` 时写入。大文件使用 multipart，并限制大小。导入请求需要 `Idempotency-Key`。
+当前接口使用严格 JSON body，`content` 放 JSON 备份文本或 ICS 文本：
+
+```json
+{
+  "format": "ics",
+  "mode": "preview",
+  "strategy": "merge",
+  "content": "BEGIN:VCALENDAR...",
+  "collection_id": "collection_local"
+}
+```
+
+`mode=preview|commit`；commit 必须带 `Idempotency-Key`。JSON 支持 `strategy=merge|replace`，ICS 只支持 merge。`config.transfer.max_import_bytes` 限制 `content` 的 UTF-8 字节数。响应包含 `accepted`、`committed`、各资源的 `created/skipped/conflicts` 计数和逐条 issue：
+
+```json
+{
+  "format": "json",
+  "mode": "preview",
+  "strategy": "merge",
+  "accepted": false,
+  "committed": false,
+  "created": {},
+  "skipped": {},
+  "conflicts": {"items": 1},
+  "issues": [
+    {
+      "resource_type": "items",
+      "index": 0,
+      "id": "item_01",
+      "code": "conflict",
+      "message": "An entity with this ID has different content"
+    }
+  ]
+}
+```
+
+解析、domain 校验、引用校验和重复检测均先于写入；任一 issue 都会拒绝整批 commit。相同幂等键与相同请求返回原报告，相同键配不同内容返回 `idempotency_conflict`。
 
 ### `GET /v1/export?format=json|ics&scope=all|collection`
 
 JSON 导出包含 schema_version、Collection、Item、Reminder、Subscription 和同步元数据；ICS 导出只包含可表达为 VEVENT 的 Event。导出不包含 token、API key 和 OAuth secret。
+
+`scope=collection` 时必须传 `collection_id`。JSON 响应为 `application/json`，ICS 响应为 `text/calendar`。ICS 映射 SUMMARY、DESCRIPTION、LOCATION、DTSTART/DTEND、RRULE/EXDATE/RDATE、CATEGORIES 和 STATUS；全天 DATE 按 `app.timezone` 转为 Item，导出时恢复 DATE。导入来源记录为 `source=ics` 和稳定 UID/hash；同 UID 同内容跳过，同 UID 不同内容报告冲突。
 
 本地 App 应优先实现本地导入导出；服务端接口用于远程备份和跨设备迁移。
 
