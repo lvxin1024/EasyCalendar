@@ -87,7 +87,7 @@
 
 ## 3. CandidateItem
 
-Candidate 是解析阶段对象，不是存储对象：
+Candidate 是解析阶段对象，不是正式 Item：
 
 ```json
 {
@@ -115,7 +115,7 @@ Candidate 是解析阶段对象，不是存储对象：
 }
 ```
 
-`temp_id` 只在一次解析响应中使用。候选项被接受后，客户端可修改字段，再调用 `ConfirmCandidate` 生成新的正式 `id`。候选项被拒绝或请求过期时直接丢弃。
+`temp_id` 只在一次 extraction 中唯一。当前本地服务会持久化 extraction 预览和拒绝状态，用于页面刷新、重启恢复和审计，但不会把 Candidate 写入 `items` 或 `outbox`。候选项被接受后，客户端把原 Candidate 和独立 `edit` 一起提交，`ConfirmCandidate` 生成新的正式 `id`；同一 `(extraction_id, temp_id)` 只能形成一个确认决策。
 
 ## 4. Reminder 和 RecurrenceRule
 
@@ -205,7 +205,7 @@ URL 必须经过 SSRF 校验；禁止访问本机、私网、云平台 metadata 
 
 ## 8. SQLite 表
 
-T1.1 已通过 `src/storage/migrations/001_initial.sql` 落地以下表：
+当前版本化 SQLite migrations 已落地以下表：
 
 ```text
 schema_migrations
@@ -216,6 +216,8 @@ subscriptions
 outbox
 sync_state
 idempotency_records
+candidate_extractions
+candidate_confirmations
 ```
 
 存储约定：
@@ -230,5 +232,7 @@ idempotency_records
 - 查询时间索引统一保存 UTC，domain payload 保留原始时区偏移。
 - `sync_state` 保存 JSON 值，`remote_cursor` 是当前同步 cursor 的固定键。
 - `idempotency_records` 按 `(scope, key)` 保存请求哈希和严格 Item 响应；同 key 不同请求拒绝，同请求在进程重启后仍返回原结果。
+- migration 003 的 `candidate_extractions` 保存原文、Parser 标识、严格 Candidate JSON、warning 和拒绝审计；它不属于正式 Item 查询。
+- `candidate_confirmations` 以 `(extraction_id, temp_id)` 为主键，记录唯一 Item、规范化请求哈希和确认时间；Item、outbox、确认和幂等记录在一个事务中提交。
 
-`sync_conflicts`、`ai_extraction_history` 以及外部事项稳定键 `(subscription_id, provider, external_id, recurrence_instance)` 随对应同步、AI 和订阅任务增加，不在首个 migration 中提前占位。
+`sync_conflicts` 以及外部事项稳定键 `(subscription_id, provider, external_id, recurrence_instance)` 随对应同步和订阅任务增加，不提前占位。

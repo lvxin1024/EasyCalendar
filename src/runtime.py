@@ -6,7 +6,8 @@ import threading
 from typing import Optional
 
 from config.loader import Settings
-from src.application import ItemService
+from src.application import CandidateService, ItemService
+from src.parser.rule_adapter import RuleParserAdapter
 from src.storage import SQLiteRepository
 
 
@@ -23,6 +24,7 @@ class RuntimeServices:
         self._repository = repository
         self._owns_repository = repository is None
         self._item_service: Optional[ItemService] = None
+        self._candidate_service: Optional[CandidateService] = None
         self._lock = threading.RLock()
 
     def item_service(self) -> ItemService:
@@ -43,9 +45,25 @@ class RuntimeServices:
             self._item_service = service
             return service
 
+    def candidate_service(self) -> CandidateService:
+        with self._lock:
+            if self._candidate_service is not None:
+                return self._candidate_service
+            item_service = self.item_service()
+            if self._repository is None:
+                raise RuntimeError("Repository initialization did not complete")
+            self._candidate_service = CandidateService(
+                self._repository,
+                item_service,
+                RuleParserAdapter(),
+                max_input_chars=self.settings.assistant.max_input_chars,
+            )
+            return self._candidate_service
+
     def close(self) -> None:
         with self._lock:
             if self._owns_repository and self._repository is not None:
                 self._repository.close()
             self._repository = None
             self._item_service = None
+            self._candidate_service = None

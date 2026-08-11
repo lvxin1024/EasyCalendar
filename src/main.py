@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .api.routes import router
 from .api.errors import register_error_handlers
+from .api.assistant_routes import router as assistant_router
 from .api.item_routes import router as item_router
 from .api.system import SERVICE_VERSION
 from .api.system_routes import router as system_router
@@ -48,6 +49,7 @@ def create_app(
     app.include_router(router)
     app.include_router(system_router)
     app.include_router(item_router)
+    app.include_router(assistant_router)
     app.state.settings = active_settings
     app.state.runtime = runtime
     register_error_handlers(app)

@@ -79,6 +79,7 @@ class AssistantSettings(StrictModel):
     base_url: Optional[str] = None
     model: Optional[str] = None
     timeout_seconds: int = Field(default=45, ge=1, le=600)
+    max_input_chars: int = Field(default=20000, ge=1, le=1000000)
 
 
 class IntegrationSettings(StrictModel):

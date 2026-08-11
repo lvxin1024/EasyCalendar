@@ -14,6 +14,7 @@ from uuid import uuid4
 
 from src.domain import (
     ChangeOperation,
+    CandidateItem,
     Collection,
     Item,
     ItemSource,
@@ -27,6 +28,7 @@ from src.domain import (
     SyncEntityType,
 )
 from src.storage import (
+    CandidateConfirmationRecord,
     IdempotencyRecord,
     ItemPosition,
     ItemQuery,
@@ -34,12 +36,15 @@ from src.storage import (
 )
 
 from .errors import (
+    CandidateDecisionConflictError,
     CollectionNotFoundError,
     IdempotencyConflictError,
     InvalidCommandError,
     InvalidCursorError,
     ItemNotFoundError,
     ReadonlyCollectionError,
+    ExtractionNotFoundError,
+    ExtractionRejectedError,
 )
 from .ports import ItemRepositoryPort
 
@@ -79,6 +84,12 @@ class CreateItemCommand:
 class UpdateItemCommand:
     expected_version: int
     values: Mapping[str, Any]
+
+
+@dataclass(frozen=True)
+class CandidateEditCommand:
+    collection_id: str
+    values: Mapping[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -394,6 +405,196 @@ class ItemService:
                 timestamp,
             )
             return completed
+
+    def confirm_candidate(
+        self,
+        *,
+        extraction_id: str,
+        candidate: CandidateItem,
+        edit: CandidateEditCommand,
+        idempotency_key: str,
+    ) -> Item:
+        self._require_idempotency_key(idempotency_key)
+        request_hash = self._request_hash(
+            {
+                "extraction_id": extraction_id,
+                "candidate": candidate,
+                "edit": edit,
+            }
+        )
+        scope = "candidates:confirm"
+        timestamp = self._now()
+        with self.repository.transaction() as transaction:
+            replay = self._idempotent_replay(
+                transaction, scope, idempotency_key, request_hash
+            )
+            if replay is not None:
+                return replay
+
+            extraction = transaction.get_candidate_extraction(extraction_id)
+            if extraction is None:
+                raise ExtractionNotFoundError(
+                    f"Candidate extraction {extraction_id!r} was not found"
+                )
+            if extraction.rejected_at is not None:
+                raise ExtractionRejectedError(
+                    f"Candidate extraction {extraction_id!r} was rejected"
+                )
+            stored_candidate = next(
+                (
+                    value
+                    for value in extraction.candidates
+                    if value.temp_id == candidate.temp_id
+                ),
+                None,
+            )
+            if stored_candidate is None:
+                raise InvalidCommandError(
+                    f"Candidate {candidate.temp_id!r} is not in the extraction"
+                )
+            if stored_candidate.to_dict() != candidate.to_dict():
+                raise InvalidCommandError(
+                    "Submitted Candidate differs from the persisted extraction; "
+                    "put user changes in edit"
+                )
+
+            previous = transaction.get_candidate_confirmation(
+                extraction_id, candidate.temp_id
+            )
+            if previous is not None:
+                if previous.request_hash != request_hash:
+                    raise CandidateDecisionConflictError(
+                        "Candidate was already confirmed with different edits"
+                    )
+                item = transaction.get_item(
+                    previous.item_id, include_deleted=True
+                )
+                if item is None:
+                    raise ItemNotFoundError(
+                        "Confirmed Candidate Item is missing from local storage"
+                    )
+                self._record_idempotency(
+                    transaction,
+                    scope,
+                    idempotency_key,
+                    request_hash,
+                    item,
+                    timestamp,
+                )
+                return item
+
+            self._require_writable_collection(transaction, edit.collection_id)
+            item = self._candidate_to_item(
+                candidate,
+                edit,
+                extraction_id=extraction_id,
+                timestamp=timestamp,
+            )
+            transaction.create_item(item)
+            transaction.create_outbox_entry(
+                self._outbox_for(
+                    item,
+                    entity_type=SyncEntityType.ITEM,
+                    operation=ChangeOperation.CREATE,
+                    timestamp=timestamp,
+                )
+            )
+            transaction.create_candidate_confirmation(
+                CandidateConfirmationRecord(
+                    extraction_id=extraction_id,
+                    temp_id=candidate.temp_id,
+                    item_id=item.id,
+                    request_hash=request_hash,
+                    confirmed_at=timestamp,
+                )
+            )
+            self._record_idempotency(
+                transaction,
+                scope,
+                idempotency_key,
+                request_hash,
+                item,
+                timestamp,
+            )
+            return item
+
+    def _candidate_to_item(
+        self,
+        candidate: CandidateItem,
+        edit: CandidateEditCommand,
+        *,
+        extraction_id: str,
+        timestamp: datetime,
+    ) -> Item:
+        candidate_fields = {
+            "type",
+            "title",
+            "body",
+            "start_at",
+            "end_at",
+            "due_at",
+            "timezone",
+            "location",
+            "attendees",
+            "reminders",
+            "priority",
+            "recurrence",
+        }
+        formal_fields = {"all_day", "status", "tags", "metadata"}
+        unknown = set(edit.values) - candidate_fields - formal_fields
+        if unknown:
+            raise InvalidCommandError(
+                f"Unsupported Candidate edit fields: {', '.join(sorted(unknown))}"
+            )
+
+        candidate_data = candidate.to_dict()
+        edited_reminders = None
+        for field_name, value in edit.values.items():
+            if field_name == "reminders":
+                edited_reminders = value
+                continue
+            if field_name not in candidate_fields:
+                continue
+            if isinstance(value, Enum):
+                value = value.value
+            elif isinstance(value, RecurrenceRule):
+                value = value.to_dict()
+            elif isinstance(value, datetime):
+                value = value.isoformat()
+            candidate_data[field_name] = value
+        try:
+            effective = CandidateItem.from_dict(candidate_data)
+            item_id = self._id_factory("item")
+            item = effective.to_item(
+                collection_id=edit.collection_id,
+                item_id=item_id,
+                source=ItemSource.AI,
+                now=timestamp,
+            )
+            if edited_reminders is not None:
+                item.reminders = self._build_reminders(
+                    item_id, edited_reminders
+                )
+            item.all_day = edit.values.get("all_day", item.all_day)
+            item.status = ItemStatus(edit.values.get("status", item.status))
+            item.tags = list(edit.values.get("tags", item.tags))
+            user_metadata = edit.values.get("metadata") or {}
+            item.metadata.update(user_metadata)
+            item.metadata.update(
+                {
+                    "candidate_extraction_id": extraction_id,
+                    "candidate_confidence": effective.confidence,
+                    "candidate_reasoning": effective.reasoning,
+                    "candidate_source_text_span": (
+                        effective.source_text_span.to_dict()
+                        if effective.source_text_span
+                        else None
+                    ),
+                }
+            )
+            return Item.from_dict(item.to_dict())
+        except (TypeError, ValueError) as error:
+            raise InvalidCommandError(str(error)) from error
 
     def _apply_patch(self, current: Item, values: Mapping[str, Any]) -> Item:
         allowed = {

@@ -87,7 +87,7 @@ interface ItemRepository {
   create(item: Item, options: WriteOptions): Promise<Item>;
   update(id: string, patch: ItemPatch, options: WriteOptions): Promise<Item>;
   delete(id: string, options: WriteOptions): Promise<Item>;
-  confirmCandidate(candidate: CandidateItem, edit: CandidateEdit,
+  confirmCandidate(extractionId: string, candidate: CandidateItem, edit: CandidateEdit,
                    options: WriteOptions): Promise<Item>;
 }
 ```

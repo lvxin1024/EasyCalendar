@@ -27,3 +27,15 @@ class IdempotencyConflictError(ApplicationError):
 
 class InvalidCursorError(ApplicationError):
     """Raised when a list cursor is malformed or unsupported."""
+
+
+class ExtractionNotFoundError(ApplicationError):
+    """Raised when a persisted Candidate extraction cannot be found."""
+
+
+class ExtractionRejectedError(ApplicationError):
+    """Raised when confirmation targets an already rejected extraction."""
+
+
+class CandidateDecisionConflictError(ApplicationError):
+    """Raised when one Candidate is confirmed with incompatible edits twice."""

@@ -10,7 +10,10 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from src.application import (
+    CandidateDecisionConflictError,
     CollectionNotFoundError,
+    ExtractionNotFoundError,
+    ExtractionRejectedError,
     IdempotencyConflictError,
     InvalidCommandError,
     InvalidCursorError,
@@ -53,10 +56,13 @@ def _response(
 def register_error_handlers(app: FastAPI) -> None:
     mappings: list[tuple[Type[Exception], int, str]] = [
         (ItemNotFoundError, 404, "not_found"),
+        (ExtractionNotFoundError, 404, "not_found"),
         (CollectionNotFoundError, 404, "not_found"),
         (EntityNotFoundError, 404, "not_found"),
         (ReadonlyCollectionError, 403, "readonly_collection"),
         (IdempotencyConflictError, 409, "idempotency_conflict"),
+        (CandidateDecisionConflictError, 409, "candidate_decision_conflict"),
+        (ExtractionRejectedError, 409, "candidate_rejected"),
         (InvalidCursorError, 400, "validation_error"),
         (InvalidCommandError, 400, "validation_error"),
         (ConstraintViolationError, 400, "validation_error"),

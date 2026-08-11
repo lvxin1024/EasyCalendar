@@ -47,6 +47,7 @@
 
 ### T1.3 Candidate confirmation
 
+- 状态：已完成。
 - 依赖：T0.2、T1.1、T1.2。
 - 内容：候选预览、修改、确认、拒绝；确认时生成正式 ID、审计 metadata 和 outbox。
 - 验收：确认一次生成一个 Item；重复请求使用幂等键返回相同结果；拒绝不写 Item。

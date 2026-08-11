@@ -236,7 +236,7 @@ Task 专用，使用 `Idempotency-Key`：
 
 ### `POST /v1/assistant/extract`
 
-需要 `Idempotency-Key` 可选。请求：
+该端点不要求幂等键；每次调用创建一个新的持久化 extraction 预览。请求：
 
 ```json
 {
@@ -260,6 +260,8 @@ Task 专用，使用 `Idempotency-Key`：
 
 AI provider 返回非法结构时，接口返回 422 或回退到规则 Parser；绝不返回一个看似成功但没有校验的候选。
 
+`GET /v1/assistant/extractions/{extraction_id}` 可在刷新页面或服务重启后恢复同一预览。
+
 ### `POST /v1/items/confirm-candidate`
 
 这是可选的服务端确认接口。纯本地 App 可以直接在本地 Repository 执行同一用例；需要同步的客户端可以将确认后的 Item push 到服务端。
@@ -268,6 +270,7 @@ AI provider 返回非法结构时，接口返回 422 或回退到规则 Parser�
 
 ```json
 {
+  "extraction_id": "extract_01",
   "candidate": {
     "temp_id": "cand_001",
     "type": "task",
@@ -283,7 +286,9 @@ AI provider 返回非法结构时，接口返回 422 或回退到规则 Parser�
 }
 ```
 
-服务端生成正式 Item，并在一个事务中写 Item、提醒和 outbox。候选项不写入 `items`，也不接受客户端直接指定 `source=ics`。
+请求必须携带 `Idempotency-Key`。`candidate` 必须与 extraction 中持久化的原值完全一致，用户修改只放在 `edit`；这能区分原始解析结果和用户决策，防止客户端绕过审计。服务端生成正式 Item，并在一个事务中写 Item、提醒、outbox、确认决策和幂等结果。确认后的 Item 固定为 `source=ai`。
+
+同一幂等键和同一请求返回原 Item；同一 Candidate 使用新幂等键重复相同决策也返回原 Item；不同编辑再次确认返回 `candidate_decision_conflict`。
 
 ### `POST /v1/assistant/extractions/{extraction_id}/reject`
 

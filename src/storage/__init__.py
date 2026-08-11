@@ -1,6 +1,8 @@
 """Durable storage adapters and repository contracts."""
 
 from .repository import (
+    CandidateConfirmationRecord,
+    CandidateExtractionRecord,
     ConstraintViolationError,
     EntityAlreadyExistsError,
     EntityNotFoundError,
@@ -14,6 +16,8 @@ from .repository import (
 from .sqlite import LATEST_SCHEMA_VERSION, SQLiteRepository, SQLiteSession
 
 __all__ = [
+    "CandidateConfirmationRecord",
+    "CandidateExtractionRecord",
     "ConstraintViolationError",
     "EntityAlreadyExistsError",
     "EntityNotFoundError",

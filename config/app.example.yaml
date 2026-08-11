@@ -41,6 +41,7 @@ assistant:
   base_url: null
   model: null
   timeout_seconds: 45
+  max_input_chars: 20000
 
 integrations:
   ical_output_dir: ./config/calendars

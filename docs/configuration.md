@@ -64,6 +64,7 @@ assistant:
   base_url: http://localhost:11434/v1
   model: deepseek-v4
   timeout_seconds: 45
+  max_input_chars: 20000
 
 integrations:
   ical_output_dir: ./config/calendars
@@ -103,6 +104,7 @@ deployment:
 | `assistant.provider` | `rules` | 否 | 否 | 无 key 时仍可运行规则 Parser |
 | `assistant.base_url` | 空 | AI/Ollama 时必填 | 否 | OpenAI-compatible 地址 |
 | `assistant.model` | 空 | AI 开启时必填 | 否 | 模型名称 |
+| `assistant.max_input_chars` | `20000` | 否 | 否 | 单次 Candidate 提取允许的最大文本字符数 |
 | `integrations.*` | 示例路径 | 对应接入时必填 | 否 | 第三方配置文件路径和租户 |
 | `widget.snapshot_path` | `./data/widget/snapshot.json` | 否 | 否 | Widget 只读快照 |
 | `deployment.provider` | `docker` | 否 | 否 | 一键部署目标 |

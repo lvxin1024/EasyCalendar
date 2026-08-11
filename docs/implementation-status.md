@@ -12,10 +12,12 @@
 | Collection / Subscription / SyncChange / Outbox | `src/domain/models.py` | 已有状态转换、严格 JSON round-trip 和 SQLite 持久化 |
 | SQLite Repository | `src/storage/` | migration、事务、savepoint、乐观锁、软删除查询、outbox 和 cursor 已实现 |
 | Item Service | `src/application/item_service.py` | CRUD、恢复、Task 完成、outbox、持久化幂等和 cursor 分页已实现 |
-| 解析器输出候选项 | `src/parser/rule_parser.py` | 已完成初步分离 |
+| Candidate Service | `src/application/candidate_service.py` | 候选提取、持久化预览、拒绝审计和确认编排已实现 |
+| 解析器输出候选项 | `src/parser/rule_adapter.py` | 规则 Parser 已适配 Candidate application port，并使用请求时区和参考时间 |
 | 旧 CalendarEvent 兼容视图 | `src/parser/models.py` | 临时兼容层 |
 | FastAPI 解析 API | `src/api/routes.py` | 仍是历史 `/api/v1` 业务接口 |
 | FastAPI Item API | `src/api/item_routes.py` | 已提供正式 `/v1/items` CRUD、分页、过滤和统一错误格式 |
+| FastAPI Candidate API | `src/api/assistant_routes.py` | 已提供 `/v1/assistant/extract`、查询、拒绝和 `/v1/items/confirm-candidate` |
 | Health / Capabilities | `src/api/system_routes.py` | 已提供目标 `/v1` 系统端点 |
 | iCal 内存客户端 | `src/calendar_client/ical_client.py` | 原型，缓存不持久化 |
 | Google / Outlook 客户端 | `src/calendar_client/` | 代码存在，未经可靠集成验证 |
@@ -25,7 +27,6 @@
 
 ## 尚未实现的目标能力
 
-- Candidate confirmation 和拒绝审计。
 - 单实例 Bearer token 鉴权。
 - Cloudflare Worker、D1 migrations、push/pull 同步。
 - ICS URL 订阅、ETag、RRULE 和只读 Collection。
@@ -46,4 +47,4 @@
 
 ## 结论
 
-正式 Item Service 和 `/v1/items` API 已可用。下一步进入 T1.3 Candidate confirmation：把规则解析结果保持为候选，支持编辑、确认、拒绝和跨重试幂等；确认必须复用 Item Service 的事务与 outbox 规则。
+正式 Item CRUD 与 Candidate 预览、编辑确认、拒绝审计均已可用。下一步进入 T1.4 本地提醒：增加持久化调度状态、平台 adapter 接口、事项变更后的重调度和启动恢复。

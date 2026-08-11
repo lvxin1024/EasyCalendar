@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 
-from src.domain import ItemStatus, ItemType
+from src.domain import CandidateItem, ItemStatus, ItemType
 
 
 class RepositoryError(RuntimeError):
@@ -78,6 +78,76 @@ class IdempotencyRecord:
                 raise ValueError(f"IdempotencyRecord {field_name} cannot be empty")
         if self.created_at.tzinfo is None or self.created_at.utcoffset() is None:
             raise ValueError("IdempotencyRecord created_at must include a timezone")
+
+
+@dataclass(frozen=True)
+class CandidateExtractionRecord:
+    """Persisted preview and optional rejection audit for parser output."""
+
+    extraction_id: str
+    parser_id: str
+    source_text: str
+    candidates: list[CandidateItem]
+    warnings: list[str]
+    created_at: datetime
+    rejected_at: Optional[datetime] = None
+    rejection_reason: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        for field_name in ("extraction_id", "parser_id"):
+            value = getattr(self, field_name)
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(
+                    f"CandidateExtractionRecord {field_name} cannot be empty"
+                )
+        if not isinstance(self.source_text, str):
+            raise ValueError("CandidateExtractionRecord source_text must be a string")
+        if not isinstance(self.candidates, list) or not all(
+            isinstance(candidate, CandidateItem) for candidate in self.candidates
+        ):
+            raise ValueError(
+                "CandidateExtractionRecord candidates must contain CandidateItem values"
+            )
+        temp_ids = [candidate.temp_id for candidate in self.candidates]
+        if len(temp_ids) != len(set(temp_ids)):
+            raise ValueError("CandidateExtractionRecord temp_ids must be unique")
+        if not isinstance(self.warnings, list) or not all(
+            isinstance(warning, str) for warning in self.warnings
+        ):
+            raise ValueError("CandidateExtractionRecord warnings must be strings")
+        for field_name in ("created_at", "rejected_at"):
+            value = getattr(self, field_name)
+            if value is not None and (
+                value.tzinfo is None or value.utcoffset() is None
+            ):
+                raise ValueError(
+                    f"CandidateExtractionRecord {field_name} must include a timezone"
+                )
+        if self.rejection_reason is not None and self.rejected_at is None:
+            raise ValueError("rejection_reason requires rejected_at")
+
+
+@dataclass(frozen=True)
+class CandidateConfirmationRecord:
+    """One immutable Candidate-to-Item decision."""
+
+    extraction_id: str
+    temp_id: str
+    item_id: str
+    request_hash: str
+    confirmed_at: datetime
+
+    def __post_init__(self) -> None:
+        for field_name in ("extraction_id", "temp_id", "item_id", "request_hash"):
+            value = getattr(self, field_name)
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(
+                    f"CandidateConfirmationRecord {field_name} cannot be empty"
+                )
+        if self.confirmed_at.tzinfo is None or self.confirmed_at.utcoffset() is None:
+            raise ValueError(
+                "CandidateConfirmationRecord confirmed_at must include a timezone"
+            )
 
 
 @dataclass(frozen=True)

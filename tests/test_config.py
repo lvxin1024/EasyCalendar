@@ -23,6 +23,7 @@ def test_default_settings_are_local_and_safe():
     assert settings.server.cors_allowed_origins == ["http://localhost:8000"]
     assert settings.sync.enabled is False
     assert settings.assistant.enabled is False
+    assert settings.assistant.max_input_chars == 20000
 
 
 def test_environment_overrides_and_legacy_names_are_supported():
@@ -139,6 +140,7 @@ def test_health_and_capabilities_are_truthful():
     assert health["instance"] == "my-easycalendar"
     assert capabilities["features"]["parser"] is True
     assert capabilities["features"]["items"] is True
+    assert capabilities["features"]["assistant"] is True
     assert capabilities["providers"]["parser"] == ["rules.zh_cn"]
 
 

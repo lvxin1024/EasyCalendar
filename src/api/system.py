@@ -54,7 +54,7 @@ def build_capabilities_payload(
             "items": True,
             "sync": False,
             "ics_subscriptions": False,
-            "assistant": False,
+            "assistant": True,
             "widget_snapshot": False,
         },
         "configured": {

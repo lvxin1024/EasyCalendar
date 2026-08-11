@@ -74,7 +74,9 @@ class RuleParser(BaseParser):
             start_time = self.date_extractor.extract_date(segment)
 
         if not start_time:
-            start_time = datetime.now().replace(hour=9, minute=0, second=0, microsecond=0)
+            start_time = self.date_extractor.reference_date.replace(
+                hour=9, minute=0, second=0, microsecond=0
+            )
 
         duration = self.event_detector.detect_duration(segment)
         end_time = start_time + timedelta(minutes=duration)

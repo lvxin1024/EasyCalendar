@@ -11,9 +11,11 @@ from importlib import resources
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional
 
-from src.domain import Collection, Item, OutboxEntry, Subscription
+from src.domain import CandidateItem, Collection, Item, OutboxEntry, Subscription
 
 from .repository import (
+    CandidateConfirmationRecord,
+    CandidateExtractionRecord,
     ConstraintViolationError,
     EntityAlreadyExistsError,
     EntityNotFoundError,
@@ -26,7 +28,7 @@ from .repository import (
 )
 
 
-LATEST_SCHEMA_VERSION = 2
+LATEST_SCHEMA_VERSION = 3
 _MIGRATION_PACKAGE = "src.storage.migrations"
 _ITEM_SCHEDULE_SQL = """
 CASE item_type
@@ -565,6 +567,162 @@ class SQLiteSession:
             ) from error
         return record
 
+    def create_candidate_extraction(
+        self, record: CandidateExtractionRecord
+    ) -> CandidateExtractionRecord:
+        if not isinstance(record, CandidateExtractionRecord):
+            raise ValueError("record must be a CandidateExtractionRecord")
+        try:
+            self._connection.execute(
+                """
+                INSERT INTO candidate_extractions(
+                    extraction_id, parser_id, source_text, candidates_json,
+                    warnings_json, created_at, rejected_at, rejection_reason
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    record.extraction_id,
+                    record.parser_id,
+                    record.source_text,
+                    _json_text(
+                        [candidate.to_dict() for candidate in record.candidates]
+                    ),
+                    _json_text(record.warnings),
+                    _utc_text(record.created_at),
+                    _utc_text(record.rejected_at) if record.rejected_at else None,
+                    record.rejection_reason,
+                ),
+            )
+        except sqlite3.IntegrityError as error:
+            raise EntityAlreadyExistsError(
+                f"Candidate extraction {record.extraction_id!r} already exists"
+            ) from error
+        return record
+
+    def get_candidate_extraction(
+        self, extraction_id: str
+    ) -> Optional[CandidateExtractionRecord]:
+        row = self._connection.execute(
+            "SELECT * FROM candidate_extractions WHERE extraction_id = ?",
+            (extraction_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        try:
+            candidates_data = _read_json(
+                row["candidates_json"],
+                f"candidate extraction {extraction_id!r}",
+            )
+            warnings = _read_json(
+                row["warnings_json"],
+                f"candidate extraction warnings {extraction_id!r}",
+            )
+            return CandidateExtractionRecord(
+                extraction_id=row["extraction_id"],
+                parser_id=row["parser_id"],
+                source_text=row["source_text"],
+                candidates=[
+                    CandidateItem.from_dict(candidate) for candidate in candidates_data
+                ],
+                warnings=warnings,
+                created_at=self._parse_stored_time(row["created_at"]),
+                rejected_at=(
+                    self._parse_stored_time(row["rejected_at"])
+                    if row["rejected_at"]
+                    else None
+                ),
+                rejection_reason=row["rejection_reason"],
+            )
+        except (TypeError, ValueError) as error:
+            raise StorageDataError(
+                f"Stored candidate extraction {extraction_id!r} is invalid"
+            ) from error
+
+    def reject_candidate_extraction(
+        self,
+        extraction_id: str,
+        *,
+        rejected_at: datetime,
+        reason: Optional[str] = None,
+    ) -> CandidateExtractionRecord:
+        current = self.get_candidate_extraction(extraction_id)
+        if current is None:
+            raise EntityNotFoundError(
+                f"Candidate extraction {extraction_id!r} does not exist"
+            )
+        if current.rejected_at is not None:
+            return current
+        self._connection.execute(
+            """
+            UPDATE candidate_extractions
+            SET rejected_at = ?, rejection_reason = ?
+            WHERE extraction_id = ? AND rejected_at IS NULL
+            """,
+            (_utc_text(rejected_at), reason, extraction_id),
+        )
+        result = self.get_candidate_extraction(extraction_id)
+        if result is None:
+            raise RepositoryError("Candidate extraction disappeared during rejection")
+        return result
+
+    def get_candidate_confirmation(
+        self, extraction_id: str, temp_id: str
+    ) -> Optional[CandidateConfirmationRecord]:
+        row = self._connection.execute(
+            """
+            SELECT extraction_id, temp_id, item_id, request_hash, confirmed_at
+            FROM candidate_confirmations
+            WHERE extraction_id = ? AND temp_id = ?
+            """,
+            (extraction_id, temp_id),
+        ).fetchone()
+        if row is None:
+            return None
+        try:
+            return CandidateConfirmationRecord(
+                extraction_id=row["extraction_id"],
+                temp_id=row["temp_id"],
+                item_id=row["item_id"],
+                request_hash=row["request_hash"],
+                confirmed_at=self._parse_stored_time(row["confirmed_at"]),
+            )
+        except (TypeError, ValueError) as error:
+            raise StorageDataError(
+                f"Stored candidate confirmation {extraction_id!r}/{temp_id!r} "
+                "is invalid"
+            ) from error
+
+    def create_candidate_confirmation(
+        self, record: CandidateConfirmationRecord
+    ) -> CandidateConfirmationRecord:
+        if not isinstance(record, CandidateConfirmationRecord):
+            raise ValueError("record must be a CandidateConfirmationRecord")
+        try:
+            self._connection.execute(
+                """
+                INSERT INTO candidate_confirmations(
+                    extraction_id, temp_id, item_id, request_hash, confirmed_at
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    record.extraction_id,
+                    record.temp_id,
+                    record.item_id,
+                    record.request_hash,
+                    _utc_text(record.confirmed_at),
+                ),
+            )
+        except sqlite3.IntegrityError as error:
+            if "FOREIGN KEY" in str(error).upper():
+                raise ConstraintViolationError(
+                    "Candidate confirmation references missing extraction or Item"
+                ) from error
+            raise EntityAlreadyExistsError(
+                f"Candidate {record.extraction_id!r}/{record.temp_id!r} "
+                "was already confirmed"
+            ) from error
+        return record
+
     def set_sync_state(
         self, key: str, value: Any, *, now: Optional[datetime] = None
     ) -> None:
@@ -612,6 +770,13 @@ class SQLiteSession:
                 for position, reminder in enumerate(item.reminders)
             ],
         )
+
+    @staticmethod
+    def _parse_stored_time(value: str) -> datetime:
+        result = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if result.tzinfo is None or result.utcoffset() is None:
+            raise ValueError("Stored timestamp must include a timezone")
+        return result
 
     @staticmethod
     def _append_item_cursor(
@@ -966,6 +1131,44 @@ class SQLiteRepository:
     ) -> IdempotencyRecord:
         with self.transaction() as session:
             return session.create_idempotency_record(record)
+
+    def create_candidate_extraction(
+        self, record: CandidateExtractionRecord
+    ) -> CandidateExtractionRecord:
+        with self.transaction() as session:
+            return session.create_candidate_extraction(record)
+
+    def get_candidate_extraction(
+        self, extraction_id: str
+    ) -> Optional[CandidateExtractionRecord]:
+        with self._read_session() as session:
+            return session.get_candidate_extraction(extraction_id)
+
+    def reject_candidate_extraction(
+        self,
+        extraction_id: str,
+        *,
+        rejected_at: datetime,
+        reason: Optional[str] = None,
+    ) -> CandidateExtractionRecord:
+        with self.transaction() as session:
+            return session.reject_candidate_extraction(
+                extraction_id,
+                rejected_at=rejected_at,
+                reason=reason,
+            )
+
+    def get_candidate_confirmation(
+        self, extraction_id: str, temp_id: str
+    ) -> Optional[CandidateConfirmationRecord]:
+        with self._read_session() as session:
+            return session.get_candidate_confirmation(extraction_id, temp_id)
+
+    def create_candidate_confirmation(
+        self, record: CandidateConfirmationRecord
+    ) -> CandidateConfirmationRecord:
+        with self.transaction() as session:
+            return session.create_candidate_confirmation(record)
 
     def set_sync_state(
         self, key: str, value: Any, *, now: Optional[datetime] = None

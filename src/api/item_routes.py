@@ -16,6 +16,7 @@ from .item_schemas import (
     ItemUpdateRequest,
     VersionCommandRequest,
 )
+from .candidate_schemas import ConfirmCandidateRequest
 
 
 router = APIRouter(prefix="/v1/items", tags=["items"])
@@ -83,6 +84,23 @@ def list_items(
         next_cursor=page.next_cursor,
         has_more=page.has_more,
     )
+
+
+@router.post("/confirm-candidate", status_code=status.HTTP_201_CREATED)
+def confirm_candidate(
+    request: Request,
+    body: ConfirmCandidateRequest,
+    idempotency_key: Annotated[
+        str, Header(alias="Idempotency-Key", min_length=1, max_length=200)
+    ],
+):
+    item = request.app.state.runtime.candidate_service().confirm(
+        extraction_id=body.extraction_id,
+        candidate=body.candidate.to_domain(),
+        edit=body.edit.to_command(),
+        idempotency_key=idempotency_key,
+    )
+    return item.to_dict()
 
 
 @router.get("/{item_id}")

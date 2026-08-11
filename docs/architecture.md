@@ -50,13 +50,13 @@ Domain 不能导入：FastAPI、Flutter、Cloudflare、SQLAlchemy/Drift、Google
 
 Application 通过抽象接口调用存储、同步、通知、Importer 和 Provider。
 
-当前 `src/application/item_service.py` 已实现正式 Item 创建、查询、修改、软删除、恢复和 Task 完成。它只依赖 `ItemRepositoryPort`，所有正式变更在同一事务内写 Item、Reminder 和 outbox；HTTP、SQLite 和 ID 生成细节不进入 domain。
+当前 `src/application/item_service.py` 已实现正式 Item 创建、查询、修改、软删除、恢复、Task 完成和 Candidate 确认。`src/application/candidate_service.py` 负责提取预览、查询和拒绝。服务通过 Repository port 访问存储；确认在同一事务内写 Item、Reminder、outbox、确认决策和幂等记录，HTTP 和 SQLite 细节不进入 domain。
 
 ### Adapters
 
 - API adapter：将 HTTP 请求映射到 application command/query。
 - SQLite adapter：`src/storage/` 已实现本地 Repository、migration、outbox 和 sync cursor；D1 adapter 尚未实现。
-- Parser/AI adapter：输出 `CandidateItem[]`。
+- Parser/AI adapter：`RuleParserAdapter` 已实现规则解析 port，其他 provider 仍待实现。
 - ICS/Google/Microsoft adapter：输出带来源信息的 Item。
 - Notification adapter：把 Reminder 转成平台通知。
 - Widget adapter：把查询结果写成 snapshot。
@@ -86,12 +86,16 @@ UI -> ItemService -> SQLite transaction
 ### 文本解析
 
 ```text
-text -> Parser/AiProvider -> CandidateItem[]
-                         -> user edits/rejects
-                         -> ConfirmCandidate -> ItemService -> SQLite + outbox
+text -> Parser/AiProvider -> candidate_extractions
+                          -> user edits/rejects
+                          -> ConfirmCandidate -> ItemService transaction
+                                                |- Item + Reminder
+                                                |- outbox
+                                                |- confirmation decision
+                                                `- idempotency record
 ```
 
-候选项没有正式 `id`、`version` 或 `collection_id`，不应出现在 Item 查询和同步响应中。
+候选预览可持久化用于刷新页面、审计和重启恢复，但没有正式 `id`、`version` 或 `collection_id`，不出现在 Item 查询和同步 outbox 中。确认请求必须引用持久化 extraction；用户修改通过独立 `edit` 传入，不能篡改原 Candidate。
 
 ### 远端同步
 

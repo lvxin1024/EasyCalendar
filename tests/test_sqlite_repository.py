@@ -128,10 +128,13 @@ def test_initializes_versioned_schema_and_loads_path_from_settings(tmp_path):
         "outbox",
         "sync_state",
         "idempotency_records",
+        "candidate_extractions",
+        "candidate_confirmations",
     } <= tables
     assert migrations == [
         (1, "001_initial.sql"),
         (2, "002_idempotency.sql"),
+        (3, "003_candidate_extractions.sql"),
     ]
 
 
