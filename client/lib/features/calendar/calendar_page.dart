@@ -6,6 +6,7 @@ import '../../domain/item.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/item_tile.dart';
 import 'calendar_navigation_controller.dart';
+import 'calendar_time_grid.dart';
 
 class CalendarPage extends StatefulWidget {
   const CalendarPage({
@@ -26,6 +27,8 @@ class CalendarPage extends StatefulWidget {
 }
 
 class _CalendarPageState extends State<CalendarPage> {
+  double _hourHeight = 72;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -46,29 +49,62 @@ class _CalendarPageState extends State<CalendarPage> {
           _CalendarToolbar(navigation: widget.navigation),
           const Divider(),
           Expanded(
-            child: events.isEmpty
-                ? EmptyState(
-                    icon: Icons.calendar_view_week_outlined,
-                    title: '${_rangeTitle(widget.navigation)}没有日程',
-                    message: '新建日程后会显示在当前日期范围内。',
+            child: widget.navigation.mode == CalendarViewMode.month
+                ? _RangeEventList(
+                    events: events,
+                    navigation: widget.navigation,
+                    onEdit: widget.onEdit,
+                    onDelete: widget.onDelete,
                   )
-                : ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 96),
-                    itemCount: events.length,
-                    itemBuilder: (context, index) {
-                      final item = events[index];
-                      return ItemTile(
-                        item: item,
-                        onEdit: () => widget.onEdit(item),
-                        onDelete: () => widget.onDelete(item),
-                      );
-                    },
+                : CalendarTimeGrid(
+                    dates: widget.navigation.visibleDates,
+                    items: events,
+                    selectedDate: widget.navigation.selectedDate,
+                    hourHeight: _hourHeight,
+                    onHourHeightChanged: (value) =>
+                        setState(() => _hourHeight = value.clamp(48, 120)),
+                    onDateSelected: widget.navigation.selectDate,
+                    onEdit: widget.onEdit,
                   ),
           ),
         ],
       );
     },
   );
+}
+
+class _RangeEventList extends StatelessWidget {
+  const _RangeEventList({
+    required this.events,
+    required this.navigation,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final List<CalendarItem> events;
+  final CalendarNavigationController navigation;
+  final ValueChanged<CalendarItem> onEdit;
+  final ValueChanged<CalendarItem> onDelete;
+
+  @override
+  Widget build(BuildContext context) => events.isEmpty
+      ? EmptyState(
+          icon: Icons.calendar_view_week_outlined,
+          title: '${_rangeTitle(navigation)}没有日程',
+          message: '新建日程后会显示在当前日期范围内。',
+        )
+      : ListView.builder(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 96),
+          itemCount: events.length,
+          itemBuilder: (context, index) {
+            final item = events[index];
+            return ItemTile(
+              item: item,
+              onEdit: () => onEdit(item),
+              onDelete: () => onDelete(item),
+            );
+          },
+        );
 }
 
 class _CalendarToolbar extends StatelessWidget {
