@@ -53,7 +53,7 @@ Application 通过抽象接口调用存储、同步、通知、Importer 和 Prov
 ### Adapters
 
 - API adapter：将 HTTP 请求映射到 application command/query。
-- SQLite/D1 adapter：实现 Repository 和 SyncStore。
+- SQLite adapter：`src/storage/` 已实现本地 Repository、migration、outbox 和 sync cursor；D1 adapter 尚未实现。
 - Parser/AI adapter：输出 `CandidateItem[]`。
 - ICS/Google/Microsoft adapter：输出带来源信息的 Item。
 - Notification adapter：把 Reminder 转成平台通知。
@@ -62,6 +62,13 @@ Application 通过抽象接口调用存储、同步、通知、Importer 和 Prov
 ### Client UI / Platform
 
 Flutter 负责跨端 UI、本地数据库访问编排和设置。macOS WidgetKit、Android alarm、Windows toast 通过 platform adapter 接入。Widget 和通知都不能拥有第二份 Item 业务逻辑。
+
+### SQLite 事务边界
+
+- `SQLiteRepository` 拥有连接、migration 和线程互斥；`SQLiteSession` 只在一次显式 transaction 中有效。
+- 每个直接 Repository 写方法自动开启事务；跨实体原子写入使用 `repository.transaction()`。
+- Item 和 Reminder 的复合写入使用 savepoint，防止局部约束错误留下半次写入。
+- application service 必须在一次 transaction 中完成 domain 实体和 outbox 写入，Repository 不负责生成业务 change。
 
 ## 4. 数据流
 

@@ -205,17 +205,28 @@ URL 必须经过 SSRF 校验；禁止访问本机、私网、云平台 metadata 
 
 ## 8. SQLite 表
 
-第一版建议：
+T1.1 已通过 `src/storage/migrations/001_initial.sql` 落地以下表：
 
 ```text
+schema_migrations
 collections
 items
 reminders
 subscriptions
 outbox
 sync_state
-sync_conflicts
-ai_extraction_history
 ```
 
-外部事项的稳定键建议为 `(subscription_id, provider, external_id, recurrence_instance)`，避免重复刷新产生重复 Item。
+存储约定：
+
+- migration 只向前执行，文件名按连续版本编号；数据库记录已执行的版本和文件名，版本不兼容时拒绝启动。
+- `collections`、`items`、`subscriptions` 和 `outbox` 同时保存核心查询列与严格 `payload_json`。查询不需要扫描 JSON，完整资源仍按 domain contract 还原。
+- Reminder 独立存放并保留列表位置；创建或更新 Item 时与 Item 主记录在同一个 savepoint 中替换。
+- 可同步实体写入使用 `expected_version` 乐观检查；待写实体必须正好是 `expected_version + 1`。
+- 本地 `create` 只接受 `version=1` 且未删除的新实体；高版本备份恢复和远端应用使用后续独立接口，不能绕过创建语义。
+- 每次写入前重新执行严格 domain 校验，防止可变对象在构造后被改成非法状态并污染数据库。
+- 默认查询排除 `deleted_at` 非空记录，显式 `include_deleted` 才返回墓碑。
+- 查询时间索引统一保存 UTC，domain payload 保留原始时区偏移。
+- `sync_state` 保存 JSON 值，`remote_cursor` 是当前同步 cursor 的固定键。
+
+`sync_conflicts`、`ai_extraction_history` 以及外部事项稳定键 `(subscription_id, provider, external_id, recurrence_instance)` 随对应同步、AI 和订阅任务增加，不在首个 migration 中提前占位。

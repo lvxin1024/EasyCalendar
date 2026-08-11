@@ -94,6 +94,20 @@ interface ItemRepository {
 
 Repository 只负责事务、版本和持久化，不负责 HTTP、UI 或第三方同步。所有写入必须同时更新 Item 和 outbox，使用同一个数据库事务。
 
+当前 Python SQLite adapter 位于 `src/storage/`。它是 T1.1 的低层持久化接口，application service 在 T1.2 中负责把 patch/delete 等用例转换为 domain 状态变更：
+
+```python
+with repository.transaction() as tx:
+    tx.update_item(item, expected_version=previous_version)
+    tx.create_outbox_entry(outbox_entry)
+```
+
+- `SQLiteRepository.from_settings(settings)` 只读取 `storage.sqlite_path` 和 `deployment.auto_migrate`，不要求用户修改源码。
+- `SQLiteSession` 只在 transaction 上下文内有效；异常默认回滚整个事务。
+- Item 与 Reminder 的复合写入有内部 savepoint。调用方捕获单次写入错误后继续事务，也不会留下半条 Item。
+- `VersionConflictError` 区分乐观锁冲突；缺失、重复 ID、外键错误和损坏数据使用独立错误类型，供 API 层稳定映射。
+- Repository 不自动生成 `change_id` 或 `device_id`。这些是 T1.2 application service 的职责，但 Repository 保证 Item 和 outbox 可原子提交。
+
 ## 5. SyncTransport 和 SyncStore
 
 ```ts

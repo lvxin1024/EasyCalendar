@@ -33,8 +33,9 @@
 
 ### T1.1 SQLite schema 和本地 Repository
 
+- 状态：已完成。
 - 依赖：T0.2、T0.3。
-- 内容：`items`、`collections`、`reminders`、`outbox`、`sync_state` 表；Repository 提供事务和查询。
+- 内容：版本化 migration；`items`、`collections`、`reminders`、`subscriptions`、`outbox`、`sync_state` 表；Repository 提供事务、查询、乐观锁和配置驱动的自动迁移。
 - 验收：创建、更新、软删除、恢复查询和版本递增有单测；进程重启后数据仍在。
 
 ### T1.2 Item Service 和正式 CRUD API

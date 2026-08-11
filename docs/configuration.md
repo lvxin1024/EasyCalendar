@@ -91,6 +91,7 @@ deployment:
 | `server.cors_allowed_origins` | 本地地址 | 生产必填 | 否 | 禁止默认 `*` |
 | `storage.driver` | `sqlite` | 否 | 否 | 客户端使用 SQLite，Worker 使用 D1 |
 | `storage.sqlite_path` | `./data/app.sqlite3` | 否 | 否 | 本地数据库路径 |
+| `storage.backup_dir` | `./data/backups` | 否 | 否 | migration 前备份目录，待部署/备份任务接入 |
 | `sync.enabled` | `false` | 否 | 否 | 是否启用同步 |
 | `subscriptions.refresh_cron` | 每 6 小时 | 否 | 否 | ICS 刷新频率 |
 | `assistant.provider` | `rules` | 否 | 否 | 无 key 时仍可运行规则 Parser |
@@ -99,6 +100,8 @@ deployment:
 | `integrations.*` | 示例路径 | 对应接入时必填 | 否 | 第三方配置文件路径和租户 |
 | `widget.snapshot_path` | `./data/widget/snapshot.json` | 否 | 否 | Widget 只读快照 |
 | `deployment.provider` | `docker` | 否 | 否 | 一键部署目标 |
+| `deployment.auto_migrate` | `true` | 否 | 否 | SQLite Repository 启动时执行向前 migration；关闭时 schema 不是最新版则拒绝启动 |
+| `deployment.auto_backup_before_migrate` | `true` | 否 | 否 | 迁移前自动备份开关，当前尚未接入执行器 |
 | `ADMIN_TOKEN` | 自动生成 | 同步必填 | 是 | 单实例 Bearer token |
 | `AI_API_KEY` | 空 | 云端 AI 时必填 | 是 | AI Provider 密钥 |
 | `GOOGLE_CLIENT_SECRET` | 空 | Google 接入时必填 | 是 | 仅放 secret store |
