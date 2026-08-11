@@ -10,6 +10,7 @@ import 'package:uuid/uuid.dart';
 import '../config/app_config.dart';
 import '../ai/ai_provider.dart';
 import '../domain/item.dart';
+import '../domain/recurrence.dart';
 import '../sync/sync_models.dart';
 import '../sync/sync_repository.dart';
 import 'item_repository.dart';
@@ -58,7 +59,7 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
     _database = await factory.openDatabase(
       databasePath!,
       options: OpenDatabaseOptions(
-        version: 3,
+        version: 4,
         onConfigure: (database) async {
           await database.execute('PRAGMA foreign_keys = ON');
         },
@@ -112,6 +113,7 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
         priority INTEGER,
         reminder_enabled INTEGER NOT NULL DEFAULT 0,
         reminder_minutes INTEGER NOT NULL DEFAULT 30,
+        recurrence_json TEXT,
         tags_json TEXT NOT NULL DEFAULT '[]',
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
@@ -224,6 +226,11 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
             )
         )
       ''');
+    }
+    if (oldVersion < 4) {
+      await database.execute(
+        'ALTER TABLE items ADD COLUMN recurrence_json TEXT',
+      );
     }
   }
 
@@ -401,6 +408,7 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
       startAt: draft.startAt,
       endAt: draft.endAt,
       dueAt: draft.dueAt,
+      recurrence: draft.recurrence,
       timezone: draft.timezone,
       allDay: draft.allDay,
       location: _optional(draft.location),
@@ -432,6 +440,7 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
       startAt: draft.startAt,
       endAt: draft.endAt,
       dueAt: draft.dueAt,
+      recurrence: draft.recurrence,
       timezone: draft.timezone,
       allDay: draft.allDay,
       location: _optional(draft.location),
@@ -474,6 +483,7 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
         title: current.title,
         body: current.body,
         dueAt: current.dueAt,
+        recurrence: null,
         timezone: current.timezone,
         status: completed ? ItemStatus.done : ItemStatus.todo,
         priority: current.priority,
@@ -496,6 +506,7 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
       startAt: current.startAt,
       endAt: current.endAt,
       dueAt: current.dueAt,
+      recurrence: current.recurrence,
       timezone: current.timezone,
       allDay: current.allDay,
       location: current.location,
@@ -1060,6 +1071,9 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
       'start_at': payload['start_at'],
       'end_at': payload['end_at'],
       'due_at': payload['due_at'],
+      'recurrence_json': payload['recurrence'] == null
+          ? null
+          : jsonEncode(payload['recurrence']),
       'timezone': payload['timezone'],
       'all_day': payload['all_day'] == true ? 1 : 0,
       'location': payload['location'],
@@ -1081,6 +1095,9 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
     }
     if (draft.type == ItemType.event && draft.startAt == null) {
       throw const RepositoryConflict('日程需要开始时间。');
+    }
+    if (draft.recurrence != null && draft.type != ItemType.event) {
+      throw const RepositoryConflict('只有日程可以设置循环。');
     }
     if (draft.startAt != null &&
         draft.endAt != null &&
@@ -1108,6 +1125,7 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
     startAt: _parseTime(row['start_at']),
     endAt: _parseTime(row['end_at']),
     dueAt: _parseTime(row['due_at']),
+    recurrence: _parseRecurrence(row['recurrence_json']),
     timezone: row['timezone'] as String,
     allDay: row['all_day'] == 1,
     location: row['location'] as String?,
@@ -1132,6 +1150,9 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
     'start_at': _optionalTime(item.startAt),
     'end_at': _optionalTime(item.endAt),
     'due_at': _optionalTime(item.dueAt),
+    'recurrence_json': item.recurrence == null
+        ? null
+        : jsonEncode(item.recurrence!.toJson()),
     'timezone': item.timezone,
     'all_day': item.allDay ? 1 : 0,
     'location': item.location,
@@ -1160,7 +1181,7 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
     'location': item.location,
     'status': item.status.name,
     'priority': item.priority,
-    'recurrence': null,
+    'recurrence': item.recurrence?.toJson(),
     'reminders': item.reminderEnabled
         ? [
             {
@@ -1185,6 +1206,17 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
 
   static DateTime? _parseTime(Object? value) =>
       value == null ? null : DateTime.parse(value as String);
+
+  static RecurrenceRule? _parseRecurrence(Object? value) {
+    if (value == null) return null;
+    try {
+      final decoded = jsonDecode(value as String);
+      if (decoded is! Map) return null;
+      return RecurrenceRule.fromJson(decoded.cast<String, Object?>());
+    } catch (_) {
+      return null;
+    }
+  }
 
   static String _timeText(DateTime value) => value.toUtc().toIso8601String();
 

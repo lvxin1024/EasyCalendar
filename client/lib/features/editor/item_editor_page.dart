@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../application/item_controller.dart';
 import '../../config/app_config.dart';
 import '../../domain/item.dart';
+import '../../domain/recurrence.dart';
 import '../../utils/date_formatters.dart';
 import '../../utils/configured_time.dart';
 
@@ -37,6 +38,8 @@ class _ItemEditorPageState extends State<ItemEditorPage> {
   DateTime? _startAt;
   DateTime? _endAt;
   DateTime? _dueAt;
+  late RecurrenceFrequency _recurrenceFrequency;
+  DateTime? _recurrenceUntil;
 
   bool get _editing => widget.item != null;
 
@@ -54,6 +57,8 @@ class _ItemEditorPageState extends State<ItemEditorPage> {
     _startAt = item?.startAt ?? now.add(const Duration(hours: 1));
     _endAt = item?.endAt ?? now.add(const Duration(hours: 2));
     _dueAt = item?.dueAt;
+    _recurrenceFrequency = _frequencyFromRule(item?.recurrence);
+    _recurrenceUntil = _untilFromRule(item?.recurrence);
     _titleController = TextEditingController(text: item?.title ?? '');
     _bodyController = TextEditingController(text: item?.body ?? '');
     _locationController = TextEditingController(text: item?.location ?? '');
@@ -123,9 +128,8 @@ class _ItemEditorPageState extends State<ItemEditorPage> {
                     labelText: '标题',
                     prefixIcon: Icon(Icons.title),
                   ),
-                  validator: (value) => value == null || value.trim().isEmpty
-                      ? '请输入标题'
-                      : null,
+                  validator: (value) =>
+                      value == null || value.trim().isEmpty ? '请输入标题' : null,
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
@@ -271,6 +275,38 @@ class _ItemEditorPageState extends State<ItemEditorPage> {
         prefixIcon: Icon(Icons.location_on_outlined),
       ),
     ),
+    const SizedBox(height: 12),
+    DropdownButtonFormField<RecurrenceFrequency>(
+      initialValue: _recurrenceFrequency,
+      decoration: const InputDecoration(
+        labelText: '循环',
+        prefixIcon: Icon(Icons.repeat),
+      ),
+      items: const [
+        DropdownMenuItem(value: RecurrenceFrequency.none, child: Text('不循环')),
+        DropdownMenuItem(value: RecurrenceFrequency.daily, child: Text('每天')),
+        DropdownMenuItem(
+          value: RecurrenceFrequency.weekdays,
+          child: Text('每个工作日'),
+        ),
+        DropdownMenuItem(value: RecurrenceFrequency.weekly, child: Text('每周')),
+        DropdownMenuItem(value: RecurrenceFrequency.monthly, child: Text('每月')),
+        DropdownMenuItem(value: RecurrenceFrequency.yearly, child: Text('每年')),
+      ],
+      onChanged: (value) => setState(
+        () => _recurrenceFrequency = value ?? RecurrenceFrequency.none,
+      ),
+    ),
+    if (_recurrenceFrequency != RecurrenceFrequency.none) ...[
+      const SizedBox(height: 10),
+      _DateTimeField(
+        label: '循环结束（可选）',
+        value: _recurrenceUntil,
+        allDay: true,
+        allowClear: true,
+        onChanged: (value) => setState(() => _recurrenceUntil = value),
+      ),
+    ],
   ];
 
   List<Widget> _taskFields() => [
@@ -313,6 +349,10 @@ class _ItemEditorPageState extends State<ItemEditorPage> {
       if (value == ItemType.task && _dueAt == null) {
         _dueAt = configuredNow().add(const Duration(days: 1));
       }
+      if (value != ItemType.event) {
+        _recurrenceFrequency = RecurrenceFrequency.none;
+        _recurrenceUntil = null;
+      }
     });
   }
 
@@ -350,6 +390,7 @@ class _ItemEditorPageState extends State<ItemEditorPage> {
       startAt: _type == ItemType.event ? startAt : null,
       endAt: _type == ItemType.event ? endAt : null,
       dueAt: _type == ItemType.task ? _dueAt : null,
+      recurrence: _type == ItemType.event ? _buildRecurrence() : null,
       timezone: widget.config.timezone,
       allDay: _type == ItemType.event && _allDay,
       location: _type == ItemType.event ? _locationController.text : null,
@@ -365,6 +406,35 @@ class _ItemEditorPageState extends State<ItemEditorPage> {
     } catch (error) {
       if (mounted) _showError(error.toString());
     }
+  }
+
+  RecurrenceRule? _buildRecurrence() {
+    if (_recurrenceFrequency == RecurrenceFrequency.none || _startAt == null) {
+      return null;
+    }
+    final weekday = const [
+      'MO',
+      'TU',
+      'WE',
+      'TH',
+      'FR',
+      'SA',
+      'SU',
+    ][_startAt!.weekday - 1];
+    final rule = switch (_recurrenceFrequency) {
+      RecurrenceFrequency.daily => 'FREQ=DAILY',
+      RecurrenceFrequency.weekdays => 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR',
+      RecurrenceFrequency.weekly => 'FREQ=WEEKLY;BYDAY=$weekday',
+      RecurrenceFrequency.monthly => 'FREQ=MONTHLY;BYMONTHDAY=${_startAt!.day}',
+      RecurrenceFrequency.yearly =>
+        'FREQ=YEARLY;BYMONTH=${_startAt!.month};BYMONTHDAY=${_startAt!.day}',
+      RecurrenceFrequency.none => '',
+    };
+    return RecurrenceRule(
+      rrule: _recurrenceUntil == null
+          ? rule
+          : '$rule;UNTIL=${recurrenceUntil(_recurrenceUntil!)}',
+    );
   }
 
   Future<void> _delete() async {
@@ -397,10 +467,38 @@ class _ItemEditorPageState extends State<ItemEditorPage> {
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+}
+
+RecurrenceFrequency _frequencyFromRule(RecurrenceRule? recurrence) {
+  final rule = recurrence?.rrule ?? '';
+  if (rule.contains('FREQ=DAILY')) return RecurrenceFrequency.daily;
+  if (rule.contains('FREQ=WEEKLY') && rule.contains('BYDAY=MO,TU,WE,TH,FR')) {
+    return RecurrenceFrequency.weekdays;
+  }
+  if (rule.contains('FREQ=WEEKLY')) return RecurrenceFrequency.weekly;
+  if (rule.contains('FREQ=MONTHLY')) return RecurrenceFrequency.monthly;
+  if (rule.contains('FREQ=YEARLY')) return RecurrenceFrequency.yearly;
+  return RecurrenceFrequency.none;
+}
+
+DateTime? _untilFromRule(RecurrenceRule? recurrence) {
+  final match = RegExp(
+    r'(?:^|;)UNTIL=([^;]+)',
+  ).firstMatch(recurrence?.rrule ?? '');
+  final raw = match?.group(1);
+  if (raw == null) return null;
+  if (RegExp(r'^\d{8}$').hasMatch(raw)) {
+    return DateTime(
+      int.parse(raw.substring(0, 4)),
+      int.parse(raw.substring(4, 6)),
+      int.parse(raw.substring(6, 8)),
     );
   }
+  return DateTime.tryParse(raw.replaceFirst('Z', '+00:00'))?.toLocal();
 }
 
 class _DateTimeField extends StatelessWidget {

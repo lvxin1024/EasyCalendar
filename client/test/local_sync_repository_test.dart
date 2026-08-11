@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:easy_calendar/config/app_config.dart';
 import 'package:easy_calendar/data/local_item_repository.dart';
 import 'package:easy_calendar/domain/item.dart';
+import 'package:easy_calendar/domain/recurrence.dart';
 import 'package:easy_calendar/sync/sync_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -177,6 +178,29 @@ void main() {
     expect(loaded.tagColors, {'工作': 0xFF2563EB});
   });
 
+  test('persists recurrence and includes it in the sync payload', () async {
+    await repository.createItem(
+      ItemDraft(
+        type: ItemType.event,
+        title: 'Weekly event',
+        startAt: DateTime.utc(2026, 8, 3, 1),
+        endAt: DateTime.utc(2026, 8, 3, 2),
+        timezone: 'Asia/Shanghai',
+        recurrence: const RecurrenceRule(rrule: 'FREQ=WEEKLY;BYDAY=MO'),
+      ),
+    );
+
+    final loaded = (await repository.listItems()).single;
+    final pending = await repository.listPendingChanges(now: DateTime.now());
+    final itemChange = pending.last;
+
+    expect(loaded.recurrence?.rrule, 'FREQ=WEEKLY;BYDAY=MO');
+    expect(
+      (itemChange.payload['recurrence'] as Map<String, Object?>)['rrule'],
+      'FREQ=WEEKLY;BYDAY=MO',
+    );
+  });
+
   test('schema v2 upgrades with pending entity heads intact', () async {
     final directory = await Directory.systemTemp.createTemp(
       'easycalendar-sync-migration-',
@@ -202,6 +226,7 @@ void main() {
     await legacy.execute('DROP INDEX idx_client_sync_conflicts');
     await legacy.execute('DROP TABLE sync_conflicts');
     await legacy.execute('DROP TABLE sync_entity_heads');
+    await legacy.execute('ALTER TABLE items DROP COLUMN recurrence_json');
     await legacy.execute('PRAGMA user_version = 2');
     await legacy.close();
 

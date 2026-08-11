@@ -1,4 +1,5 @@
 import '../ai/ai_provider.dart';
+import 'recurrence.dart';
 
 enum ItemType { event, task, note }
 
@@ -12,6 +13,7 @@ class ItemDraft {
     this.startAt,
     this.endAt,
     this.dueAt,
+    this.recurrence,
     required this.timezone,
     this.allDay = false,
     this.location,
@@ -28,6 +30,7 @@ class ItemDraft {
   final DateTime? startAt;
   final DateTime? endAt;
   final DateTime? dueAt;
+  final RecurrenceRule? recurrence;
   final String timezone;
   final bool allDay;
   final String? location;
@@ -48,6 +51,7 @@ class CalendarItem {
     this.startAt,
     this.endAt,
     this.dueAt,
+    this.recurrence,
     required this.timezone,
     required this.allDay,
     this.location,
@@ -70,6 +74,7 @@ class CalendarItem {
   final DateTime? startAt;
   final DateTime? endAt;
   final DateTime? dueAt;
+  final RecurrenceRule? recurrence;
   final String timezone;
   final bool allDay;
   final String? location;
@@ -94,6 +99,7 @@ class CalendarItem {
     startAt: startAt,
     endAt: endAt,
     dueAt: dueAt,
+    recurrence: recurrence,
     timezone: timezone,
     allDay: allDay,
     location: location,
@@ -102,6 +108,35 @@ class CalendarItem {
     reminderEnabled: reminderEnabled,
     reminderMinutes: reminderMinutes,
     tags: tags,
+  );
+
+  CalendarItem copyWith({
+    String? id,
+    DateTime? startAt,
+    DateTime? endAt,
+    RecurrenceRule? recurrence,
+  }) => CalendarItem(
+    id: id ?? this.id,
+    collectionId: collectionId,
+    type: type,
+    title: title,
+    body: body,
+    startAt: startAt ?? this.startAt,
+    endAt: endAt ?? this.endAt,
+    dueAt: dueAt,
+    recurrence: recurrence ?? this.recurrence,
+    timezone: timezone,
+    allDay: allDay,
+    location: location,
+    status: status,
+    priority: priority,
+    reminderEnabled: reminderEnabled,
+    reminderMinutes: reminderMinutes,
+    tags: tags,
+    createdAt: createdAt,
+    updatedAt: updatedAt,
+    deletedAt: deletedAt,
+    version: version,
   );
 }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../domain/item.dart';
+import '../../domain/recurrence.dart';
 import '../../utils/configured_time.dart';
 
 enum CalendarViewMode { day, week, month }
@@ -105,7 +106,8 @@ class CalendarNavigationController extends ChangeNotifier {
       month: toDate.month,
       day: toDate.day,
     );
-    final events = items
+    final expanded = expandCalendarItems(items, fromDate, toDate);
+    final events = expanded
         .where((item) {
           if (item.type != ItemType.event ||
               item.status == ItemStatus.cancelled ||
