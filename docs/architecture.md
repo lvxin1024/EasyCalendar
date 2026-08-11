@@ -59,7 +59,7 @@ Application 通过抽象接口调用存储、同步、通知、Importer 和 Prov
 - Parser/AI adapter：`RuleParserAdapter` 已实现规则解析 port，其他 provider 仍待实现。
 - Notification adapter：`NotificationSchedulerPort` 定义稳定调度/取消边界；当前 `memory` adapter 只用于开发和测试，系统 adapter 由各客户端平台实现。
 - ICS/Google/Microsoft adapter：未来通过 Importer contract 输出带来源信息的 Item。
-- Widget adapter：把查询结果写成 snapshot。
+- Widget adapter：把查询结果写成完整、可原子替换的 snapshot；当前实现位于 `src/widget/`，不直接读取网络或暴露编辑能力。
 
 ### Client UI / Platform
 
@@ -181,4 +181,4 @@ Google、Microsoft、AI 和 Cloudflare SDK 必须延迟加载或作为独立 ada
 
 1. 实现 Subscription 与只读 Collection，并接入 ICS 抓取链路。
 2. 在 T6.1 建立 Importer SDK 后重新实现外部日历适配，不复用已删除原型。
-3. 接入 AI、系统通知、Widget 和 OAuth provider。
+3. 接入 AI、系统通知、T4.2 macOS WidgetKit 和 OAuth provider。

@@ -123,6 +123,7 @@ class ItemService:
         clock: Callable[[], datetime] = _utc_now,
         id_factory: Callable[[str], str] = _default_id_factory,
         reminder_coordinator: Optional[ReminderCoordinatorPort] = None,
+        widget_snapshot_callback: Optional[Callable[[], None]] = None,
     ):
         if not device_id.strip():
             raise ValueError("device_id cannot be empty")
@@ -131,6 +132,7 @@ class ItemService:
         self._clock = clock
         self._id_factory = id_factory
         self._reminder_coordinator = reminder_coordinator
+        self._widget_snapshot_callback = widget_snapshot_callback
 
     def ensure_default_collection(
         self, *, collection_id: str, name: str, color: Optional[str]
@@ -231,6 +233,7 @@ class ItemService:
                     timestamp,
                 )
         self._reconcile_reminders(item)
+        self._refresh_widget_snapshot()
         return item
 
     def get_item(self, item_id: str, *, include_deleted: bool = False) -> Item:
@@ -361,6 +364,7 @@ class ItemService:
                     )
                 )
         self._reconcile_reminders(updated)
+        self._refresh_widget_snapshot()
         return updated
 
     def delete_item(self, item_id: str, *, expected_version: int) -> Item:
@@ -388,6 +392,7 @@ class ItemService:
                     )
                 )
         self._reconcile_reminders(deleted)
+        self._refresh_widget_snapshot()
         return deleted
 
     def restore_item(self, item_id: str, *, expected_version: int) -> Item:
@@ -412,6 +417,7 @@ class ItemService:
                     )
                 )
         self._reconcile_reminders(restored)
+        self._refresh_widget_snapshot()
         return restored
 
     def complete_task(
@@ -472,6 +478,7 @@ class ItemService:
                         timestamp,
                     )
         self._reconcile_reminders(completed)
+        self._refresh_widget_snapshot()
         return completed
 
     def confirm_candidate(
@@ -504,7 +511,17 @@ class ItemService:
                 timestamp=timestamp,
             )
         self._reconcile_reminders(item)
+        self._refresh_widget_snapshot()
         return item
+
+    def _refresh_widget_snapshot(self) -> None:
+        if self._widget_snapshot_callback is None:
+            return
+        try:
+            self._widget_snapshot_callback()
+        except Exception:
+            # A stale widget must never make a committed Item operation fail.
+            logger.exception("Unable to refresh the widget snapshot")
 
     def _confirm_candidate_in_transaction(
         self,

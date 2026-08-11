@@ -46,7 +46,7 @@ def build_capabilities_payload(
             "local_reminders": True,
             "json_backup": True,
             "ics_transfer": True,
-            "widget_snapshot": False,
+            "widget_snapshot": True,
         },
         "configured": {
             "sync": active_settings.sync.enabled,

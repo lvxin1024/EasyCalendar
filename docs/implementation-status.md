@@ -26,6 +26,7 @@
 | Subscription / 只读 Collection | `src/application/subscription_service.py`、`src/api/subscription_routes.py` | T3.1 已实现订阅与 Collection CRUD、幂等创建、启停、软删除、URL 基础 SSRF 边界和只读 Item 写入保护 |
 | ICS 抓取与刷新审计 | `src/application/ics_service.py`、`src/storage/migrations/005_subscription_fetch_logs.sql` | T3.2 已实现条件请求、超时重试、响应大小限制、ETag/Last-Modified、源哈希、失败状态和抓取日志 |
 | RRULE 与外部 ID 同步 | `src/domain/recurrence.py`、`src/application/ics_service.py` | T3.3 已实现 RRULE/EXDATE/RDATE 时间范围展开、订阅 UID 映射、远端删除和稳定 occurrence ID |
+| Widget snapshot writer | `src/widget/snapshot.py`、`src/runtime.py` | T4.1 已实现今日/近期 Event、未完成 Due、版本字段、空快照和原子 JSON 写入；WidgetKit 平台适配仍属 T4.2 |
 | 配置 | `config/loader.py` | YAML、secrets.env、环境覆盖和严格校验已接入 |
 | 本地启动入口 | `run.py` | 从统一配置读取 host、port 和 debug |
 | 测试与依赖 | `scripts/test.sh` | 单一命令安装锁定依赖并运行全部离线 Python 测试 |
@@ -57,4 +58,4 @@
 
 ## 结论
 
-正式 Item CRUD、Candidate 确认、可恢复本地提醒协调、事务化 JSON/ICS transfer、Flutter 离线 CRUD、T2 的 Worker/D1 与客户端同步冲突恢复，以及完整 T3 ICS 订阅链路均已落地。下一项产品功能是 T4 Widget snapshot；T1.6 的三平台原生启动验收作为环境任务保留。
+正式 Item CRUD、Candidate 确认、可恢复本地提醒协调、事务化 JSON/ICS transfer、Flutter 离线 CRUD、T2 的 Worker/D1 与客户端同步冲突恢复、完整 T3 ICS 订阅链路和 T4.1 Widget snapshot writer 均已落地。下一项产品功能是 T4.2 macOS WidgetKit；T1.6 的三平台原生启动验收作为环境任务保留。

@@ -18,6 +18,7 @@ from src.application import (
 from src.notification import InMemoryNotificationScheduler
 from src.parser.rule_adapter import RuleParserAdapter
 from src.storage import SQLiteRepository
+from src.widget import FileWidgetSnapshotWriter, WidgetSnapshotService
 
 
 class RuntimeServices:
@@ -40,6 +41,7 @@ class RuntimeServices:
         self._reminder_service: Optional[ReminderService] = None
         self._subscription_service: Optional[SubscriptionService] = None
         self._refresh_service: Optional[SubscriptionRefreshService] = None
+        self._widget_service: Optional[WidgetSnapshotService] = None
         self._lock = threading.RLock()
 
     def item_service(self) -> ItemService:
@@ -51,6 +53,11 @@ class RuntimeServices:
                 repository,
                 device_id=self.settings.app.instance_name,
                 reminder_coordinator=self.reminder_service(),
+                widget_snapshot_callback=(
+                    self._refresh_widget_snapshot
+                    if self.settings.widget.enabled
+                    else None
+                ),
             )
             service.ensure_default_collection(
                 collection_id=self.settings.app.default_collection_id,
@@ -58,7 +65,26 @@ class RuntimeServices:
                 color=self.settings.app.default_collection_color,
             )
             self._item_service = service
+            if self.settings.widget.enabled:
+                self._refresh_widget_snapshot()
             return service
+
+    def widget_snapshot_service(self) -> Optional[WidgetSnapshotService]:
+        with self._lock:
+            if not self.settings.widget.enabled:
+                return None
+            if self._widget_service is None:
+                self._widget_service = WidgetSnapshotService(
+                    self._repository_instance(),
+                    FileWidgetSnapshotWriter(self.settings.widget.snapshot_path),
+                    timezone_name=self.settings.app.timezone,
+                )
+            return self._widget_service
+
+    def _refresh_widget_snapshot(self) -> None:
+        service = self.widget_snapshot_service()
+        if service is not None:
+            service.refresh()
 
     def reminder_service(self) -> ReminderService:
         with self._lock:
@@ -145,6 +171,7 @@ class RuntimeServices:
             self._subscription_service = None
             self._refresh_service = None
             self._reminder_service = None
+            self._widget_service = None
             self._notification_scheduler = None
 
     def _repository_instance(self) -> SQLiteRepository:
