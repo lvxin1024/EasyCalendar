@@ -60,6 +60,9 @@ client/windows/flutter/ephemeral/
 .DS_Store
 Thumbs.db
 
+# Internal development docs (not for public repo)
+docs/
+
 # Temporary files
 *.tmp
 *.bak

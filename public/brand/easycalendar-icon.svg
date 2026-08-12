@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">EasyCalendar icon</title>
+  <desc id="desc">A blue calendar tile with a teal sync loop and coral due marker.</desc>
+  <rect width="512" height="512" rx="112" fill="#102A43"/>
+  <rect x="72" y="92" width="368" height="332" rx="48" fill="#2563EB"/>
+  <path d="M72 170h368" fill="none" stroke="#BFD7FF" stroke-width="18"/>
+  <path d="M148 62v72M364 62v72" fill="none" stroke="#F7FAFC" stroke-linecap="round" stroke-width="28"/>
+  <path d="M164 250c0-42 34-76 76-76 33 0 61 21 72 51" fill="none" stroke="#8DE1D1" stroke-linecap="round" stroke-width="24"/>
+  <path d="m307 206 8 39-39-5" fill="#8DE1D1"/>
+  <path d="M348 286c0 42-34 76-76 76-33 0-61-21-72-51" fill="none" stroke="#8DE1D1" stroke-linecap="round" stroke-width="24"/>
+  <path d="m205 330-8-39 39 5" fill="#8DE1D1"/>
+  <circle cx="358" cy="346" r="46" fill="#EA6A47" stroke="#102A43" stroke-width="14"/>
+  <path d="m337 346 14 14 29-34" fill="none" stroke="#FFF7F2" stroke-linecap="round" stroke-linejoin="round" stroke-width="15"/>
+</svg>
