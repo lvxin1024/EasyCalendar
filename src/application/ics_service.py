@@ -95,7 +95,7 @@ class UrllibICSFetcher:
         headers: Mapping[str, str],
         timeout_seconds: int,
     ) -> FetchResponse:
-        self._validate_target(url)
+        url = self._validate_target(url)
         request = Request(
             url,
             headers={
@@ -144,10 +144,12 @@ class UrllibICSFetcher:
             raise last_error
         raise ICSFetchError(f"ICS fetch failed: {last_error}") from last_error
 
-    def _validate_target(self, url: str) -> None:
+    def _validate_target(self, url: str) -> str:
+        if url.startswith("webcal://"):
+            url = url.replace("webcal://", "https://", 1)
         parsed = urlsplit(url)
         if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-            raise ICSFetchError("ICS URL must be an absolute HTTP(S) URL")
+            raise ICSFetchError("ICS URL must be an absolute HTTP(S) or webcal URL")
         hostname = parsed.hostname.rstrip(".").lower()
         if parsed.username or parsed.password or hostname == "localhost" or hostname.endswith(".localhost"):
             raise ICSFetchError("ICS URL target is not allowed")
@@ -165,6 +167,7 @@ class UrllibICSFetcher:
                 or address.is_reserved
             ):
                 raise ICSFetchError("ICS URL cannot target a private address")
+        return url
 
 
 class _NoRedirectHandler:

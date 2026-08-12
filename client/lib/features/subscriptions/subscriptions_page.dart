@@ -445,11 +445,15 @@ class _SubscriptionDialogState extends State<_SubscriptionDialog> {
               keyboardType: TextInputType.url,
               decoration: const InputDecoration(labelText: 'ICS URL'),
               validator: (value) {
-                final uri = Uri.tryParse(value?.trim() ?? '');
+                final raw = value?.trim() ?? '';
+                final normalized = raw.startsWith('webcal://')
+                    ? raw.replaceFirst('webcal://', 'https://')
+                    : raw;
+                final uri = Uri.tryParse(normalized);
                 return uri == null ||
                         !uri.hasAuthority ||
                         (uri.scheme != 'http' && uri.scheme != 'https')
-                    ? '请输入有效的 HTTP(S) 地址'
+                    ? '请输入有效的 HTTP(S) 或 webcal 地址'
                     : null;
               },
             ),
@@ -465,11 +469,14 @@ class _SubscriptionDialogState extends State<_SubscriptionDialog> {
       FilledButton(
         onPressed: () {
           if (!(_formKey.currentState?.validate() ?? false)) return;
+          final rawUrl = _url.text.trim();
           Navigator.pop(
             context,
             _SubscriptionDraft(
               title: _title.text.trim(),
-              url: _url.text.trim(),
+              url: rawUrl.startsWith('webcal://')
+                  ? rawUrl.replaceFirst('webcal://', 'https://')
+                  : rawUrl,
               refreshIntervalMinutes: _refreshIntervalMinutes,
             ),
           );
