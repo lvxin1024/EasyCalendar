@@ -14,6 +14,7 @@ import '../domain/recurrence.dart';
 import '../sync/sync_models.dart';
 import '../sync/sync_repository.dart';
 import 'item_repository.dart';
+import 'transfer_api_client.dart';
 
 class LocalItemRepository implements ItemRepository, SyncRepository {
   LocalItemRepository(
@@ -677,6 +678,178 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
       await _writeOutbox(transaction, deleted, 'delete');
     });
   }
+
+  @override
+  Future<CalendarItem> restoreItem(CalendarItem current) async {
+    if (current.deletedAt == null) {
+      throw const RepositoryConflict('事项未被删除。');
+    }
+    final restored = CalendarItem(
+      id: current.id,
+      collectionId: current.collectionId,
+      type: current.type,
+      title: current.title,
+      body: current.body,
+      startAt: current.startAt,
+      endAt: current.endAt,
+      dueAt: current.dueAt,
+      recurrence: current.recurrence,
+      timezone: current.timezone,
+      allDay: current.allDay,
+      location: current.location,
+      status: current.status,
+      priority: current.priority,
+      reminderEnabled: current.reminderEnabled,
+      reminderMinutes: current.reminderMinutes,
+      tags: current.tags,
+      createdAt: current.createdAt,
+      updatedAt: DateTime.now(),
+      deletedAt: null,
+      version: current.version + 1,
+    );
+    await _db.transaction((transaction) async {
+      final count = await transaction.update(
+        'items',
+        _itemToRow(restored),
+        where: 'id = ? AND version = ? AND deleted_at IS NOT NULL',
+        whereArgs: [current.id, current.version],
+      );
+      if (count != 1) {
+        throw const RepositoryConflict('事项已被更新，请刷新后重试。');
+      }
+      await _writeOutbox(transaction, restored, 'update');
+    });
+    return restored;
+  }
+
+  @override
+  Future<List<CalendarItem>> listDeletedItems() async {
+    final rows = await _db.query(
+      'items',
+      where: 'deleted_at IS NOT NULL',
+      orderBy: 'deleted_at DESC, id',
+    );
+    return rows.map(_itemFromRow).toList(growable: false);
+  }
+
+  @override
+  Future<String> exportLocalJsonBackup() async {
+    final collections = await _db.query('collections');
+    final items = await _db.query('items');
+    final subscriptions = await _db.query('subscriptions');
+    final outbox = await _db.query('outbox');
+    final syncState = await _db.query('sync_state');
+    final now = DateTime.now().toUtc().toIso8601String();
+    final payload = {
+      'schema_version': 1,
+      'exported_at': now,
+      'collections': collections,
+      'items': items,
+      'subscriptions': subscriptions,
+      'outbox': outbox,
+      'sync_state': syncState,
+    };
+    return jsonEncode(payload);
+  }
+
+  @override
+  Future<TransferResult> previewLocalJsonImport(String content) async {
+    final decoded = jsonDecode(content);
+    if (decoded is! Map<String, dynamic>) {
+      throw const FormatException('备份文件根节点必须是 JSON object');
+    }
+    final schemaVersion = decoded['schema_version'];
+    if (schemaVersion != 1) {
+      throw FormatException('不支持的备份版本：$schemaVersion');
+    }
+    final created = <String, int>{};
+    final skipped = <String, int>{};
+    final conflicts = <String, int>{};
+    final issues = <TransferIssue>[];
+
+    for (final key in ['collections', 'items', 'subscriptions', 'outbox', 'sync_state']) {
+      final values = decoded[key];
+      if (values is! List) {
+        issues.add(TransferIssue(
+          resourceType: key,
+          index: 0,
+          message: '$key 必须是数组',
+        ));
+        continue;
+      }
+      final existingRows = await _db.query(_tableForBackupKey(key));
+      final existingIds = existingRows.map((r) => r['id'] as String).toSet();
+      for (var i = 0; i < values.length; i++) {
+        final entry = values[i];
+        if (entry is! Map) {
+          issues.add(TransferIssue(
+            resourceType: key,
+            index: i,
+            message: '条目必须是对象',
+          ));
+          continue;
+        }
+        final id = entry['id'];
+        if (id is! String || id.isEmpty) {
+          issues.add(TransferIssue(
+            resourceType: key,
+            index: i,
+            message: '缺少有效 ID',
+          ));
+          continue;
+        }
+        if (existingIds.contains(id)) {
+          skipped[key] = (skipped[key] ?? 0) + 1;
+        } else {
+          created[key] = (created[key] ?? 0) + 1;
+        }
+      }
+    }
+
+    return TransferResult(
+      accepted: issues.isEmpty,
+      committed: false,
+      format: 'json',
+      created: created,
+      skipped: skipped,
+      conflicts: conflicts,
+      issues: issues,
+    );
+  }
+
+  @override
+  Future<void> commitLocalJsonImport(String content) async {
+    final decoded = jsonDecode(content);
+    if (decoded is! Map<String, dynamic>) {
+      throw const FormatException('备份文件根节点必须是 JSON object');
+    }
+    await _db.transaction((transaction) async {
+      for (final key in ['collections', 'items', 'subscriptions', 'outbox', 'sync_state']) {
+        final values = decoded[key];
+        if (values is! List) continue;
+        final table = _tableForBackupKey(key);
+        final existingRows = await transaction.query(table);
+        final existingIds = existingRows.map((r) => r['id'] as String).toSet();
+        for (final entry in values) {
+          if (entry is! Map) continue;
+          final id = entry['id'];
+          if (id is! String || id.isEmpty) continue;
+          if (existingIds.contains(id)) continue;
+          final row = Map<String, Object?>.from(entry.map((k, v) => MapEntry(k, v)));
+          await transaction.insert(table, row);
+        }
+      }
+    });
+  }
+
+  static String _tableForBackupKey(String key) => switch (key) {
+    'collections' => 'collections',
+    'items' => 'items',
+    'subscriptions' => 'subscriptions',
+    'outbox' => 'outbox',
+    'sync_state' => 'sync_state',
+    _ => throw FormatException('Unknown backup key: $key'),
+  };
 
   @override
   Future<ClientPreferences> loadPreferences(ClientPreferences defaults) async {

@@ -10,6 +10,7 @@ import '../../domain/item.dart';
 import '../../sync/sync_models.dart';
 import '../../utils/tag_colors.dart';
 import '../../widgets/tag_filter_bar.dart';
+import '../transfer/transfer_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
@@ -223,6 +224,24 @@ class _SettingsPageState extends State<SettingsPage> {
                 icon: Icons.storage_outlined,
                 label: '本地数据库',
                 value: widget.controller.databasePath ?? '尚未初始化',
+              ),
+              const SizedBox(height: 24),
+              _SectionLabel(label: '数据管理'),
+              ListTile(
+                leading: const Icon(Icons.file_upload_outlined),
+                title: const Text('导入 / 导出'),
+                subtitle: const Text('JSON 备份恢复、ICS 日历文件导入导出'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => Scaffold(
+                        appBar: AppBar(title: const Text('导入导出')),
+                        body: TransferPage(controller: widget.controller),
+                      ),
+                    ),
+                  );
+                },
               ),
               const SizedBox(height: 20),
               Align(

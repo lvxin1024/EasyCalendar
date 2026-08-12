@@ -1,4 +1,5 @@
 import '../domain/item.dart';
+import 'transfer_api_client.dart';
 
 abstract interface class ItemRepository {
   String? get databasePath;
@@ -34,6 +35,16 @@ abstract interface class ItemRepository {
   });
 
   Future<void> deleteItem(CalendarItem current);
+
+  Future<CalendarItem> restoreItem(CalendarItem current);
+
+  Future<List<CalendarItem>> listDeletedItems();
+
+  Future<String> exportLocalJsonBackup();
+
+  Future<TransferResult> previewLocalJsonImport(String content);
+
+  Future<void> commitLocalJsonImport(String content);
 
   Future<ClientPreferences> loadPreferences(ClientPreferences defaults);
 

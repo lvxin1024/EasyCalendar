@@ -7,6 +7,7 @@ import '../ai/ai_provider.dart';
 import '../ai/ai_provider_connection_tester.dart';
 import '../config/app_config.dart';
 import '../data/item_repository.dart';
+import '../data/transfer_api_client.dart';
 import '../domain/item.dart';
 import '../sync/sync_coordinator.dart';
 import '../sync/sync_models.dart';
@@ -254,6 +255,27 @@ class ItemController extends ChangeNotifier {
 
   Future<void> deleteItem(CalendarItem item) =>
       _mutate(() => repository.deleteItem(item));
+
+  Future<CalendarItem> restoreItem(CalendarItem item) async {
+    late CalendarItem result;
+    await _mutate(() async {
+      result = await repository.restoreItem(item);
+    });
+    return result;
+  }
+
+  Future<List<CalendarItem>> listDeletedItems() =>
+      repository.listDeletedItems();
+
+  Future<String> exportLocalJsonBackup() =>
+      repository.exportLocalJsonBackup();
+
+  Future<TransferResult> previewLocalJsonImport(String content) =>
+      repository.previewLocalJsonImport(content);
+
+  Future<void> commitLocalJsonImport(String content) async {
+    await _mutate(() => repository.commitLocalJsonImport(content));
+  }
 
   Future<void> setTaskCompleted(CalendarItem item, {required bool completed}) =>
       _mutate(() async {
