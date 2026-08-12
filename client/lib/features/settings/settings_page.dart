@@ -10,6 +10,7 @@ import '../../domain/item.dart';
 import '../../sync/sync_models.dart';
 import '../../utils/tag_colors.dart';
 import '../../widgets/tag_filter_bar.dart';
+import '../recycle_bin/recycle_bin_page.dart';
 import '../transfer/transfer_page.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -238,6 +239,22 @@ class _SettingsPageState extends State<SettingsPage> {
                       builder: (_) => Scaffold(
                         appBar: AppBar(title: const Text('导入导出')),
                         body: TransferPage(controller: widget.controller),
+                      ),
+                    ),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete_sweep_outlined),
+                title: const Text('回收站'),
+                subtitle: const Text('查看和恢复已删除的事项'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => Scaffold(
+                        appBar: AppBar(title: const Text('回收站')),
+                        body: RecycleBinPage(controller: widget.controller),
                       ),
                     ),
                   );
