@@ -162,10 +162,20 @@ class _SettingsPageState extends State<SettingsPage> {
               _SettingSwitch(
                 icon: Icons.notifications_outlined,
                 title: '通知',
-                subtitle: _notificationsEnabled ? '已启用' : '已关闭',
+                subtitle: _notificationsEnabled
+                    ? widget.controller.notificationService?.statusText ??
+                        '已启用'
+                    : '已关闭',
                 value: _notificationsEnabled,
-                onChanged: (value) =>
-                    setState(() => _notificationsEnabled = value),
+                onChanged: (value) async {
+                  setState(() => _notificationsEnabled = value);
+                  if (value) {
+                    await widget.controller.notificationService?.initialize();
+                    await widget.controller.notificationService
+                        ?.reconcileAll(widget.controller.items);
+                    setState(() {});
+                  }
+                },
               ),
               _AiProviderSection(
                 enabled: _assistantEnabled,

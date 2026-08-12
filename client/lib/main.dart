@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:timezone/data/latest.dart' as tz_data;
@@ -7,6 +9,8 @@ import 'app.dart';
 import 'application/item_controller.dart';
 import 'config/app_config.dart';
 import 'data/local_item_repository.dart';
+import 'notification/notification_adapter.dart';
+import 'notification/notification_service.dart';
 import 'sync/connectivity_monitor.dart';
 import 'sync/http_sync_transport.dart';
 import 'sync/sync_coordinator.dart';
@@ -23,6 +27,8 @@ Future<void> main() async {
   await initializeDateFormatting('zh_CN');
   final repository = LocalItemRepository(config);
   final desktopWindowController = DesktopWindowController();
+  final notificationAdapter = InMemoryNotificationAdapter();
+  final notificationService = NotificationService(adapter: notificationAdapter);
   final syncCoordinator = SyncCoordinator(
     repository: repository,
     transport: HttpSyncTransport(),
@@ -37,8 +43,13 @@ Future<void> main() async {
     syncCoordinator: syncCoordinator,
     widgetSnapshotWriter: const PlatformWidgetSnapshotWriter(),
     desktopWindowController: desktopWindowController,
+    notificationService: notificationService,
   );
   await controller.initialize();
+  await notificationService.initialize();
+  if (config.notificationsEnabled) {
+    unawaited(notificationService.reconcileAll(controller.items));
+  }
   final widgetDeepLinks = WidgetDeepLinkController();
   await widgetDeepLinks.start();
   runApp(

@@ -9,6 +9,7 @@ import '../config/app_config.dart';
 import '../data/item_repository.dart';
 import '../data/transfer_api_client.dart';
 import '../domain/item.dart';
+import '../notification/notification_service.dart';
 import '../sync/sync_coordinator.dart';
 import '../sync/sync_models.dart';
 import '../utils/configured_time.dart';
@@ -22,6 +23,7 @@ class ItemController extends ChangeNotifier {
     this.syncCoordinator,
     this.widgetSnapshotWriter,
     this.desktopWindowController,
+    this.notificationService,
     AiApiKeyStore? aiApiKeyStore,
     AiProviderConnectionTester? aiProviderConnectionTester,
   }) {
@@ -36,6 +38,7 @@ class ItemController extends ChangeNotifier {
   final SyncCoordinator? syncCoordinator;
   final WidgetSnapshotWriter? widgetSnapshotWriter;
   final DesktopWindowController? desktopWindowController;
+  final NotificationService? notificationService;
   late final AiApiKeyStore _aiApiKeyStore;
   late final AiProviderConnectionTester _aiProviderConnectionTester;
 
@@ -335,6 +338,9 @@ class ItemController extends ChangeNotifier {
       );
     } catch (_) {
       // Widget refresh is derived state and must not block local CRUD.
+    }
+    if (preferences.notificationsEnabled) {
+      unawaited(notificationService?.reconcileAll(_items));
     }
     if (notify) notifyListeners();
   }
