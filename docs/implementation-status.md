@@ -33,6 +33,11 @@
 | 月视图和周跳转 | `client/lib/features/calendar/calendar_month_grid.dart` | T5.3 已接入按周分行的月视图、事件摘要、溢出入口和 ISO 周序号跳转 |
 | macOS 桌面窗口控制 | `client/lib/window/desktop_window_controller.dart`、`client/macos/Runner/MainFlutterWindow.swift` | T5.4 已接入设置页透明度、置顶、点击穿透和 Dock 解锁；偏好保存在本机 app_settings |
 | Windows 桌面窗口控制 | `client/windows/runner/flutter_window.cpp` | T5.5 已接入 channel、透明度、置顶、点击穿透和 Ctrl+Alt+L 解锁；待 Windows SDK 真机编译验收 |
+| 日历密度与 Due 融合 | `client/lib/features/calendar/` | T8.1 已接入 16 px/小时最小时间轴、顶部未完成 Due 和截止前 30 分钟占位 |
+| 标签颜色与筛选 | `client/lib/features/settings/`、`client/lib/features/calendar/` | T8.2 已接入标签颜色持久化、设置入口和事项/Due/日历多标签筛选 |
+| 客户端循环日程 | `client/lib/domain/recurrence.dart`、`client/lib/data/local_database.dart` | T8.3 已接入 RRULE 编辑、SQLite v4 迁移和日/周/月 occurrence 展开 |
+| Collection 管理入口 | `client/lib/domain/collection.dart`、`client/lib/features/settings/` | T8.4 已接入 Collection CRUD、只读边界和事项 Collection 选择 |
+| Flutter ICS 订阅入口 | `client/lib/domain/subscription.dart`、`client/lib/data/subscription_api_client.dart`、`client/lib/features/subscriptions/` | T8.5 已接入订阅添加、启停、刷新、删除、抓取日志和错误状态展示 |
 | Flutter AI Provider 设置 | `client/lib/ai/`、`client/lib/features/settings/settings_page.dart` | T6.1 已接入 OpenAI-compatible/Ollama 配置、非敏感本地持久化、平台安全密钥存储和连接测试 |
 | AI Provider 抽象与校验 | `src/application/ai_providers.py` | T6.2 已接入规则/OpenAI-compatible/Ollama 可替换 Provider、超时/大小/有限重试和严格 Candidate JSON 校验 |
 | AI 候选工作台 | `client/lib/features/assistant/`、`client/lib/ai/assistant_models.dart` | T6.3 已接入多候选提取、逐项错误、编辑、拆分、合并、拒绝和确认后本地写入 |
@@ -53,11 +58,9 @@
 ## 尚未实现的目标能力
 
 - 更复杂的 ICS provider 扩展和部署级抓取调度策略。
-- Flutter 端 Collection、ICS 订阅、刷新日志和 JSON/ICS transfer 交互入口。
-- Flutter 端软删除回收站和恢复入口。
-- Flutter 端标签颜色、循环日程持久化与编辑入口。
-- Android、macOS、Windows 的真实系统通知 adapter。
-- 日历顶部未完成 Due、时间轴 Due 占位和更低时间轴密度。
+- Flutter 端 JSON/ICS transfer 交互入口（T8.6）。
+- Flutter 端软删除回收站和恢复入口（T8.7）。
+- Android、macOS、Windows 的真实系统通知 adapter（T8.8）。
 - Cloudflare 备份/回滚和 Docker 一键部署。
 
 ## 目前必须注意的缺陷
@@ -69,4 +72,4 @@
 
 ## 结论
 
-正式 Item CRUD、Candidate 确认、可恢复本地提醒协调、事务化 JSON/ICS transfer、Flutter 离线 CRUD、T2 的 Worker/D1 与客户端同步冲突恢复、完整 T3 ICS 订阅链路、T4 Widget 和 T5.1–T5.5 日历与桌面工作台均已落地。T5.5 的 Windows SDK 真机编译和 T1.6 的 Android/Windows 原生启动验收仍作为环境任务保留，macOS 已通过 Xcode 验收。
+正式 Item CRUD、Candidate 确认、可恢复本地提醒协调、事务化 JSON/ICS transfer、Flutter 离线 CRUD、T2 的 Worker/D1 与客户端同步冲突恢复、完整 T3 ICS 订阅链路、T4 Widget、T5.1–T5.5 日历与桌面工作台，以及 T8.1–T8.5 客户端闭环均已落地。T5.5 的 Windows SDK 真机编译和 T1.6 的 Android/Windows 原生启动验收仍作为环境任务保留，macOS 已通过 Xcode 验收。T8.6–T8.8 暂未实施。

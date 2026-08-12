@@ -11,6 +11,7 @@ import '../assistant/assistant_page.dart';
 import '../editor/item_editor_page.dart';
 import '../items/items_page.dart';
 import '../settings/settings_page.dart';
+import '../subscriptions/subscriptions_page.dart';
 
 class HomeShell extends StatefulWidget {
   const HomeShell({
@@ -72,6 +73,11 @@ class _HomeShellState extends State<HomeShell> {
       icon: Icon(Icons.check_circle_outline),
       selectedIcon: Icon(Icons.check_circle),
       label: 'Due',
+    ),
+    NavigationDestination(
+      icon: Icon(Icons.link_outlined),
+      selectedIcon: Icon(Icons.link),
+      label: '订阅',
     ),
     NavigationDestination(
       icon: Icon(Icons.auto_awesome_outlined),
@@ -166,6 +172,11 @@ class _HomeShellState extends State<HomeShell> {
                         label: Text('Due'),
                       ),
                       NavigationRailDestination(
+                        icon: Icon(Icons.link_outlined),
+                        selectedIcon: Icon(Icons.link),
+                        label: Text('订阅'),
+                      ),
+                      NavigationRailDestination(
                         icon: Icon(Icons.auto_awesome_outlined),
                         selectedIcon: Icon(Icons.auto_awesome),
                         label: Text('助手'),
@@ -230,7 +241,8 @@ class _HomeShellState extends State<HomeShell> {
       onDelete: _confirmDelete,
       onToggleCompleted: _toggleCompleted,
     ),
-    3 => AssistantPage(config: widget.config, controller: widget.controller),
+    3 => SubscriptionsPage(controller: widget.controller),
+    4 => AssistantPage(config: widget.config, controller: widget.controller),
     _ => SettingsPage(config: widget.config, controller: widget.controller),
   };
 
