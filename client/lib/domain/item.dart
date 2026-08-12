@@ -170,6 +170,9 @@ class CalendarCollection {
 class ClientPreferences {
   const ClientPreferences({
     required this.apiUrl,
+    this.deviceId = 'my-easycalendar-client',
+    this.defaultCollectionId = 'collection_local',
+    this.defaultCollectionName = '我的日程',
     required this.syncEnabled,
     required this.notificationsEnabled,
     this.windowOpacity = 1,
@@ -180,6 +183,9 @@ class ClientPreferences {
   });
 
   final String apiUrl;
+  final String deviceId;
+  final String defaultCollectionId;
+  final String defaultCollectionName;
   final bool syncEnabled;
   final bool notificationsEnabled;
   final double windowOpacity;
@@ -190,6 +196,9 @@ class ClientPreferences {
 
   ClientPreferences copyWith({
     String? apiUrl,
+    String? deviceId,
+    String? defaultCollectionId,
+    String? defaultCollectionName,
     bool? syncEnabled,
     bool? notificationsEnabled,
     double? windowOpacity,
@@ -199,6 +208,9 @@ class ClientPreferences {
     Map<String, int>? tagColors,
   }) => ClientPreferences(
     apiUrl: apiUrl ?? this.apiUrl,
+    deviceId: deviceId ?? this.deviceId,
+    defaultCollectionId: defaultCollectionId ?? this.defaultCollectionId,
+    defaultCollectionName: defaultCollectionName ?? this.defaultCollectionName,
     syncEnabled: syncEnabled ?? this.syncEnabled,
     notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
     windowOpacity: windowOpacity ?? this.windowOpacity,

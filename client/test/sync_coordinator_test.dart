@@ -62,6 +62,29 @@ void main() {
     expect(transport.pullCalls, 1);
   });
 
+  test('device id changes preserve and separately push older outbox batches', () async {
+    repository.pending.add(
+      PendingSyncChange(
+        changeId: 'change_02',
+        deviceId: 'renamed-device',
+        entityType: 'item',
+        entityId: 'item_02',
+        operation: 'create',
+        version: 1,
+        updatedAt: DateTime.utc(2026, 8, 11, 9),
+        payload: const {'id': 'item_02', 'version': 1},
+        retryCount: 0,
+      ),
+    );
+    transport.acceptAll = true;
+    coordinator.configureDeviceId('renamed-device');
+
+    await coordinator.synchronize();
+
+    expect(transport.pushedDeviceIds, ['test-device', 'renamed-device']);
+    expect(repository.pending, isEmpty);
+  });
+
   test(
     'records exponential backoff after a transient transport failure',
     () async {
@@ -245,6 +268,8 @@ class _FakeTransport implements SyncTransport {
   SyncTransportException? pushError;
   int pushCalls = 0;
   int pullCalls = 0;
+  bool acceptAll = false;
+  final List<String> pushedDeviceIds = [];
 
   @override
   Future<PushSyncResult> push({
@@ -255,7 +280,14 @@ class _FakeTransport implements SyncTransport {
     required List<PendingSyncChange> changes,
   }) async {
     pushCalls += 1;
+    pushedDeviceIds.add(deviceId);
     if (pushError case final error?) throw error;
+    if (acceptAll) {
+      return PushSyncResult(
+        accepted: changes.map((change) => change.changeId).toList(),
+        rejected: const [],
+      );
+    }
     return pushResult;
   }
 

@@ -178,6 +178,37 @@ void main() {
     expect(loaded.tagColors, {'工作': 0xFF2563EB});
   });
 
+  test(
+    'runtime settings drive new collection and outbox device identity',
+    () async {
+      await repository.configureRuntime(
+        deviceId: 'lvxin-windows',
+        defaultCollectionId: 'collection_shared',
+        defaultCollectionName: '共享日历',
+      );
+      await repository.createItem(
+        const ItemDraft(
+          type: ItemType.task,
+          title: 'Runtime settings task',
+          timezone: 'Asia/Shanghai',
+        ),
+      );
+
+      final item = (await repository.listItems()).single;
+      final pending = await repository.listPendingChanges(now: DateTime.now());
+
+      expect(item.collectionId, 'collection_shared');
+      expect(
+        pending.where((change) => change.entityId == item.id).single.deviceId,
+        'lvxin-windows',
+      );
+      expect(
+        (await repository.listCollections()).map((value) => value.id),
+        contains('collection_shared'),
+      );
+    },
+  );
+
   test('persists recurrence and includes it in the sync payload', () async {
     await repository.createItem(
       ItemDraft(

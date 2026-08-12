@@ -1,6 +1,7 @@
 import 'package:easy_calendar/application/item_controller.dart';
 import 'package:easy_calendar/config/app_config.dart';
 import 'package:easy_calendar/data/item_repository.dart';
+import 'package:easy_calendar/data/transfer_models.dart';
 import 'package:easy_calendar/domain/item.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -175,6 +176,30 @@ class _MemoryRepository implements ItemRepository {
   Future<void> deleteItem(CalendarItem current) async {
     _items.removeWhere((item) => item.id == current.id);
   }
+
+  @override
+  Future<CalendarItem> restoreItem(CalendarItem current) async => current;
+
+  @override
+  Future<List<CalendarItem>> listDeletedItems() async => const [];
+
+  @override
+  Future<String> exportLocalJsonBackup() async => '{}';
+
+  @override
+  Future<TransferResult> previewLocalJsonImport(String content) async =>
+      const TransferResult(
+        accepted: true,
+        committed: false,
+        format: 'json',
+        created: {},
+        skipped: {},
+        conflicts: {},
+        issues: [],
+      );
+
+  @override
+  Future<void> commitLocalJsonImport(String content) async {}
 
   @override
   Future<ClientPreferences> loadPreferences(ClientPreferences defaults) async =>

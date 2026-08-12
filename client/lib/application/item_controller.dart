@@ -61,6 +61,9 @@ class ItemController extends ChangeNotifier {
 
   ClientPreferences get _defaultPreferences => ClientPreferences(
     apiUrl: config.apiUrl,
+    deviceId: config.deviceId,
+    defaultCollectionId: config.defaultCollectionId,
+    defaultCollectionName: config.defaultCollectionName,
     syncEnabled: config.syncEnabled,
     notificationsEnabled: config.notificationsEnabled,
     windowOpacity: 1,
@@ -175,6 +178,7 @@ class ItemController extends ChangeNotifier {
       await repository.initialize();
       _initialized = true;
       _preferences = await repository.loadPreferences(_defaultPreferences);
+      await _applyRuntimeSettings(_preferences!);
       try {
         await desktopWindowController?.initialize(
           opacity: _preferences!.windowOpacity,
@@ -289,6 +293,7 @@ class ItemController extends ChangeNotifier {
     await _mutate(() async {
       await repository.savePreferences(value);
       _preferences = value;
+      await _applyRuntimeSettings(value);
       try {
         await desktopWindowController?.setOpacity(value.windowOpacity);
         await desktopWindowController?.setAlwaysOnTop(value.windowAlwaysOnTop);
@@ -301,6 +306,17 @@ class ItemController extends ChangeNotifier {
       );
       if (value.syncEnabled) unawaited(syncCoordinator?.synchronize());
     }, reloadItems: false);
+  }
+
+  Future<void> _applyRuntimeSettings(ClientPreferences value) async {
+    syncCoordinator?.configureDeviceId(value.deviceId);
+    if (repository is RuntimeSettingsPort) {
+      await (repository as RuntimeSettingsPort).configureRuntime(
+        deviceId: value.deviceId,
+        defaultCollectionId: value.defaultCollectionId,
+        defaultCollectionName: value.defaultCollectionName,
+      );
+    }
   }
 
   Future<void> _mutate(

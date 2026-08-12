@@ -26,7 +26,7 @@ class SyncCoordinator extends ChangeNotifier {
   final SyncTransport transport;
   final SyncTokenStore tokenStore;
   final ConnectivityMonitor connectivityMonitor;
-  final String deviceId;
+  String deviceId;
   final int retryLimit;
   final Uuid _uuid;
   final DateTime Function() _clock;
@@ -41,6 +41,12 @@ class SyncCoordinator extends ChangeNotifier {
 
   SyncSnapshot get snapshot => _snapshot;
   bool get tokenConfigured => _tokenConfigured;
+
+  void configureDeviceId(String value) {
+    final normalized = value.trim();
+    if (normalized.isEmpty) throw const FormatException('设备 ID 不能为空。');
+    deviceId = normalized;
+  }
 
   Future<void> start({required bool enabled, required String serverUrl}) async {
     try {
@@ -138,13 +144,17 @@ class SyncCoordinator extends ChangeNotifier {
           limit: 200,
         );
         if (pending.isEmpty) break;
-        attemptedChangeIds = pending.map((change) => change.changeId).toList();
+        final batchDeviceId = pending.first.deviceId;
+        final batch = pending
+            .where((change) => change.deviceId == batchDeviceId)
+            .toList(growable: false);
+        attemptedChangeIds = batch.map((change) => change.changeId).toList();
         final result = await transport.push(
           serverUrl: serverUrl,
           token: token,
-          deviceId: deviceId,
+          deviceId: batchDeviceId,
           idempotencyKey: 'push_${_uuid.v4()}',
-          changes: pending,
+          changes: batch,
         );
         await repository.applyPushConflicts(result.conflicts);
         await repository.removeAcceptedChanges(result.accepted);

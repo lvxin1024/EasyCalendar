@@ -16,7 +16,8 @@ import '../sync/sync_repository.dart';
 import 'item_repository.dart';
 import 'transfer_models.dart';
 
-class LocalItemRepository implements ItemRepository, SyncRepository {
+class LocalItemRepository
+    implements ItemRepository, RuntimeSettingsPort, SyncRepository {
   LocalItemRepository(
     this.config, {
     Uuid? uuid,
@@ -31,9 +32,35 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
   final DatabaseFactory? _databaseFactoryOverride;
   final String? _databasePathOverride;
   Database? _database;
+  late String _runtimeDeviceId = config.deviceId;
+  late String _runtimeDefaultCollectionId = config.defaultCollectionId;
+  late String _runtimeDefaultCollectionName = config.defaultCollectionName;
 
   @override
   String? databasePath;
+
+  @override
+  Future<void> configureRuntime({
+    required String deviceId,
+    required String defaultCollectionId,
+    required String defaultCollectionName,
+  }) async {
+    final nextDeviceId = deviceId.trim();
+    final nextCollectionId = defaultCollectionId.trim();
+    final nextCollectionName = defaultCollectionName.trim();
+    if (nextDeviceId.isEmpty ||
+        nextCollectionId.isEmpty ||
+        nextCollectionName.isEmpty) {
+      throw const FormatException('设备 ID、默认 Collection ID 和名称不能为空。');
+    }
+    if (!RegExp(r'^[A-Za-z0-9][A-Za-z0-9_.-]{1,127}$').hasMatch(nextDeviceId)) {
+      throw const FormatException('设备 ID 只能包含字母、数字、点、下划线和连字符。');
+    }
+    _runtimeDeviceId = nextDeviceId;
+    _runtimeDefaultCollectionId = nextCollectionId;
+    _runtimeDefaultCollectionName = nextCollectionName;
+    await _ensureDefaultCollection();
+  }
 
   Database get _db {
     final value = _database;
@@ -271,9 +298,16 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
   Future<void> _ensureDefaultCollection() async {
     final now = _timeText(DateTime.now());
     await _db.transaction((transaction) async {
+      final existing = await transaction.query(
+        'collections',
+        where: 'id = ?',
+        whereArgs: [_runtimeDefaultCollectionId],
+        limit: 1,
+      );
+      if (existing.isNotEmpty) return;
       await transaction.insert('collections', {
-        'id': config.defaultCollectionId,
-        'name': config.defaultCollectionName,
+        'id': _runtimeDefaultCollectionId,
+        'name': _runtimeDefaultCollectionName,
         'kind': 'local',
         'color': _colorText(config.defaultCollectionColor.toARGB32()),
         'readonly': 0,
@@ -282,17 +316,10 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
         'deleted_at': null,
         'version': 1,
       }, conflictAlgorithm: ConflictAlgorithm.ignore);
-      final seeded = await transaction.query(
-        'sync_state',
-        where: 'key = ?',
-        whereArgs: ['default_collection_enqueued'],
-        limit: 1,
-      );
-      if (seeded.isNotEmpty) return;
       final rows = await transaction.query(
         'collections',
         where: 'id = ?',
-        whereArgs: [config.defaultCollectionId],
+        whereArgs: [_runtimeDefaultCollectionId],
         limit: 1,
       );
       await _writeCollectionOutbox(
@@ -300,11 +327,6 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
         rows.single,
         operation: 'create',
       );
-      await transaction.insert('sync_state', {
-        'key': 'default_collection_enqueued',
-        'value': 'true',
-        'updated_at': now,
-      });
     });
   }
 
@@ -379,7 +401,7 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
     Map<String, Object?> payload,
   ) => RemoteSyncChange(
     changeId: '0',
-    deviceId: config.deviceId,
+    deviceId: _runtimeDeviceId,
     entityType: entityType,
     entityId: row['id'] as String,
     operation: row['deleted_at'] == null ? 'update' : 'delete',
@@ -496,7 +518,7 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
 
   @override
   Future<void> deleteCollection(CalendarCollection current) async {
-    if (current.id == config.defaultCollectionId) {
+    if (current.id == _runtimeDefaultCollectionId) {
       throw const RepositoryConflict('默认 Collection 不能删除。');
     }
     if (current.readonly) {
@@ -539,7 +561,7 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
   @override
   Future<CalendarItem> createItem(ItemDraft draft) async {
     _validateDraft(draft);
-    final collectionId = draft.collectionId ?? config.defaultCollectionId;
+    final collectionId = draft.collectionId ?? _runtimeDefaultCollectionId;
     await _ensureWritableCollection(collectionId);
     final now = DateTime.now();
     final item = CalendarItem(
@@ -913,6 +935,11 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
     };
     return ClientPreferences(
       apiUrl: values['api_url'] ?? defaults.apiUrl,
+      deviceId: values['device_id'] ?? defaults.deviceId,
+      defaultCollectionId:
+          values['default_collection_id'] ?? defaults.defaultCollectionId,
+      defaultCollectionName:
+          values['default_collection_name'] ?? defaults.defaultCollectionName,
       syncEnabled: _storedBool(values['sync_enabled'], defaults.syncEnabled),
       notificationsEnabled: _storedBool(
         values['notifications_enabled'],
@@ -943,6 +970,9 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
     await _db.transaction((transaction) async {
       for (final entry in {
         'api_url': preferences.apiUrl.trim(),
+        'device_id': preferences.deviceId.trim(),
+        'default_collection_id': preferences.defaultCollectionId.trim(),
+        'default_collection_name': preferences.defaultCollectionName.trim(),
         'sync_enabled': preferences.syncEnabled ? 'true' : 'false',
         'notifications_enabled': preferences.notificationsEnabled
             ? 'true'
@@ -1017,7 +1047,7 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
     final payload = _itemPayload(item);
     await transaction.insert('outbox', {
       'change_id': changeId,
-      'device_id': config.deviceId,
+      'device_id': _runtimeDeviceId,
       'entity_type': 'item',
       'entity_id': item.id,
       'operation': operation,
@@ -1034,7 +1064,7 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
       transaction,
       RemoteSyncChange(
         changeId: changeId,
-        deviceId: config.deviceId,
+        deviceId: _runtimeDeviceId,
         entityType: 'item',
         entityId: item.id,
         operation: operation,
@@ -1064,7 +1094,7 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
     final changeId = 'change_${_uuid.v4()}';
     await transaction.insert('outbox', {
       'change_id': changeId,
-      'device_id': config.deviceId,
+      'device_id': _runtimeDeviceId,
       'entity_type': 'collection',
       'entity_id': collection['id'],
       'operation': operation,
@@ -1081,7 +1111,7 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
       transaction,
       RemoteSyncChange(
         changeId: changeId,
-        deviceId: config.deviceId,
+        deviceId: _runtimeDeviceId,
         entityType: 'collection',
         entityId: collection['id'] as String,
         operation: operation,

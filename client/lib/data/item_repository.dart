@@ -53,6 +53,14 @@ abstract interface class ItemRepository {
   Future<void> close();
 }
 
+abstract interface class RuntimeSettingsPort {
+  Future<void> configureRuntime({
+    required String deviceId,
+    required String defaultCollectionId,
+    required String defaultCollectionName,
+  });
+}
+
 class RepositoryConflict implements Exception {
   const RepositoryConflict(this.message);
 

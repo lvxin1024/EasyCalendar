@@ -30,6 +30,9 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _apiUrlController;
+  late final TextEditingController _deviceIdController;
+  late final TextEditingController _collectionIdController;
+  late final TextEditingController _collectionNameController;
   late final TextEditingController _tokenController;
   late bool _syncEnabled;
   late bool _notificationsEnabled;
@@ -45,6 +48,13 @@ class _SettingsPageState extends State<SettingsPage> {
     super.initState();
     final preferences = widget.controller.preferences;
     _apiUrlController = TextEditingController(text: preferences.apiUrl);
+    _deviceIdController = TextEditingController(text: preferences.deviceId);
+    _collectionIdController = TextEditingController(
+      text: preferences.defaultCollectionId,
+    );
+    _collectionNameController = TextEditingController(
+      text: preferences.defaultCollectionName,
+    );
     _tokenController = TextEditingController();
     _syncEnabled = preferences.syncEnabled;
     _notificationsEnabled = preferences.notificationsEnabled;
@@ -60,6 +70,9 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   void dispose() {
     _apiUrlController.dispose();
+    _deviceIdController.dispose();
+    _collectionIdController.dispose();
+    _collectionNameController.dispose();
     _tokenController.dispose();
     widget.controller.desktopWindowController?.removeListener(_windowChanged);
     super.dispose();
@@ -85,9 +98,39 @@ class _SettingsPageState extends State<SettingsPage> {
                 keyboardType: TextInputType.url,
                 decoration: const InputDecoration(
                   labelText: 'API 地址',
+                  helperText: '多设备同步请填写 Cloudflare Worker 的 HTTPS 地址',
                   prefixIcon: Icon(Icons.link),
                 ),
                 validator: _validateUrl,
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _deviceIdController,
+                decoration: const InputDecoration(
+                  labelText: '设备 ID',
+                  helperText: '每台设备必须唯一，只能使用字母、数字、点、下划线和连字符',
+                  prefixIcon: Icon(Icons.devices_outlined),
+                ),
+                validator: _validateDeviceId,
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _collectionIdController,
+                decoration: const InputDecoration(
+                  labelText: '默认 Collection ID',
+                  helperText: '同一同步实例的设备应使用相同 ID；改名不会迁移旧 Collection',
+                  prefixIcon: Icon(Icons.folder_outlined),
+                ),
+                validator: _validateRequired,
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _collectionNameController,
+                decoration: const InputDecoration(
+                  labelText: '默认 Collection 名称',
+                  prefixIcon: Icon(Icons.label_outline),
+                ),
+                validator: _validateRequired,
               ),
               const SizedBox(height: 10),
               TextFormField(
@@ -163,16 +206,16 @@ class _SettingsPageState extends State<SettingsPage> {
                 icon: Icons.notifications_outlined,
                 title: '通知',
                 subtitle: _notificationsEnabled
-                    ? widget.controller.notificationService?.statusText ??
-                        '已启用'
+                    ? widget.controller.notificationService?.statusText ?? '已启用'
                     : '已关闭',
                 value: _notificationsEnabled,
                 onChanged: (value) async {
                   setState(() => _notificationsEnabled = value);
                   if (value) {
                     await widget.controller.notificationService?.initialize();
-                    await widget.controller.notificationService
-                        ?.reconcileAll(widget.controller.items);
+                    await widget.controller.notificationService?.reconcileAll(
+                      widget.controller.items,
+                    );
                     setState(() {});
                   }
                 },
@@ -297,12 +340,26 @@ class _SettingsPageState extends State<SettingsPage> {
     return null;
   }
 
+  String? _validateRequired(String? raw) =>
+      raw?.trim().isNotEmpty == true ? null : '不能为空';
+
+  String? _validateDeviceId(String? raw) {
+    final value = raw?.trim() ?? '';
+    if (!RegExp(r'^[A-Za-z0-9][A-Za-z0-9_.-]{1,127}$').hasMatch(value)) {
+      return '请输入 2-128 位设备 ID（字母、数字、点、下划线或连字符）';
+    }
+    return null;
+  }
+
   Future<void> _save() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     try {
       await widget.controller.savePreferences(
         ClientPreferences(
           apiUrl: _apiUrlController.text.trim(),
+          deviceId: _deviceIdController.text.trim(),
+          defaultCollectionId: _collectionIdController.text.trim(),
+          defaultCollectionName: _collectionNameController.text.trim(),
           syncEnabled: _syncEnabled,
           notificationsEnabled: _notificationsEnabled,
           windowOpacity: _windowOpacity,
