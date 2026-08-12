@@ -1,5 +1,5 @@
 import '../domain/item.dart';
-import 'transfer_api_client.dart';
+import 'transfer_models.dart';
 
 abstract interface class ItemRepository {
   String? get databasePath;

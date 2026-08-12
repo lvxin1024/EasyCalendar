@@ -7,7 +7,7 @@ import '../ai/ai_provider.dart';
 import '../ai/ai_provider_connection_tester.dart';
 import '../config/app_config.dart';
 import '../data/item_repository.dart';
-import '../data/transfer_api_client.dart';
+import '../data/transfer_models.dart';
 import '../domain/item.dart';
 import '../notification/notification_service.dart';
 import '../sync/sync_coordinator.dart';

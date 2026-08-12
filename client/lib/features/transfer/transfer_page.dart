@@ -24,7 +24,9 @@ class TransferPage extends StatefulWidget {
 class _TransferPageState extends State<TransferPage> {
   final _client = TransferApiClient();
   final _uuid = const Uuid();
-  String? _previewJson;
+  String? _previewContent;
+  String? _previewFormat; // 'json' or 'ics'
+  String? _previewCollectionId;
   TransferResult? _previewResult;
   bool _busy = false;
   String? _statusMessage;
@@ -143,7 +145,9 @@ class _TransferPageState extends State<TransferPage> {
   void _clearPreview() {
     setState(() {
       _previewResult = null;
-      _previewJson = null;
+      _previewContent = null;
+      _previewFormat = null;
+      _previewCollectionId = null;
     });
   }
 
@@ -186,8 +190,10 @@ class _TransferPageState extends State<TransferPage> {
     setState(() => _busy = true);
     try {
       final result = await widget.controller.previewLocalJsonImport(content);
+      if (!mounted) return;
       setState(() {
-        _previewJson = content;
+        _previewContent = content;
+        _previewFormat = 'json';
         _previewResult = result;
       });
       if (result.issues.isNotEmpty) {
@@ -199,24 +205,54 @@ class _TransferPageState extends State<TransferPage> {
         _showStatus('预览完成，可以确认导入');
       }
     } catch (error) {
+      if (!mounted) return;
       _showStatus('预览失败：$error', error: true);
     } finally {
-      setState(() => _busy = false);
+      if (mounted) setState(() => _busy = false);
     }
   }
 
   Future<void> _commitImport() async {
-    if (_previewJson == null) return;
+    if (_previewContent == null || _previewFormat == null) return;
     setState(() => _busy = true);
     try {
-      await widget.controller.commitLocalJsonImport(_previewJson!);
+      if (_previewFormat == 'json') {
+        await widget.controller.commitLocalJsonImport(_previewContent!);
+      } else if (_previewFormat == 'ics') {
+        final prefs = widget.controller.preferences;
+        final serverUrl = Uri.parse(prefs.apiUrl);
+        final token = await _readSyncToken();
+        if (token == null) {
+          _showStatus('请先配置访问令牌', error: true);
+          return;
+        }
+        await _client.importContent(
+          serverUrl: serverUrl,
+          token: token,
+          idempotencyKey: 'ics_commit_${_uuid.v4()}',
+          format: 'ics',
+          mode: 'commit',
+          strategy: 'merge',
+          content: _previewContent!,
+          collectionId: _previewCollectionId,
+        );
+      }
+      if (!mounted) return;
       _showStatus('导入完成');
+      await widget.controller.refresh();
       _clearPreview();
     } catch (error) {
+      if (!mounted) return;
       _showStatus('导入失败：$error', error: true);
     } finally {
-      setState(() => _busy = false);
+      if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<String?> _readSyncToken() async {
+    final tokenStore = widget.controller.syncCoordinator?.tokenStore;
+    if (tokenStore == null) return null;
+    return tokenStore.read();
   }
 
   Future<void> _exportIcs() async {
@@ -228,12 +264,7 @@ class _TransferPageState extends State<TransferPage> {
     setState(() => _busy = true);
     try {
       final serverUrl = Uri.parse(prefs.apiUrl);
-      final tokenStore = widget.controller.syncCoordinator?.tokenStore;
-      if (tokenStore == null) {
-        _showStatus('同步服务未配置', error: true);
-        return;
-      }
-      final token = await tokenStore.read();
+      final token = await _readSyncToken();
       if (token == null) {
         _showStatus('请先配置访问令牌', error: true);
         return;
@@ -282,17 +313,11 @@ class _TransferPageState extends State<TransferPage> {
     setState(() => _busy = true);
     try {
       final serverUrl = Uri.parse(prefs.apiUrl);
-      final tokenStore = widget.controller.syncCoordinator?.tokenStore;
-      if (tokenStore == null) {
-        _showStatus('同步服务未配置', error: true);
-        return;
-      }
-      final token = await tokenStore.read();
+      final token = await _readSyncToken();
       if (token == null) {
         _showStatus('请先配置访问令牌', error: true);
         return;
       }
-      // Preview first
       final preview = await _client.importContent(
         serverUrl: serverUrl,
         token: token,
@@ -302,8 +327,10 @@ class _TransferPageState extends State<TransferPage> {
         strategy: 'merge',
         content: content,
       );
+      if (!mounted) return;
       setState(() {
-        _previewJson = content;
+        _previewContent = content;
+        _previewFormat = 'ics';
         _previewResult = preview;
       });
       if (preview.issues.isNotEmpty) {
@@ -315,9 +342,10 @@ class _TransferPageState extends State<TransferPage> {
         _showStatus('预览完成，可以确认导入');
       }
     } catch (error) {
+      if (!mounted) return;
       _showStatus('ICS 导入失败：$error', error: true);
     } finally {
-      setState(() => _busy = false);
+      if (mounted) setState(() => _busy = false);
     }
   }
 }

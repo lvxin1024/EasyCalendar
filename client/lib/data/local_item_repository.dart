@@ -14,7 +14,7 @@ import '../domain/recurrence.dart';
 import '../sync/sync_models.dart';
 import '../sync/sync_repository.dart';
 import 'item_repository.dart';
-import 'transfer_api_client.dart';
+import 'transfer_models.dart';
 
 class LocalItemRepository implements ItemRepository, SyncRepository {
   LocalItemRepository(
@@ -767,6 +767,7 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
     final conflicts = <String, int>{};
     final issues = <TransferIssue>[];
 
+    final backupCollectionIds = <String>{};
     for (final key in ['collections', 'items', 'subscriptions', 'outbox', 'sync_state']) {
       final values = decoded[key];
       if (values is! List) {
@@ -776,6 +777,14 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
           message: '$key 必须是数组',
         ));
         continue;
+      }
+      if (key == 'collections') {
+        for (final entry in values) {
+          if (entry is Map) {
+            final id = entry['id'];
+            if (id is String && id.isNotEmpty) backupCollectionIds.add(id);
+          }
+        }
       }
       final existingRows = await _db.query(_tableForBackupKey(key));
       final existingIds = existingRows.map((r) => r['id'] as String).toSet();
@@ -802,6 +811,51 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
           skipped[key] = (skipped[key] ?? 0) + 1;
         } else {
           created[key] = (created[key] ?? 0) + 1;
+        }
+      }
+    }
+    // Validate foreign keys: items and subscriptions must reference known collections
+    final allCollectionIds = {
+      ...backupCollectionIds,
+      ...(await _db.query('collections')).map((r) => r['id'] as String),
+    };
+    final items = decoded['items'];
+    if (items is List) {
+      for (var i = 0; i < items.length; i++) {
+        final entry = items[i];
+        if (entry is! Map) continue;
+        final collectionId = entry['collection_id'];
+        if (collectionId is String &&
+            collectionId.isNotEmpty &&
+            !allCollectionIds.contains(collectionId)) {
+          final itemId = entry['id'];
+          issues.add(TransferIssue(
+            resourceType: 'items',
+            index: i,
+            message: 'Collection $collectionId 不存在',
+            resourceId: itemId is String ? itemId : null,
+          ));
+          conflicts['items'] = (conflicts['items'] ?? 0) + 1;
+        }
+      }
+    }
+    final subscriptions = decoded['subscriptions'];
+    if (subscriptions is List) {
+      for (var i = 0; i < subscriptions.length; i++) {
+        final entry = subscriptions[i];
+        if (entry is! Map) continue;
+        final collectionId = entry['collection_id'];
+        if (collectionId is String &&
+            collectionId.isNotEmpty &&
+            !allCollectionIds.contains(collectionId)) {
+          final subId = entry['id'];
+          issues.add(TransferIssue(
+            resourceType: 'subscriptions',
+            index: i,
+            message: 'Collection $collectionId 不存在',
+            resourceId: subId is String ? subId : null,
+          ));
+          conflicts['subscriptions'] = (conflicts['subscriptions'] ?? 0) + 1;
         }
       }
     }
