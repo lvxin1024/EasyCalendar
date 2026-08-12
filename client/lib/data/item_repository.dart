@@ -7,6 +7,23 @@ abstract interface class ItemRepository {
 
   Future<List<CalendarItem>> listItems({bool includeDeleted = false});
 
+  Future<List<CalendarCollection>> listCollections({
+    bool includeDeleted = false,
+  });
+
+  Future<CalendarCollection> createCollection({
+    required String name,
+    required int color,
+  });
+
+  Future<CalendarCollection> updateCollection(
+    CalendarCollection current, {
+    required String name,
+    required int color,
+  });
+
+  Future<void> deleteCollection(CalendarCollection current);
+
   Future<CalendarItem> createItem(ItemDraft draft);
 
   Future<CalendarItem> updateItem(CalendarItem current, ItemDraft draft);

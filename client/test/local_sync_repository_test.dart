@@ -201,6 +201,30 @@ void main() {
     );
   });
 
+  test('creates, updates and soft deletes local collections', () async {
+    final created = await repository.createCollection(
+      name: 'Work',
+      color: 0xFF0F766E,
+    );
+    final updated = await repository.updateCollection(
+      created,
+      name: 'Projects',
+      color: 0xFF7A5AF8,
+    );
+
+    expect(updated.name, 'Projects');
+    expect((await repository.listCollections()), hasLength(2));
+
+    await repository.deleteCollection(updated);
+
+    expect((await repository.listCollections()), hasLength(1));
+    final operations =
+        (await repository.listPendingChanges(now: DateTime.now()))
+            .where((change) => change.entityId == created.id)
+            .map((change) => change.operation);
+    expect(operations, ['create', 'update', 'delete']);
+  });
+
   test('schema v2 upgrades with pending entity heads intact', () async {
     final directory = await Directory.systemTemp.createTemp(
       'easycalendar-sync-migration-',

@@ -179,6 +179,12 @@ class _SettingsPageState extends State<SettingsPage> {
                 onToggle: _toggleProvider,
                 onTest: _testProvider,
               ),
+              _CollectionSection(
+                collections: widget.controller.collections,
+                onAdd: () => _showCollectionEditor(),
+                onEdit: _showCollectionEditor,
+                onDelete: _deleteCollection,
+              ),
               _TagColorSection(
                 tags: tagsFromItems(widget.controller.items),
                 colors: _tagColors,
@@ -303,6 +309,64 @@ class _SettingsPageState extends State<SettingsPage> {
         widget.controller.preferences.copyWith(tagColors: _tagColors),
       ),
     );
+  }
+
+  Future<void> _showCollectionEditor([CalendarCollection? current]) async {
+    final result = await showDialog<_CollectionDraft>(
+      context: context,
+      builder: (_) => _CollectionDialog(current: current),
+    );
+    if (result == null) return;
+    try {
+      if (current == null) {
+        await widget.controller.createCollection(
+          name: result.name,
+          color: result.color.toARGB32(),
+        );
+      } else {
+        await widget.controller.updateCollection(
+          current,
+          name: result.name,
+          color: result.color.toARGB32(),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Collection 保存失败：$error')));
+      }
+    }
+  }
+
+  Future<void> _deleteCollection(CalendarCollection collection) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('删除 Collection'),
+        content: Text('确定删除“${collection.name}”吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await widget.controller.deleteCollection(collection);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Collection 删除失败：$error')));
+      }
+    }
   }
 
   Future<void> _showProviderEditor([AiProviderConfig? current]) async {
@@ -607,6 +671,156 @@ class _DesktopWindowSection extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    ],
+  );
+}
+
+class _CollectionSection extends StatelessWidget {
+  const _CollectionSection({
+    required this.collections,
+    required this.onAdd,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final List<CalendarCollection> collections;
+  final VoidCallback onAdd;
+  final ValueChanged<CalendarCollection> onEdit;
+  final ValueChanged<CalendarCollection> onDelete;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      const SizedBox(height: 24),
+      const _SectionLabel(label: 'Collections'),
+      for (final collection in collections)
+        ListTile(
+          leading: CircleAvatar(
+            radius: 10,
+            backgroundColor: collection.color == null
+                ? Theme.of(context).colorScheme.primary
+                : Color(collection.color!),
+          ),
+          title: Text(collection.name),
+          subtitle: Text(
+            collection.readonly ? '只读订阅 Collection' : '本地 Collection',
+          ),
+          trailing: collection.readonly
+              ? const Icon(Icons.lock_outline, size: 20)
+              : Wrap(
+                  spacing: 0,
+                  children: [
+                    IconButton(
+                      tooltip: '编辑 Collection',
+                      onPressed: () => onEdit(collection),
+                      icon: const Icon(Icons.edit_outlined),
+                    ),
+                    IconButton(
+                      tooltip: '删除 Collection',
+                      onPressed: () => onDelete(collection),
+                      icon: const Icon(Icons.delete_outline),
+                    ),
+                  ],
+                ),
+        ),
+      Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Align(
+          alignment: Alignment.centerRight,
+          child: FilledButton.tonalIcon(
+            onPressed: onAdd,
+            icon: const Icon(Icons.create_new_folder_outlined),
+            label: const Text('新建 Collection'),
+          ),
+        ),
+      ),
+    ],
+  );
+}
+
+class _CollectionDraft {
+  const _CollectionDraft({required this.name, required this.color});
+
+  final String name;
+  final Color color;
+}
+
+class _CollectionDialog extends StatefulWidget {
+  const _CollectionDialog({this.current});
+
+  final CalendarCollection? current;
+
+  @override
+  State<_CollectionDialog> createState() => _CollectionDialogState();
+}
+
+class _CollectionDialogState extends State<_CollectionDialog> {
+  late final TextEditingController _name;
+  late Color _color;
+
+  @override
+  void initState() {
+    super.initState();
+    _name = TextEditingController(text: widget.current?.name ?? '');
+    _color = widget.current?.color == null
+        ? tagPalette.first
+        : Color(widget.current!.color!);
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text(widget.current == null ? '新建 Collection' : '编辑 Collection'),
+    content: SizedBox(
+      width: 420,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _name,
+            autofocus: true,
+            decoration: const InputDecoration(labelText: '名称'),
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            children: [
+              for (final color in tagPalette)
+                IconButton(
+                  tooltip: '选择颜色',
+                  onPressed: () => setState(() => _color = color),
+                  icon: CircleAvatar(
+                    radius: 12,
+                    backgroundColor: color,
+                    child: _color == color
+                        ? Icon(Icons.check, size: 16, color: onTagColor(color))
+                        : null,
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('取消'),
+      ),
+      FilledButton(
+        onPressed: () {
+          final name = _name.text.trim();
+          if (name.isEmpty) return;
+          Navigator.pop(context, _CollectionDraft(name: name, color: _color));
+        },
+        child: const Text('保存'),
       ),
     ],
   );

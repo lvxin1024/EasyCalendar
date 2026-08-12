@@ -39,6 +39,7 @@ class ItemController extends ChangeNotifier {
   late final AiProviderConnectionTester _aiProviderConnectionTester;
 
   List<CalendarItem> _items = const [];
+  List<CalendarCollection> _collections = const [];
   ClientPreferences? _preferences;
   bool _loading = true;
   bool _initialized = false;
@@ -46,6 +47,7 @@ class ItemController extends ChangeNotifier {
   Object? _error;
 
   List<CalendarItem> get items => List.unmodifiable(_items);
+  List<CalendarCollection> get collections => List.unmodifiable(_collections);
   ClientPreferences get preferences => _preferences ?? _defaultPreferences;
   bool get loading => _loading;
   bool get initialized => _initialized;
@@ -207,6 +209,49 @@ class ItemController extends ChangeNotifier {
     return result;
   }
 
+  Future<CalendarCollection> createCollection({
+    required String name,
+    required int color,
+  }) async {
+    late CalendarCollection result;
+    await _mutate(
+      () async =>
+          result = await repository.createCollection(name: name, color: color),
+      reloadItems: false,
+    );
+    _collections = await repository.listCollections();
+    notifyListeners();
+    return result;
+  }
+
+  Future<CalendarCollection> updateCollection(
+    CalendarCollection current, {
+    required String name,
+    required int color,
+  }) async {
+    late CalendarCollection result;
+    await _mutate(
+      () async => result = await repository.updateCollection(
+        current,
+        name: name,
+        color: color,
+      ),
+      reloadItems: false,
+    );
+    _collections = await repository.listCollections();
+    notifyListeners();
+    return result;
+  }
+
+  Future<void> deleteCollection(CalendarCollection current) async {
+    await _mutate(
+      () => repository.deleteCollection(current),
+      reloadItems: false,
+    );
+    _collections = await repository.listCollections();
+    notifyListeners();
+  }
+
   Future<void> deleteItem(CalendarItem item) =>
       _mutate(() => repository.deleteItem(item));
 
@@ -260,6 +305,7 @@ class ItemController extends ChangeNotifier {
 
   Future<void> _reload({bool notify = true}) async {
     _items = await repository.listItems();
+    _collections = await repository.listCollections();
     try {
       await widgetSnapshotWriter?.write(
         items: _items,

@@ -294,13 +294,32 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
         whereArgs: [config.defaultCollectionId],
         limit: 1,
       );
-      await _writeCollectionOutbox(transaction, rows.single);
+      await _writeCollectionOutbox(
+        transaction,
+        rows.single,
+        operation: 'create',
+      );
       await transaction.insert('sync_state', {
         'key': 'default_collection_enqueued',
         'value': 'true',
         'updated_at': now,
       });
     });
+  }
+
+  Future<void> _ensureWritableCollection(String collectionId) async {
+    final rows = await _db.query(
+      'collections',
+      where: 'id = ? AND deleted_at IS NULL',
+      whereArgs: [collectionId],
+      limit: 1,
+    );
+    if (rows.isEmpty) {
+      throw const RepositoryConflict('Collection 不存在。');
+    }
+    if (rows.single['readonly'] == 1) {
+      throw const RepositoryConflict('订阅 Collection 不能写入本地事项。');
+    }
   }
 
   Future<void> _ensureLegacySyncHeads() async {
@@ -396,12 +415,135 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
   }
 
   @override
+  Future<List<CalendarCollection>> listCollections({
+    bool includeDeleted = false,
+  }) async {
+    final rows = await _db.query(
+      'collections',
+      where: includeDeleted ? null : 'deleted_at IS NULL',
+      orderBy: 'readonly, name, id',
+    );
+    return rows.map(_collectionFromRow).toList(growable: false);
+  }
+
+  @override
+  Future<CalendarCollection> createCollection({
+    required String name,
+    required int color,
+  }) async {
+    final normalized = name.trim();
+    if (normalized.isEmpty) {
+      throw const RepositoryConflict('Collection 名称不能为空。');
+    }
+    final now = DateTime.now();
+    final collection = CalendarCollection(
+      id: 'collection_${_uuid.v4()}',
+      name: normalized,
+      kind: 'local',
+      color: color,
+      readonly: false,
+      createdAt: now,
+      updatedAt: now,
+      version: 1,
+    );
+    await _db.transaction((transaction) async {
+      final row = _collectionToRow(collection);
+      await transaction.insert('collections', row);
+      await _writeCollectionOutbox(transaction, row, operation: 'create');
+    });
+    return collection;
+  }
+
+  @override
+  Future<CalendarCollection> updateCollection(
+    CalendarCollection current, {
+    required String name,
+    required int color,
+  }) async {
+    if (current.readonly) {
+      throw const RepositoryConflict('订阅 Collection 不能在本地编辑。');
+    }
+    final normalized = name.trim();
+    if (normalized.isEmpty) {
+      throw const RepositoryConflict('Collection 名称不能为空。');
+    }
+    final updated = CalendarCollection(
+      id: current.id,
+      name: normalized,
+      kind: current.kind,
+      color: color,
+      readonly: false,
+      createdAt: current.createdAt,
+      updatedAt: DateTime.now(),
+      version: current.version + 1,
+    );
+    await _db.transaction((transaction) async {
+      final row = _collectionToRow(updated);
+      final count = await transaction.update(
+        'collections',
+        row,
+        where: 'id = ? AND version = ? AND deleted_at IS NULL',
+        whereArgs: [current.id, current.version],
+      );
+      if (count != 1) {
+        throw const RepositoryConflict('Collection 已更新，请刷新后重试。');
+      }
+      await _writeCollectionOutbox(transaction, row, operation: 'update');
+    });
+    return updated;
+  }
+
+  @override
+  Future<void> deleteCollection(CalendarCollection current) async {
+    if (current.id == config.defaultCollectionId) {
+      throw const RepositoryConflict('默认 Collection 不能删除。');
+    }
+    if (current.readonly) {
+      throw const RepositoryConflict('请从订阅入口删除只读 Collection。');
+    }
+    await _db.transaction((transaction) async {
+      final itemRows = await transaction.rawQuery(
+        'SELECT COUNT(*) AS item_count FROM items '
+        'WHERE collection_id = ? AND deleted_at IS NULL',
+        [current.id],
+      );
+      if ((itemRows.single['item_count'] as int? ?? 0) > 0) {
+        throw const RepositoryConflict('请先移动或删除 Collection 中的事项。');
+      }
+      final deleted = CalendarCollection(
+        id: current.id,
+        name: current.name,
+        kind: current.kind,
+        color: current.color,
+        readonly: current.readonly,
+        createdAt: current.createdAt,
+        updatedAt: DateTime.now(),
+        deletedAt: DateTime.now(),
+        version: current.version + 1,
+      );
+      final row = _collectionToRow(deleted);
+      final count = await transaction.update(
+        'collections',
+        row,
+        where: 'id = ? AND version = ? AND deleted_at IS NULL',
+        whereArgs: [current.id, current.version],
+      );
+      if (count != 1) {
+        throw const RepositoryConflict('Collection 已更新，请刷新后重试。');
+      }
+      await _writeCollectionOutbox(transaction, row, operation: 'delete');
+    });
+  }
+
+  @override
   Future<CalendarItem> createItem(ItemDraft draft) async {
     _validateDraft(draft);
+    final collectionId = draft.collectionId ?? config.defaultCollectionId;
+    await _ensureWritableCollection(collectionId);
     final now = DateTime.now();
     final item = CalendarItem(
       id: 'item_${_uuid.v4()}',
-      collectionId: config.defaultCollectionId,
+      collectionId: collectionId,
       type: draft.type,
       title: draft.title.trim(),
       body: _optional(draft.body),
@@ -431,9 +573,11 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
   @override
   Future<CalendarItem> updateItem(CalendarItem current, ItemDraft draft) async {
     _validateDraft(draft);
+    final collectionId = draft.collectionId ?? current.collectionId;
+    await _ensureWritableCollection(collectionId);
     final updated = CalendarItem(
       id: current.id,
-      collectionId: current.collectionId,
+      collectionId: collectionId,
       type: draft.type,
       title: draft.title.trim(),
       body: _optional(draft.body),
@@ -676,8 +820,9 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
 
   Future<void> _writeCollectionOutbox(
     Transaction transaction,
-    Map<String, Object?> collection,
-  ) async {
+    Map<String, Object?> collection, {
+    required String operation,
+  }) async {
     final payload = {
       'id': collection['id'],
       'name': collection['name'],
@@ -695,7 +840,7 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
       'device_id': config.deviceId,
       'entity_type': 'collection',
       'entity_id': collection['id'],
-      'operation': 'create',
+      'operation': operation,
       'entity_version': collection['version'],
       'payload_json': jsonEncode(payload),
       'created_at': collection['updated_at'],
@@ -712,7 +857,7 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
         deviceId: config.deviceId,
         entityType: 'collection',
         entityId: collection['id'] as String,
-        operation: 'create',
+        operation: operation,
         version: collection['version'] as int,
         updatedAt: DateTime.parse(collection['updated_at'] as String),
         payload: payload,
@@ -1042,6 +1187,42 @@ class LocalItemRepository implements ItemRepository, SyncRepository {
     'loser_json': jsonEncode(loser.toJson()),
     'recorded_at': _timeText(DateTime.now()),
   }, conflictAlgorithm: ConflictAlgorithm.ignore);
+
+  static CalendarCollection _collectionFromRow(Map<String, Object?> row) =>
+      CalendarCollection(
+        id: row['id'] as String,
+        name: row['name'] as String,
+        kind: row['kind'] as String,
+        color: _parseColor(row['color']),
+        readonly: row['readonly'] == 1,
+        createdAt: DateTime.parse(row['created_at'] as String),
+        updatedAt: DateTime.parse(row['updated_at'] as String),
+        deletedAt: _parseTime(row['deleted_at']),
+        version: row['version'] as int,
+      );
+
+  static Map<String, Object?> _collectionToRow(
+    CalendarCollection collection,
+  ) => {
+    'id': collection.id,
+    'name': collection.name,
+    'kind': collection.kind,
+    'color': collection.color == null ? null : _colorText(collection.color!),
+    'readonly': collection.readonly ? 1 : 0,
+    'created_at': _timeText(collection.createdAt),
+    'updated_at': _timeText(collection.updatedAt),
+    'deleted_at': _optionalTime(collection.deletedAt),
+    'version': collection.version,
+  };
+
+  static int? _parseColor(Object? value) {
+    if (value is int) return value;
+    if (value is! String) return null;
+    final normalized = value.replaceFirst('#', '');
+    final parsed = int.tryParse(normalized, radix: 16);
+    if (parsed == null) return null;
+    return normalized.length <= 6 ? 0xFF000000 | parsed : parsed;
+  }
 
   static Map<String, Object?> _remoteCollectionRow(
     Map<String, Object?> payload,

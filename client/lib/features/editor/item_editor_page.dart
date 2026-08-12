@@ -31,6 +31,7 @@ class _ItemEditorPageState extends State<ItemEditorPage> {
   late final TextEditingController _tagsController;
   late ItemType _type;
   late ItemStatus _status;
+  late String _collectionId;
   late bool _allDay;
   late bool _reminderEnabled;
   late int _reminderMinutes;
@@ -49,6 +50,7 @@ class _ItemEditorPageState extends State<ItemEditorPage> {
     final item = widget.item;
     final now = configuredNow();
     _type = item?.type ?? ItemType.event;
+    _collectionId = item?.collectionId ?? widget.config.defaultCollectionId;
     _status = item?.status ?? ItemStatus.todo;
     _allDay = item?.allDay ?? false;
     _reminderEnabled = item?.reminderEnabled ?? false;
@@ -120,6 +122,34 @@ class _ItemEditorPageState extends State<ItemEditorPage> {
                   onSelectionChanged: (values) => _changeType(values.first),
                 ),
                 const SizedBox(height: 20),
+                DropdownButtonFormField<String>(
+                  initialValue:
+                      widget.controller.collections.any(
+                        (collection) => collection.id == _collectionId,
+                      )
+                      ? _collectionId
+                      : null,
+                  decoration: const InputDecoration(
+                    labelText: 'Collection',
+                    prefixIcon: Icon(Icons.folder_outlined),
+                  ),
+                  items: [
+                    for (final collection in widget.controller.collections)
+                      DropdownMenuItem(
+                        value: collection.id,
+                        enabled: !collection.readonly,
+                        child: Text(
+                          collection.readonly
+                              ? '${collection.name}（只读）'
+                              : collection.name,
+                        ),
+                      ),
+                  ],
+                  onChanged: (value) => setState(() {
+                    if (value != null) _collectionId = value;
+                  }),
+                ),
+                const SizedBox(height: 12),
                 TextFormField(
                   controller: _titleController,
                   autofocus: !_editing,
@@ -384,6 +414,7 @@ class _ItemEditorPageState extends State<ItemEditorPage> {
           )
         : _endAt;
     final draft = ItemDraft(
+      collectionId: _collectionId,
       type: _type,
       title: _titleController.text,
       body: _bodyController.text,

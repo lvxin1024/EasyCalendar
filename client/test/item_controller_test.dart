@@ -74,6 +74,18 @@ void main() {
 
 class _MemoryRepository implements ItemRepository {
   final List<CalendarItem> _items = [];
+  final List<CalendarCollection> _collections = [
+    CalendarCollection(
+      id: 'collection_local',
+      name: 'Local',
+      kind: 'local',
+      color: 0xFF2563EB,
+      readonly: false,
+      createdAt: DateTime.utc(2026, 1, 1),
+      updatedAt: DateTime.utc(2026, 1, 1),
+      version: 1,
+    ),
+  ];
 
   @override
   String? get databasePath => ':memory:';
@@ -86,6 +98,42 @@ class _MemoryRepository implements ItemRepository {
       _items
           .where((item) => includeDeleted || !item.isDeleted)
           .toList(growable: false);
+
+  @override
+  Future<List<CalendarCollection>> listCollections({
+    bool includeDeleted = false,
+  }) async => _collections;
+
+  @override
+  Future<CalendarCollection> createCollection({
+    required String name,
+    required int color,
+  }) async {
+    final collection = CalendarCollection(
+      id: 'collection_${_collections.length}',
+      name: name,
+      kind: 'local',
+      color: color,
+      readonly: false,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+      version: 1,
+    );
+    _collections.add(collection);
+    return collection;
+  }
+
+  @override
+  Future<CalendarCollection> updateCollection(
+    CalendarCollection current, {
+    required String name,
+    required int color,
+  }) async => current;
+
+  @override
+  Future<void> deleteCollection(CalendarCollection current) async {
+    _collections.removeWhere((value) => value.id == current.id);
+  }
 
   @override
   Future<CalendarItem> createItem(ItemDraft draft) async {
@@ -146,7 +194,7 @@ class _MemoryRepository implements ItemRepository {
     DateTime? createdAt,
   }) => CalendarItem(
     id: id,
-    collectionId: 'collection_local',
+    collectionId: draft.collectionId ?? 'collection_local',
     type: draft.type,
     title: draft.title,
     body: draft.body,

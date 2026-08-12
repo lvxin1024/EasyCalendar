@@ -7,6 +7,7 @@ enum ItemStatus { todo, done, cancelled }
 
 class ItemDraft {
   const ItemDraft({
+    this.collectionId,
     required this.type,
     required this.title,
     this.body,
@@ -24,6 +25,7 @@ class ItemDraft {
     this.tags = const [],
   });
 
+  final String? collectionId;
   final ItemType type;
   final String title;
   final String? body;
@@ -93,6 +95,7 @@ class CalendarItem {
   bool get isDeleted => deletedAt != null;
 
   ItemDraft toDraft() => ItemDraft(
+    collectionId: collectionId,
     type: type,
     title: title,
     body: body,
@@ -138,6 +141,30 @@ class CalendarItem {
     deletedAt: deletedAt,
     version: version,
   );
+}
+
+class CalendarCollection {
+  const CalendarCollection({
+    required this.id,
+    required this.name,
+    required this.kind,
+    this.color,
+    required this.readonly,
+    required this.createdAt,
+    required this.updatedAt,
+    this.deletedAt,
+    required this.version,
+  });
+
+  final String id;
+  final String name;
+  final String kind;
+  final int? color;
+  final bool readonly;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final DateTime? deletedAt;
+  final int version;
 }
 
 class ClientPreferences {
