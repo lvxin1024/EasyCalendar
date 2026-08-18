@@ -313,6 +313,32 @@ void main() {
     expect(operations, ['create', 'update', 'delete']);
   });
 
+  test(
+    'connecting an existing collection does not publish a create change',
+    () async {
+      final before = await repository.listPendingChanges(now: DateTime.now());
+
+      final connected = await repository.connectCollection(
+        id: 'collection_shared',
+        name: 'Shared',
+        color: 0xFF0F766E,
+      );
+
+      expect(connected.id, 'collection_shared');
+      expect(connected.version, 0);
+      expect(
+        (await repository.listPendingChanges(now: DateTime.now())).length,
+        before.length,
+      );
+      expect(
+        (await repository.listCollections())
+            .singleWhere((value) => value.id == connected.id)
+            .name,
+        'Shared',
+      );
+    },
+  );
+
   test('owns subscription lifecycle and readonly collection locally', () async {
     final created = await repository.createSubscription(
       title: 'Team calendar',

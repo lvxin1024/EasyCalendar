@@ -480,6 +480,51 @@ class LocalItemRepository
   }
 
   @override
+  Future<CalendarCollection> connectCollection({
+    required String id,
+    required String name,
+    int? color,
+  }) async {
+    final normalizedId = id.trim();
+    final normalizedName = name.trim();
+    if (!RegExp(r'^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$').hasMatch(normalizedId) ||
+        normalizedName.isEmpty ||
+        normalizedName.length > 80) {
+      throw const RepositoryConflict('日历配置码内容无效。');
+    }
+    final existingRows = await _db.query(
+      'collections',
+      where: 'id = ?',
+      whereArgs: [normalizedId],
+      limit: 1,
+    );
+    if (existingRows.isNotEmpty && existingRows.single['deleted_at'] == null) {
+      final existing = _collectionFromRow(existingRows.single);
+      if (existing.readonly) {
+        throw const RepositoryConflict('只读订阅日历不能作为同步默认日历。');
+      }
+      return existing;
+    }
+    final now = DateTime.now();
+    final collection = CalendarCollection(
+      id: normalizedId,
+      name: normalizedName,
+      kind: 'local',
+      color: color,
+      readonly: false,
+      createdAt: now,
+      updatedAt: now,
+      version: 0,
+    );
+    await _db.insert(
+      'collections',
+      _collectionToRow(collection),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    return collection;
+  }
+
+  @override
   Future<CalendarCollection> updateCollection(
     CalendarCollection current, {
     required String name,

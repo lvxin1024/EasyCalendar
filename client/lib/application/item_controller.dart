@@ -8,6 +8,7 @@ import '../ai/ai_provider.dart';
 import '../ai/ai_provider_connection_tester.dart';
 import '../config/app_config.dart';
 import '../data/item_repository.dart';
+import '../data/calendar_connection_code.dart';
 import '../data/local_ics_service.dart';
 import '../data/service_probe_client.dart';
 import '../data/subscription_fetch_client.dart';
@@ -311,6 +312,28 @@ class ItemController extends ChangeNotifier {
       reloadItems: false,
     );
     _collections = await repository.listCollections();
+    notifyListeners();
+    return result;
+  }
+
+  Future<CalendarCollection> connectCollection(String code) async {
+    final connection = CalendarConnectionCode.decode(code);
+    late CalendarCollection result;
+    await _mutate(
+      () async => result = await repository.connectCollection(
+        id: connection.collectionId,
+        name: connection.name,
+        color: connection.color,
+      ),
+      reloadItems: false,
+    );
+    _collections = await repository.listCollections();
+    await savePreferences(
+      preferences.copyWith(
+        defaultCollectionId: result.id,
+        defaultCollectionName: result.name,
+      ),
+    );
     notifyListeners();
     return result;
   }

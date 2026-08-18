@@ -9,6 +9,7 @@ import '../../ai/ai_provider.dart';
 import '../../ai/ai_provider_connection_tester.dart';
 import '../../application/item_controller.dart';
 import '../../config/app_config.dart';
+import '../../data/calendar_connection_code.dart';
 import '../../data/service_probe_client.dart';
 import '../../device/device_identity.dart';
 import '../../domain/item.dart';
@@ -213,6 +214,7 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
+                key: ValueKey(_collectionIdController.text),
                 initialValue:
                     widget.controller.collections.any(
                       (collection) =>
@@ -236,6 +238,23 @@ class _SettingsPageState extends State<SettingsPage> {
                 ],
                 onChanged: _selectDefaultCollection,
                 validator: (value) => value == null ? '请选择默认日历' : null,
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: _importCalendarConnectionCode,
+                    icon: const Icon(Icons.link_outlined),
+                    label: const Text('连接已有日历'),
+                  ),
+                  TextButton.icon(
+                    onPressed: _copyCalendarConnectionCode,
+                    icon: const Icon(Icons.ios_share_outlined),
+                    label: const Text('复制日历配置码'),
+                  ),
+                ],
               ),
               const SizedBox(height: 10),
               ExpansionTile(
@@ -656,6 +675,78 @@ class _SettingsPageState extends State<SettingsPage> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('Collection ID 已复制')));
+  }
+
+  Future<void> _copyCalendarConnectionCode() async {
+    CalendarCollection? collection;
+    for (final candidate in widget.controller.collections) {
+      if (!candidate.readonly && candidate.id == _collectionIdController.text) {
+        collection = candidate;
+        break;
+      }
+    }
+    if (collection == null) return;
+    final code = CalendarConnectionCode(
+      collectionId: collection.id,
+      name: collection.name,
+      color: collection.color,
+    ).encode();
+    await Clipboard.setData(ClipboardData(text: code));
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('日历配置码已复制')));
+  }
+
+  Future<void> _importCalendarConnectionCode() async {
+    final input = TextEditingController();
+    final code = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('连接已有日历'),
+        content: SizedBox(
+          width: 460,
+          child: TextField(
+            controller: input,
+            minLines: 3,
+            maxLines: 6,
+            decoration: const InputDecoration(
+              labelText: '日历配置码',
+              hintText: 'ECAL1-...',
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(context, input.text.trim()),
+            icon: const Icon(Icons.link),
+            label: const Text('连接'),
+          ),
+        ],
+      ),
+    );
+    input.dispose();
+    if (code == null || code.isEmpty) return;
+    try {
+      final collection = await widget.controller.connectCollection(code);
+      if (!mounted) return;
+      setState(() {
+        _collectionIdController.text = collection.id;
+        _collectionNameController.text = collection.name;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已连接“${collection.name}”，同步后将获取已有内容')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('连接日历失败：$error')));
+    }
   }
 
   void _selectDefaultCollection(String? collectionId) {

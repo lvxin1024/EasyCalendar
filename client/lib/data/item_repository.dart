@@ -19,6 +19,12 @@ abstract interface class ItemRepository {
     required int color,
   });
 
+  Future<CalendarCollection> connectCollection({
+    required String id,
+    required String name,
+    int? color,
+  });
+
   Future<CalendarCollection> updateCollection(
     CalendarCollection current, {
     required String name,

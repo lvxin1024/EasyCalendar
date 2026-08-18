@@ -4,6 +4,7 @@ import 'package:easy_calendar/ai/ai_key_store.dart';
 import 'package:easy_calendar/ai/ai_provider.dart';
 import 'package:easy_calendar/application/item_controller.dart';
 import 'package:easy_calendar/config/app_config.dart';
+import 'package:easy_calendar/data/calendar_connection_code.dart';
 import 'package:easy_calendar/data/item_repository.dart';
 import 'package:easy_calendar/data/local_ics_service.dart';
 import 'package:easy_calendar/data/service_probe_client.dart';
@@ -165,6 +166,30 @@ void main() {
       );
       expect(await keyStore.read('cloud'), isNull);
       expect(controller.aiProviders.single.keyConfigured, isFalse);
+    },
+  );
+
+  test(
+    'calendar connection code selects an existing synchronized calendar',
+    () async {
+      final repository = _MemoryRepository();
+      final controller = ItemController(repository: repository, config: config);
+      await controller.initialize();
+      final code = const CalendarConnectionCode(
+        collectionId: 'collection_shared',
+        name: 'Shared',
+        color: 0xFF0F766E,
+      ).encode();
+
+      final connected = await controller.connectCollection(code);
+
+      expect(connected.id, 'collection_shared');
+      expect(controller.preferences.defaultCollectionId, 'collection_shared');
+      expect(controller.preferences.defaultCollectionName, 'Shared');
+      expect(
+        repository.storedPreferences?.defaultCollectionId,
+        'collection_shared',
+      );
     },
   );
 
@@ -383,6 +408,30 @@ class _MemoryRepository implements ItemRepository {
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
       version: 1,
+    );
+    _collections.add(collection);
+    return collection;
+  }
+
+  @override
+  Future<CalendarCollection> connectCollection({
+    required String id,
+    required String name,
+    int? color,
+  }) async {
+    for (final collection in _collections) {
+      if (collection.id == id) return collection;
+    }
+    final now = DateTime.now();
+    final collection = CalendarCollection(
+      id: id,
+      name: name,
+      kind: 'local',
+      color: color,
+      readonly: false,
+      createdAt: now,
+      updatedAt: now,
+      version: 0,
     );
     _collections.add(collection);
     return collection;
