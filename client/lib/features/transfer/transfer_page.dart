@@ -333,17 +333,12 @@ class _TransferPageState extends State<TransferPage> {
   }
 
   Future<void> _importSettings() async {
-    final picked = await FilePicker.platform.pickFiles(
+    final picked = await FilePicker.pickFile(
       type: FileType.custom,
       allowedExtensions: ['json'],
-      withData: true,
     );
-    if (picked == null || picked.files.isEmpty) return;
-    final bytes = picked.files.single.bytes;
-    if (bytes == null) {
-      _showStatus('无法读取设置文件', error: true);
-      return;
-    }
+    if (picked == null) return;
+    final bytes = await picked.readAsBytes();
     setState(() => _busy = true);
     try {
       await widget.controller.importPortableSettings(utf8.decode(bytes));
@@ -399,17 +394,12 @@ class _TransferPageState extends State<TransferPage> {
   }
 
   Future<void> _pickAndPreviewJsonImport() async {
-    final picked = await FilePicker.platform.pickFiles(
+    final picked = await FilePicker.pickFile(
       type: FileType.custom,
       allowedExtensions: ['json'],
-      withData: true,
     );
-    if (picked == null || picked.files.isEmpty) return;
-    final bytes = picked.files.single.bytes;
-    if (bytes == null) {
-      _showStatus('无法读取文件', error: true);
-      return;
-    }
+    if (picked == null) return;
+    final bytes = await picked.readAsBytes();
     final content = utf8.decode(bytes);
     setState(() => _busy = true);
     try {
@@ -478,17 +468,12 @@ class _TransferPageState extends State<TransferPage> {
   }
 
   Future<void> _pickAndImportIcs() async {
-    final picked = await FilePicker.platform.pickFiles(
+    final picked = await FilePicker.pickFile(
       type: FileType.custom,
       allowedExtensions: ['ics'],
-      withData: true,
     );
-    if (picked == null || picked.files.isEmpty) return;
-    final bytes = picked.files.single.bytes;
-    if (bytes == null) {
-      _showStatus('无法读取文件', error: true);
-      return;
-    }
+    if (picked == null) return;
+    final bytes = await picked.readAsBytes();
     final content = utf8.decode(bytes);
     setState(() => _busy = true);
     try {
