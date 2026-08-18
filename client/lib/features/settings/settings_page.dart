@@ -212,13 +212,30 @@ class _SettingsPageState extends State<SettingsPage> {
                 validator: _validateRequired,
               ),
               const SizedBox(height: 10),
-              TextFormField(
-                controller: _collectionNameController,
+              DropdownButtonFormField<String>(
+                initialValue:
+                    widget.controller.collections.any(
+                      (collection) =>
+                          !collection.readonly &&
+                          collection.id == _collectionIdController.text,
+                    )
+                    ? _collectionIdController.text
+                    : null,
                 decoration: const InputDecoration(
-                  labelText: '默认 Collection 名称',
-                  prefixIcon: Icon(Icons.label_outline),
+                  labelText: '默认日历',
+                  helperText: '新建事项默认保存到这里',
+                  prefixIcon: Icon(Icons.calendar_today_outlined),
                 ),
-                validator: _validateRequired,
+                items: [
+                  for (final collection in widget.controller.collections)
+                    if (!collection.readonly)
+                      DropdownMenuItem(
+                        value: collection.id,
+                        child: Text(collection.name),
+                      ),
+                ],
+                onChanged: _selectDefaultCollection,
+                validator: (value) => value == null ? '请选择默认日历' : null,
               ),
               const SizedBox(height: 10),
               ExpansionTile(
@@ -256,12 +273,17 @@ class _SettingsPageState extends State<SettingsPage> {
                   const SizedBox(height: 10),
                   TextFormField(
                     controller: _collectionIdController,
-                    decoration: const InputDecoration(
+                    readOnly: true,
+                    decoration: InputDecoration(
                       labelText: '默认 Collection ID',
-                      helperText: '同一同步实例的设备应使用相同 ID；修改不会迁移旧数据',
-                      prefixIcon: Icon(Icons.folder_outlined),
+                      helperText: '由 App 自动维护；切换默认日历不会迁移旧事项',
+                      prefixIcon: const Icon(Icons.folder_outlined),
+                      suffixIcon: IconButton(
+                        tooltip: '复制 Collection ID',
+                        onPressed: _copyCollectionId,
+                        icon: const Icon(Icons.copy_outlined),
+                      ),
                     ),
-                    validator: _validateRequired,
                   ),
                 ],
               ),
@@ -482,11 +504,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 },
               ),
               _InfoRow(
-                icon: Icons.folder_outlined,
-                label: '默认 Collection',
-                value: widget.config.defaultCollectionName,
-              ),
-              _InfoRow(
                 icon: Icons.storage_outlined,
                 label: '本地数据库',
                 value: widget.controller.databasePath ?? '尚未初始化',
@@ -633,6 +650,26 @@ class _SettingsPageState extends State<SettingsPage> {
     ).showSnackBar(const SnackBar(content: Text('设备 ID 已复制')));
   }
 
+  Future<void> _copyCollectionId() async {
+    await Clipboard.setData(ClipboardData(text: _collectionIdController.text));
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Collection ID 已复制')));
+  }
+
+  void _selectDefaultCollection(String? collectionId) {
+    if (collectionId == null) return;
+    for (final collection in widget.controller.collections) {
+      if (collection.id != collectionId || collection.readonly) continue;
+      setState(() {
+        _collectionIdController.text = collection.id;
+        _collectionNameController.text = collection.name;
+      });
+      return;
+    }
+  }
+
   Future<void> _regenerateDeviceIdentity() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -707,11 +744,14 @@ class _SettingsPageState extends State<SettingsPage> {
           color: result.color.toARGB32(),
         );
       } else {
-        await widget.controller.updateCollection(
+        final updated = await widget.controller.updateCollection(
           current,
           name: result.name,
           color: result.color.toARGB32(),
         );
+        if (_collectionIdController.text == updated.id) {
+          _collectionNameController.text = updated.name;
+        }
       }
     } catch (error) {
       if (mounted) {
@@ -743,6 +783,14 @@ class _SettingsPageState extends State<SettingsPage> {
     if (confirmed != true) return;
     try {
       await widget.controller.deleteCollection(collection);
+      if (_collectionIdController.text == collection.id && mounted) {
+        setState(() {
+          _collectionIdController.text =
+              widget.controller.preferences.defaultCollectionId;
+          _collectionNameController.text =
+              widget.controller.preferences.defaultCollectionName;
+        });
+      }
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(
