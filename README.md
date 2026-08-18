@@ -16,7 +16,6 @@
 <p align="center">
   <a href="https://github.com/lvxin1024/text2calendar/actions"><img src="https://github.com/lvxin1024/text2calendar/actions/workflows/tests.yml/badge.svg" alt="Tests" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License" /></a>
-  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python" alt="Python 3.11+" /></a>
   <a href="https://flutter.dev"><img src="https://img.shields.io/badge/flutter-3.44.9-02569B?logo=flutter" alt="Flutter 3.44.9" /></a>
 </p>
 
@@ -61,78 +60,25 @@
 
 ---
 
-## 🚢 部署 / Deployment
+## 🚀 下载与使用 / Getting Started
 
-EasyCalendar 由三个独立组件组成，可以根据需要分别部署。
+普通用户只需下载对应平台的 [GitHub Release](https://github.com/lvxin1024/text2calendar/releases) 安装包，安装后选择“仅本地使用”即可进入 App。本地日历、Due、提醒、备份、ICS 导入导出、网址订阅和基础中文解析都在客户端内完成。
 
-### 组件总览
+**使用安装包不需要 Python、Flutter、Node.js，也不需要修改配置文件或环境变量。** 设备 ID 会在首次启动时自动生成，其他运行时选项都可以在 App 设置中管理。
 
-| 组件 | 技术栈 | 说明 |
+需要更强的自然语言理解时，在“设置 > AI Provider”中配置 OpenAI-compatible、DeepSeek 或 Ollama。App 会直接请求该 Provider，API Key 保存在系统安全存储中，不需要 Python Core 中转。
+
+### 组件边界
+
+| 组件 | 是否必需 | 说明 |
 |---|---|---|
-| **Python Core** | Python 3.11+ / FastAPI / SQLite | 独立 API 与参考实现；Flutter 安装包的 ICS 功能不依赖它 |
-| **Flutter Client** | Flutter 3.44.9 / Dart / SQLite | macOS / Windows 桌面端和 Android 移动端，离线可用 |
-| **Sync Server** | TypeScript / Cloudflare Workers / D1 | 多设备同步（可选，离线使用不需要） |
+| **EasyCalendar App** | 是 | macOS / Windows / Android 客户端，内置 SQLite，离线可用 |
+| **Cloud Sync** | 否 | Cloudflare Worker / D1 多设备同步服务 |
+| **Python Compatibility API** | 否 | 面向开发者和第三方集成的参考 REST API，不在 App 主链路上 |
 
-### 1. Python Core
+---
 
-规则解析、导入导出和 AI 助手等服务端 API 的参考实现。它可以独立部署，但不承担 Flutter 客户端的多设备同步；Flutter 安装包的 ICS 文件传输和网址订阅已在本机完成。
-
-```bash
-git clone https://github.com/lvxin1024/text2calendar.git
-cd text2calendar
-
-# 安装依赖
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-
-# 配置
-cp config/app.example.yaml config/app.yaml   # 编辑时区、端口等
-cp config/secrets.example.env config/secrets.env  # 设置 token、AI key
-
-# 启动
-.venv/bin/python run.py
-# → API: http://localhost:8000
-# → OpenAPI docs: http://localhost:8000/docs
-```
-
-不复制配置文件也可以以安全默认值启动。Core 不强制依赖 Sync Server，可以独立运行。
-
-部署到远程服务器时，建议用 systemd 等进程管理器运行，并在前面配置 Caddy 或 Nginx HTTPS 反向代理；不要把 `config/secrets.env` 提交到 Git。Flutter 设置页中的“功能服务地址”填写 Python Core 地址；“同步服务地址”填写下文的 Cloudflare Worker 地址，两者不能混用。
-
-### 2. Flutter 客户端
-
-macOS / Windows 桌面端和 Android 移动端。内置 SQLite 本地存储，断网也能完整使用。
-
-```bash
-cd client
-cp ../config/client.example.json ../config/client.json
-
-# 安装依赖 + 生成平台 runner
-flutter pub get
-
-# macOS
-flutter run -d macos
-# 或打包：flutter build macos
-
-# Windows（需在 Windows host 执行）
-flutter run -d windows
-# 或打包：flutter build windows
-
-# Android（需 Android SDK）
-flutter run -d <device-id>
-# 或打包：flutter build apk
-```
-
-也可以使用脚本：
-
-```bash
-./scripts/setup-client.sh   # 环境初始化
-./scripts/run-client.sh     # 启动（自动检测平台）
-```
-
-`config/client.json` 只提供首次启动的默认值。设备 ID 在首次启动时自动生成并持久化；安装后可以直接在“设置 > 连接”中维护 API 地址、设备名称和默认 Collection，无需重新编译；具体填写方式见下一节。
-
-### 3. Sync Server（Cloudflare Worker/D1）
+## ☁️ 可选：多设备同步
 
 多设备同步服务。部署后各客户端通过它交换 outbox 变更。
 
@@ -223,34 +169,57 @@ cd ..
 | 设置项 | 如何填写 | 示例 |
 |---|---|---|
 | **同步服务地址** | 所有设备填写同一个 Cloudflare Worker HTTPS 地址 | `https://calendar.example.com` |
-| **功能服务地址** | 兼容 Python Core API 的可选地址；当前安装包本地功能不依赖 | `https://core.example.com` |
 | **同步服务令牌** | Cloudflare Worker 的 `ADMIN_TOKEN`；需要同步的设备填写同一个值 | 上面生成的 64 位字符串 |
-| **功能服务令牌** | Python Core 配置了 `ADMIN_TOKEN` 时填写；未配置鉴权时留空 | Core 实例自己的 token |
 | **设备名称** | 用于区分设备，可按习惯修改 | `工作电脑`、`手机` |
-| **设备 ID** | 首次启动自动生成并长期保存；通常无需修改，可在高级连接设置中复制或重建 | `device-<UUID>` |
-| **默认 Collection ID** | 需要共享默认日历的设备填写相同值 | `collection_local` |
-| **默认 Collection 名称** | 本机显示名称，可按需要填写 | `我的日程` |
+| **默认日历** | 从 App 中已有的可写日历中选择 | `我的日程` |
 | **同步** | 打开开关，保存后点击“立即同步” | 开启 |
 
-这些设置会持久化在当前安装中，并覆盖构建时的 API 地址、默认 Collection 等初始值，因此普通用户不需要编辑环境变量或重新构建应用。`EASYCALENDAR_DEVICE_ID` 默认留空；仅定制部署需要预设 ID，普通 Release 安装会自动生成。
+新设备需要连接已有同步日历时，先在原设备复制“日历配置码”，再在新设备选择“连接已有日历”并粘贴。Collection ID 由 App 自动维护，普通用户不需要填写；只在高级连接设置中提供查看和复制。
 
-同步服务令牌与功能服务令牌使用不同的系统安全存储项，互不覆盖。Python Core 未配置 `ADMIN_TOKEN` 时允许无 token 访问，适合仅监听本机地址的场景；一旦配置 `ADMIN_TOKEN`，除 health/capabilities 外的 `/v1` API 都要求对应 Bearer token。把 Core 暴露到局域网或公网时必须配置 token 和 HTTPS。
-
-设置页为同步服务和功能服务分别提供“测试连接”。检测会依次验证健康状态、API 版本、服务能力和令牌，不会创建或修改日历数据；DNS、TLS、超时、鉴权和能力不兼容会显示不同错误。
-
-维护者推送与 `client/pubspec.yaml` 版本一致的 `vX.Y.Z` tag 后，Release 工作流会构建 Android APK/AAB、Windows 安装器与便携包、macOS DMG，并附带调试符号和 `SHA256SUMS.txt`。工作流要求预先配置 Android keystore、Windows 代码签名证书、Apple Developer ID 证书/Provisioning Profile 与公证账户 Secrets；任何签名材料缺失都会终止发布。
-
-Release 仓库 Secrets：`ANDROID_KEYSTORE_BASE64`、`ANDROID_STORE_PASSWORD`、`ANDROID_KEY_ALIAS`、`ANDROID_KEY_PASSWORD`、`WINDOWS_CERTIFICATE_PFX_BASE64`、`WINDOWS_CERTIFICATE_PASSWORD`、`MACOS_CERTIFICATE_P12_BASE64`、`MACOS_CERTIFICATE_PASSWORD`、`MACOS_SIGNING_IDENTITY`、`MACOS_APP_PROVISION_PROFILE_BASE64`、`MACOS_WIDGET_PROVISION_PROFILE_BASE64`、`APPLE_ID`、`APPLE_APP_PASSWORD`、`APPLE_TEAM_ID`。证书文件均以 base64 内容保存，不写入仓库。
-
-设备 ID 应长期保持稳定。高级设置中的“重建设备身份”不会破坏尚未上传的旧变更，客户端会按旧、新设备 ID 分批上传；只应在复制安装、身份冲突或排查同步问题时使用。修改默认 Collection ID 只影响之后新建的日程，会创建或选择新的 Collection，不会自动迁移旧 Collection 中已有数据。
+这些设置会持久化在当前安装中。同步令牌保存在系统安全存储中；“测试连接”会检查网络、TLS、鉴权、API 版本和同步能力，不会修改日历数据。设备 ID 会自动生成并长期保存，只应在复制安装、身份冲突或排查同步问题时使用高级设置中的“重建设备身份”。
 
 #### Cloudflare 与已有远程服务器如何分工
 
 - **Cloudflare 账户**：配置和运行 Worker、D1、同步域名及 `ADMIN_TOKEN`，客户端同步地址指向这里。
-- **已有远程服务器/VPS**：可选，用来运行 Python/FastAPI Core，并通过 Caddy/Nginx 提供 HTTPS；它目前与 Flutter 同步链路相互独立。
+- **已有远程服务器/VPS**：可选，只在需要 Python Compatibility API 时使用；它与 App 的本地功能和云同步链路都相互独立。
 - **客户端设备**：各自保存本地 SQLite 数据；需要多设备同步时连接同一个 Worker，但使用各自唯一的设备 ID。
 
-> 当前尚未实现 Docker Compose 一键部署、全套 VPS 同步部署和自动 D1 备份/回滚。不要把 Python Core URL 填成同步 API 地址。
+> 当前尚未实现 Docker Compose 一键部署、全套 VPS 同步部署和自动 D1 备份/回滚。不要把 Python Compatibility API URL 填成同步 API 地址。
+
+---
+
+## 🛠️ 开发者指南 / Development
+
+### 从源码运行 App
+
+Flutter 3.44.9 是开发环境依赖，不是普通用户的安装依赖。
+
+```bash
+git clone https://github.com/lvxin1024/text2calendar.git
+cd text2calendar
+./scripts/setup-client.sh
+./scripts/run-client.sh
+```
+
+也可以进入 `client/` 目录直接执行 `flutter pub get` 和 `flutter run -d <device-id>`。`config/client.json` 只用于定制首次启动默认值；运行时配置仍以 App 设置为准。
+
+### Python Compatibility API（可选）
+
+仓库根目录的 `src/` 保留了规则解析、导入导出和 AI 助手等 REST API 的参考实现，可用于第三方客户端、兼容性测试或服务端扩展。它不承担多设备同步，也不是 EasyCalendar App 的运行依赖。
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python run.py
+# API: http://localhost:8000
+# OpenAPI docs: http://localhost:8000/docs
+```
+
+不创建配置文件也可以以安全默认值启动。需要定制时再复制 `config/app.example.yaml` 和 `config/secrets.example.env`；不要提交实际密钥。如果对外网络暴露 Core，必须配置 `ADMIN_TOKEN` 和 HTTPS，并在 App 的可选“功能服务”中填写该地址，不要与同步服务地址混用。
+
+### 发布维护
+
+维护者推送与 `client/pubspec.yaml` 版本一致的 `vX.Y.Z` tag 后，Release 工作流会构建 Android APK/AAB、Windows 安装器与便携包、macOS DMG，并附带调试符号和 `SHA256SUMS.txt`。正式发布前需要在仓库 Secrets 中配置对应平台的签名、Apple 公证和 Android keystore 材料；签名文件不写入仓库。
 
 ### 运行测试
 
@@ -267,10 +236,10 @@ cd server && npm test      # Worker 测试
 | 层 | 技术 |
 |---|---|
 | 客户端 | Flutter 3.44.9, Dart, SQLite (drift), platform channels |
-| 核心服务 | Python 3.11+, FastAPI, SQLite, icalendar, RRULE 展开引擎 |
+| 可选兼容 API | Python 3.11+, FastAPI, SQLite, icalendar, RRULE 展开引擎 |
 | 同步服务 | TypeScript, Cloudflare Workers, D1, Hono, outbox/cursor 协议 |
 | AI | OpenAI-compatible / Ollama Provider, Candidate 确认流程 |
-| 解析 | 中文规则引擎 (date_extractor + event_detector), 不依赖 AI |
+| 本地解析 | Flutter `LocalRuleParser`，不依赖 AI 或 Python |
 
 离线优先架构：客户端 `LocalItemRepository` 直连本地 SQLite，所有 CRUD 即时完成。同步层通过 outbox push / cursor pull 异步交换变更，确定性 LWW 冲突恢复。ICS 订阅由客户端直接执行 ETag/Last-Modified 条件请求，解析到只读 Collection 后通过同一同步协议交换。
 
@@ -282,32 +251,15 @@ cd server && npm test      # Worker 测试
 
 完整实施顺序、任务状态和验收标准见 **[ROADMAP.md](ROADMAP.md)**。本节保留优先级摘要，具体状态以 Roadmap 为准。
 
-当前已经具备的基础能力：同步与功能服务地址、各自令牌、设备 ID、默认 Collection、AI Provider/API Key、通知开关和桌面窗口参数可以在设置页维护；服务令牌和 AI Key 使用系统安全存储。下面只列尚未闭环的工作。
+同步与可选功能服务、设备身份、默认日历、AI Provider/API Key、通知和桌面窗口参数均已实现 App 内设置。P0.1、P0.2、P0.5 与 P1.1-P1.9 已完成；Python Compatibility API 不是待发布的客户端功能。
 
 ### P0：Release / 开箱即用阻塞项
 
 | ID | 任务 | 当前缺口 | 完成标准 |
 |---|---|---|---|
-| P0.1 | **拆分服务配置并做能力发现（已完成）** | 同步与功能服务地址、令牌已分离；Core 支持可选鉴权 | 设置页检测健康、版本、能力和鉴权；订阅与远程 ICS 自动探测并按能力降级；本地 Core 可免 token |
-| P0.2 | **自动生成并持久化设备身份（已完成）** | 首次启动生成并保存唯一 ID，同时迁移旧固定默认值 | 设置页提供可读设备名称；技术 ID 仅在高级区域复制或经确认后重建；旧 outbox 保持原 ID 并可继续上传 |
-| P0.3 | **建立多平台 Release 流水线** | tag 工作流已定义；待配置签名 Secrets 并完成三平台首次真实 Runner/安装验证 | Git tag 自动产出 macOS 签名并公证的 DMG/PKG、Windows 签名安装包、Android release 签名 APK（AAB 可选），同时上传 SHA-256、版本说明和必要的调试符号；签名材料只存在 CI Secrets |
-| P0.4 | **干净安装和覆盖升级验收** | 目前的运行说明面向开发环境，尚未证明安装包脱离源码配置可用 | 在全新 macOS、Windows、Android 环境验证：无需 `config/client.json`、Python、Flutter、Node 即可启动和本地使用；重启后设置仍在；覆盖升级不丢数据库、同步令牌和 AI Key；形成可重复的 smoke test 清单 |
-| P0.5 | **收敛 Python Core 与客户端的运行时边界（客户端本地能力已完成）** | ICS 文件传输、网址订阅和基础中文规则解析已在 Flutter 本地完成；复杂自然语言规则仍需 AI Provider 或手动校对 | 安装包不需要手工启动 Python；本地功能有明确错误状态；Python Core 仅作为可选兼容 API |
-| P0.6 | **验证 Release 环境下的安全存储** | 代码已使用 `flutter_secure_storage`，但缺少签名安装包中的 Keychain/Credential Manager/Android Keystore 端到端验收 | AI Key 和同步令牌可新增、替换、清除并在重启/升级后读取；不会写入 SQLite、JSON 备份、日志或崩溃报告；macOS entitlements、Windows 包身份和 Android 备份策略均通过真机验证 |
-
-### P1：设置闭环与产品化
-
-| ID | 任务 | 当前缺口 | 完成标准 |
-|---|---|---|---|
-| P1.1 | **首次启动向导与配置诊断（已完成）** | 首次启动可选择仅本地使用或在 capability/auth 检测通过后连接同步服务；同步和未保存的 AI Provider 配置均可独立测试，分类后的诊断结果可安全复制 | 首次启动可选择“仅本地使用”或“连接已有服务”；同步和 AI Provider 均有“测试连接”；错误能区分 DNS、TLS、超时、401、版本/能力不兼容；诊断失败不影响本地数据 |
-| P1.2 | **时区、语言和日期偏好改为运行时设置（已完成）** | 首次安装默认跟随系统 locale/IANA 时区；时区、语言、每周起始日和 12/24 小时制均可在设置中覆盖并立即应用；日期和时间显示已统一使用运行时偏好 | 首次启动默认跟随系统，并允许在设置中覆盖时区、语言、每周起始日和 12/24 小时制；修改后日历、解析、提醒、Widget 和导入导出使用同一配置，已有 UTC 数据不被错误改写 |
-| P1.3 | **隐藏技术性 Collection ID（已完成）** | 普通设置使用日历名称选择默认项；内部 ID 由 App 维护并仅在高级区域显示；已有同步日历可通过带校验的配置码连接 | 普通界面只选择默认日历；Collection ID 由 App 生成和维护；连接已有数据时通过服务端列表、邀请/配置码或导入选择，不要求复制内部 ID；保留高级查看和复制入口 |
-| P1.4 | **完善 AI Provider 配置向导（已完成）** | Ollama、OpenAI-compatible、DeepSeek 预设支持未保存 Key 测试和模型发现；超时、重试、温度、最大输出 Token、无凭据 HTTP 代理及 Key 替换/清除均可在设置中完成 | 提供常见 OpenAI-compatible/Ollama 预设；可从 `/models` 或 Ollama tags 获取模型列表；编辑时可用尚未保存的 Key 测试；支持代理、超时和常用请求参数；提供 Key 的替换/清除状态但永不回显完整值 |
-| P1.5 | **接入真实系统通知与权限设置（已完成）** | macOS、Windows、Android 已使用系统通知适配器；权限状态、主动申请、系统设置入口和测试通知都可在 App 设置中完成 | macOS、Windows、Android 接入真实通知实现；设置页展示权限状态、申请/跳转系统设置、发送测试通知；提醒创建、修改、删除、重启恢复和时区变化均有自动化与原生构建验证 |
-| P1.6 | **客户端备份、迁移和故障恢复（已完成）** | schema 升级前自动创建 SQLite 恢复点；设置内可创建、查看、恢复和删除，启动迁移失败也有恢复入口；非敏感设置支持独立迁移 | 数据库 schema 升级前创建可恢复备份；设置页支持查看备份、恢复和清理；启动迁移失败时保留原库并给出恢复入口；非敏感设置可单独导入导出，secret 和设备 ID 默认排除 |
-| P1.7 | **应用内版本与更新入口（已完成）** | 设置内已可查看当前版本、构建号、平台和数据 schema，并比较 GitHub latest Release | 更新页展示说明并只打开官方仓库对应平台的 HTTPS 安装包；下载和安装交由系统处理，不绕过平台安全机制 |
-| P1.8 | **统一应用身份与安装元数据（已完成）** | 三平台的显示名、品牌图标、Windows EXE/卸载项和 macOS About 元数据已统一 | 平台安装标识和版本规则已固定；Windows 首次启动会迁移旧数据与加密凭据目录，安装器保持同一 AppId |
-| P1.9 | **补齐客户端 CI 质量门禁（已完成）** | push/PR 已并行运行 Flutter、Python 和 Worker 全量检查 | macOS、Windows、Android 分别在原生 Runner 编译 Release 产物；测试签名与正式发布 Secrets 隔离，且不上传未签名产物 |
+| P0.3 | **建立多平台 Release 流水线** | 受外部条件阻塞：待维护者配置签名 Secrets 并触发首次真实 Release | 三平台签名产物、调试符号和 SHA-256 均由 tag 工作流产出 |
+| P0.4 | **干净安装和覆盖升级验收** | 受 P0.3 阻塞：需要可安装的正式签名产物 | 全新三平台无需开发工具即可使用；覆盖升级不丢数据、设置或密钥 |
+| P0.6 | **验证 Release 环境下的安全存储** | 受 P0.3/P0.4 阻塞：需要签名安装包和三平台验收环境 | AI Key 和服务令牌在重启/升级后可读，且不进入 SQLite、备份、日志或崩溃报告 |
 
 ### 待修复 / Known Issues
 
