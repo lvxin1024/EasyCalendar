@@ -4,8 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../application/item_controller.dart';
-import '../../data/service_probe_client.dart';
-import '../../data/subscription_api_client.dart';
 import '../../domain/subscription.dart';
 
 class SubscriptionsPage extends StatefulWidget {
@@ -18,25 +16,14 @@ class SubscriptionsPage extends StatefulWidget {
 }
 
 class _SubscriptionsPageState extends State<SubscriptionsPage> {
-  late final SubscriptionApiClient _client;
   List<CalendarSubscription> _subscriptions = const [];
   bool _loading = true;
-  bool _capabilityAvailable = false;
   String? _error;
 
   @override
   void initState() {
     super.initState();
-    _client = SubscriptionApiClient(
-      tokenStore: widget.controller.featureTokenStore,
-    );
-    unawaited(_initialize());
-  }
-
-  @override
-  void dispose() {
-    _client.close();
-    super.dispose();
+    unawaited(_reload());
   }
 
   @override
@@ -55,11 +42,11 @@ class _SubscriptionsPageState extends State<SubscriptionsPage> {
             ),
             IconButton(
               tooltip: '刷新订阅列表',
-              onPressed: _loading || !_capabilityAvailable ? null : _reload,
+              onPressed: _loading ? null : _reload,
               icon: const Icon(Icons.refresh),
             ),
             FilledButton.tonalIcon(
-              onPressed: _capabilityAvailable ? _showCreateDialog : null,
+              onPressed: _loading ? null : _showCreateDialog,
               icon: const Icon(Icons.add_link),
               label: const Text('添加订阅'),
             ),
@@ -97,64 +84,13 @@ class _SubscriptionsPageState extends State<SubscriptionsPage> {
     ],
   );
 
-  Uri? get _baseUrl =>
-      Uri.tryParse(widget.controller.preferences.featureApiUrl);
-
-  Future<void> _initialize() async {
-    try {
-      final result =
-          widget.controller.featureServiceProbe ??
-          await widget.controller.testServiceConnection(
-            kind: ServiceKind.feature,
-            serverUrl: widget.controller.preferences.featureApiUrl,
-          );
-      if (!result.capabilities.supports('ics_subscriptions')) {
-        if (mounted) {
-          setState(() {
-            _loading = false;
-            _error = '当前功能服务不支持网址订阅，请在设置中检查服务地址。';
-          });
-        }
-        return;
-      }
-      if (!mounted) return;
-      setState(() => _capabilityAvailable = true);
-      await _reload();
-    } on ServiceProbeException catch (error) {
-      if (mounted) {
-        setState(() {
-          _loading = false;
-          _error = '网址订阅不可用：${error.message}';
-        });
-      }
-    } catch (error) {
-      if (mounted) {
-        setState(() {
-          _loading = false;
-          _error = '网址订阅连接检测失败：$error';
-        });
-      }
-    }
-  }
-
   Future<void> _reload() async {
-    if (!_capabilityAvailable) return;
-    final base = _baseUrl;
-    if (base == null || !base.hasAuthority) {
-      if (mounted) {
-        setState(() {
-          _loading = false;
-          _error = '功能服务地址无效，请在设置中配置 Python Core。';
-        });
-      }
-      return;
-    }
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      final values = await _client.list(base);
+      final values = await widget.controller.listSubscriptions();
       if (mounted) setState(() => _subscriptions = values);
     } catch (error) {
       if (mounted) setState(() => _error = '$error');
@@ -168,16 +104,14 @@ class _SubscriptionsPageState extends State<SubscriptionsPage> {
       context: context,
       builder: (_) => const _SubscriptionDialog(),
     );
-    final base = _baseUrl;
-    if (draft == null || base == null) return;
+    if (draft == null) return;
     try {
-      await _client.create(
-        base,
+      final created = await widget.controller.createSubscription(
         title: draft.title,
         url: draft.url,
         refreshIntervalMinutes: draft.refreshIntervalMinutes,
       );
-      await _reload();
+      await _refresh(created);
     } catch (error) {
       if (mounted) setState(() => _error = '$error');
     }
@@ -188,17 +122,14 @@ class _SubscriptionsPageState extends State<SubscriptionsPage> {
       context: context,
       builder: (_) => _SubscriptionDialog(initial: current),
     );
-    final base = _baseUrl;
-    if (draft == null || base == null) return;
+    if (draft == null) return;
     try {
-      await _client.update(
-        base,
+      await widget.controller.updateSubscription(
         current,
-        patch: {
-          'title': draft.title,
-          'url': draft.url,
-          'refresh_interval_minutes': draft.refreshIntervalMinutes,
-        },
+        title: draft.title,
+        url: draft.url,
+        enabled: current.enabled,
+        refreshIntervalMinutes: draft.refreshIntervalMinutes,
       );
       await _reload();
     } catch (error) {
@@ -207,10 +138,14 @@ class _SubscriptionsPageState extends State<SubscriptionsPage> {
   }
 
   Future<void> _toggle(CalendarSubscription current, bool enabled) async {
-    final base = _baseUrl;
-    if (base == null) return;
     try {
-      await _client.update(base, current, patch: {'enabled': enabled});
+      await widget.controller.updateSubscription(
+        current,
+        title: current.title,
+        url: current.url,
+        enabled: enabled,
+        refreshIntervalMinutes: current.refreshIntervalMinutes,
+      );
       await _reload();
     } catch (error) {
       if (mounted) setState(() => _error = '$error');
@@ -218,21 +153,19 @@ class _SubscriptionsPageState extends State<SubscriptionsPage> {
   }
 
   Future<void> _refresh(CalendarSubscription current) async {
-    final base = _baseUrl;
-    if (base == null) return;
     try {
-      await _client.refresh(base, current);
+      await widget.controller.refreshSubscription(current);
       await _reload();
     } catch (error) {
-      if (mounted) setState(() => _error = '$error');
+      final message = '$error';
+      await _reload();
+      if (mounted) setState(() => _error = message);
     }
   }
 
   Future<void> _delete(CalendarSubscription current) async {
-    final base = _baseUrl;
-    if (base == null) return;
     try {
-      await _client.delete(base, current);
+      await widget.controller.deleteSubscription(current);
       await _reload();
     } catch (error) {
       if (mounted) setState(() => _error = '$error');
@@ -240,10 +173,10 @@ class _SubscriptionsPageState extends State<SubscriptionsPage> {
   }
 
   Future<void> _showLogs(CalendarSubscription current) async {
-    final base = _baseUrl;
-    if (base == null) return;
     try {
-      final logs = await _client.logs(base, current);
+      final logs = await widget.controller.listSubscriptionFetchLogs(
+        current.id,
+      );
       if (!mounted) return;
       await showDialog<void>(
         context: context,

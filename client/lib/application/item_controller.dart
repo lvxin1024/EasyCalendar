@@ -9,6 +9,7 @@ import '../config/app_config.dart';
 import '../data/item_repository.dart';
 import '../data/local_ics_service.dart';
 import '../data/service_probe_client.dart';
+import '../data/subscription_fetch_client.dart';
 import '../data/transfer_models.dart';
 import '../device/device_identity.dart';
 import '../domain/item.dart';
@@ -34,6 +35,7 @@ class ItemController extends ChangeNotifier {
     DeviceIdentity? deviceIdentity,
     SyncTokenStore? featureTokenStore,
     ServiceProbeClient? serviceProbeClient,
+    SubscriptionFetchClient? subscriptionFetchClient,
   }) {
     syncCoordinator?.addListener(_syncChanged);
     _aiApiKeyStore = aiApiKeyStore ?? SecureAiApiKeyStore();
@@ -42,6 +44,8 @@ class ItemController extends ChangeNotifier {
     _deviceIdentity = deviceIdentity ?? DeviceIdentity();
     this.featureTokenStore = featureTokenStore ?? SecureFeatureTokenStore();
     _serviceProbeClient = serviceProbeClient ?? ServiceProbeClient();
+    _subscriptionFetchClient =
+        subscriptionFetchClient ?? SubscriptionFetchClient();
   }
 
   final ItemRepository repository;
@@ -55,6 +59,7 @@ class ItemController extends ChangeNotifier {
   late final DeviceIdentity _deviceIdentity;
   late final SyncTokenStore featureTokenStore;
   late final ServiceProbeClient _serviceProbeClient;
+  late final SubscriptionFetchClient _subscriptionFetchClient;
   final LocalIcsService _localIcsService = const LocalIcsService();
 
   List<CalendarItem> _items = const [];
@@ -400,6 +405,62 @@ class ItemController extends ChangeNotifier {
   Future<void> deleteSubscription(CalendarSubscription current) =>
       _mutate(() => repository.deleteSubscription(current));
 
+  Future<SubscriptionFetchLog> refreshSubscription(
+    CalendarSubscription current,
+  ) async {
+    final fetchedAt = DateTime.now();
+    try {
+      final response = await _subscriptionFetchClient.fetch(current);
+      var events = const <LocalIcsEvent>[];
+      if (!response.notModified) {
+        final plan = _localIcsService.planImport(
+          response.content,
+          defaultTimezone: config.timezone,
+          deduplicate: false,
+        );
+        if (!plan.result.accepted) {
+          throw FormatException('订阅文件包含 ${plan.result.issues.length} 个无效日程。');
+        }
+        events = plan.events;
+      }
+      late SubscriptionFetchLog result;
+      await _mutate(() async {
+        result = await repository.applySubscriptionRefresh(
+          current,
+          events: events,
+          notModified: response.notModified,
+          httpStatus: response.statusCode,
+          fetchedAt: fetchedAt,
+          etag: response.etag,
+          lastModified: response.lastModified,
+          sourceHash: response.sourceHash,
+        );
+      });
+      return result;
+    } catch (error) {
+      try {
+        await _mutate(
+          () => repository.recordSubscriptionRefreshFailure(
+            current,
+            fetchedAt: fetchedAt,
+            error: '$error',
+            httpStatus: error is SubscriptionFetchException
+                ? error.statusCode
+                : null,
+          ),
+          reloadItems: false,
+        );
+      } catch (_) {
+        // Preserve the original fetch or parse error if failure logging races.
+      }
+      rethrow;
+    }
+  }
+
+  Future<List<SubscriptionFetchLog>> listSubscriptionFetchLogs(
+    String subscriptionId,
+  ) => repository.listSubscriptionFetchLogs(subscriptionId);
+
   Future<void> setTaskCompleted(CalendarItem item, {required bool completed}) =>
       _mutate(() async {
         await repository.setTaskCompleted(item, completed: completed);
@@ -572,6 +633,7 @@ class ItemController extends ChangeNotifier {
     unawaited(repository.close());
     _aiProviderConnectionTester.close();
     _serviceProbeClient.close();
+    _subscriptionFetchClient.close();
     super.dispose();
   }
 

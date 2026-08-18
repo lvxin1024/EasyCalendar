@@ -8,10 +8,20 @@ import '../domain/recurrence.dart';
 import 'transfer_models.dart';
 
 class LocalIcsImportPlan {
-  const LocalIcsImportPlan({required this.result, required this.drafts});
+  const LocalIcsImportPlan({required this.result, required this.events});
 
   final TransferResult result;
-  final List<ItemDraft> drafts;
+  final List<LocalIcsEvent> events;
+
+  List<ItemDraft> get drafts =>
+      events.map((event) => event.draft).toList(growable: false);
+}
+
+class LocalIcsEvent {
+  const LocalIcsEvent({required this.externalId, required this.draft});
+
+  final String externalId;
+  final ItemDraft draft;
 }
 
 class LocalIcsService {
@@ -21,9 +31,10 @@ class LocalIcsService {
     String content, {
     required String defaultTimezone,
     Iterable<CalendarItem> existingItems = const [],
+    bool deduplicate = true,
   }) {
     final calendar = ICalendar.fromString(content);
-    final drafts = <ItemDraft>[];
+    final events = <LocalIcsEvent>[];
     final issues = <TransferIssue>[];
     final known = existingItems.map(_itemFingerprint).toSet();
     var skipped = 0;
@@ -35,11 +46,17 @@ class LocalIcsService {
       try {
         final draft = _eventDraft(component, defaultTimezone);
         final fingerprint = _draftFingerprint(draft);
-        if (!known.add(fingerprint)) {
+        if (deduplicate && !known.add(fingerprint)) {
           skipped += 1;
           continue;
         }
-        drafts.add(draft);
+        final uid = _text(component['uid'])?.trim();
+        events.add(
+          LocalIcsEvent(
+            externalId: uid?.isNotEmpty == true ? uid! : fingerprint,
+            draft: draft,
+          ),
+        );
       } catch (error) {
         issues.add(
           TransferIssue(
@@ -69,12 +86,12 @@ class LocalIcsService {
         accepted: issues.isEmpty,
         committed: false,
         format: 'ics',
-        created: {if (drafts.isNotEmpty) 'events': drafts.length},
+        created: {if (events.isNotEmpty) 'events': events.length},
         skipped: {if (skipped > 0) 'events': skipped},
         conflicts: const {},
         issues: issues,
       ),
-      drafts: List.unmodifiable(drafts),
+      events: List.unmodifiable(events),
     );
   }
 

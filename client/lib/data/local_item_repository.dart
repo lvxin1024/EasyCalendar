@@ -15,6 +15,7 @@ import '../domain/subscription.dart';
 import '../sync/sync_models.dart';
 import '../sync/sync_repository.dart';
 import 'item_repository.dart';
+import 'local_ics_service.dart';
 import 'transfer_models.dart';
 
 class LocalItemRepository
@@ -1180,6 +1181,224 @@ class LocalItemRepository
     });
   }
 
+  @override
+  Future<SubscriptionFetchLog> applySubscriptionRefresh(
+    CalendarSubscription current, {
+    required List<LocalIcsEvent> events,
+    required bool notModified,
+    required int httpStatus,
+    required DateTime fetchedAt,
+    String? etag,
+    String? lastModified,
+    String? sourceHash,
+  }) async {
+    var createdCount = 0;
+    var updatedCount = 0;
+    var deletedCount = 0;
+    var unchangedCount = 0;
+    late SubscriptionFetchLog log;
+    await _db.transaction((transaction) async {
+      final subscriptionRows = await transaction.query(
+        'subscriptions',
+        where: 'id = ? AND version = ? AND deleted_at IS NULL',
+        whereArgs: [current.id, current.version],
+        limit: 1,
+      );
+      if (subscriptionRows.isEmpty) {
+        throw const RepositoryConflict('订阅已更新或删除，请刷新后重试。');
+      }
+      if (!notModified) {
+        final existingRows = await transaction.query(
+          'items',
+          where: 'collection_id = ?',
+          whereArgs: [current.collectionId],
+        );
+        final existing = {
+          for (final row in existingRows)
+            row['id'] as String: _itemFromRow(row),
+        };
+        final seen = <String>{};
+        for (final event in events) {
+          final itemId = _subscriptionItemId(current.id, event.externalId);
+          seen.add(itemId);
+          final previous = existing[itemId];
+          if (previous == null) {
+            final created = _subscriptionItem(
+              id: itemId,
+              collectionId: current.collectionId,
+              draft: event.draft,
+              createdAt: fetchedAt,
+              updatedAt: fetchedAt,
+              version: 1,
+            );
+            await transaction.insert('items', _itemToRow(created));
+            await _writeOutbox(transaction, created, 'create');
+            createdCount += 1;
+          } else if (_sameSubscriptionItem(previous, event.draft) &&
+              !previous.isDeleted) {
+            unchangedCount += 1;
+          } else {
+            final updated = _subscriptionItem(
+              id: previous.id,
+              collectionId: current.collectionId,
+              draft: event.draft,
+              createdAt: previous.createdAt,
+              updatedAt: fetchedAt,
+              version: previous.version + 1,
+            );
+            await transaction.update(
+              'items',
+              _itemToRow(updated),
+              where: 'id = ? AND version = ?',
+              whereArgs: [previous.id, previous.version],
+            );
+            await _writeOutbox(transaction, updated, 'update');
+            updatedCount += 1;
+          }
+        }
+        for (final previous in existing.values) {
+          if (seen.contains(previous.id) || previous.isDeleted) continue;
+          final deleted = CalendarItem(
+            id: previous.id,
+            collectionId: previous.collectionId,
+            type: previous.type,
+            title: previous.title,
+            body: previous.body,
+            startAt: previous.startAt,
+            endAt: previous.endAt,
+            dueAt: previous.dueAt,
+            recurrence: previous.recurrence,
+            timezone: previous.timezone,
+            allDay: previous.allDay,
+            location: previous.location,
+            status: previous.status,
+            priority: previous.priority,
+            reminderEnabled: previous.reminderEnabled,
+            reminderMinutes: previous.reminderMinutes,
+            tags: previous.tags,
+            createdAt: previous.createdAt,
+            updatedAt: fetchedAt,
+            deletedAt: fetchedAt,
+            version: previous.version + 1,
+          );
+          await transaction.update(
+            'items',
+            _itemToRow(deleted),
+            where: 'id = ? AND version = ?',
+            whereArgs: [previous.id, previous.version],
+          );
+          await _writeOutbox(transaction, deleted, 'delete');
+          deletedCount += 1;
+        }
+      }
+
+      log = SubscriptionFetchLog(
+        status: notModified ? 'not_modified' : 'success',
+        fetchedAt: fetchedAt,
+        httpStatus: httpStatus,
+        etag: etag,
+        sourceHash: sourceHash,
+        createdCount: createdCount,
+        updatedCount: updatedCount,
+        deletedCount: deletedCount,
+        unchangedCount: unchangedCount,
+      );
+      final currentPayload = _subscriptionPayloadFromRow(
+        subscriptionRows.single,
+      );
+      final updatedPayload = _appendSubscriptionLog({
+        ...currentPayload,
+        'last_fetched_at': _timeText(fetchedAt),
+        'last_success_at': _timeText(fetchedAt),
+        'last_error': null,
+        'etag': etag,
+        'last_modified': lastModified,
+        'source_hash': sourceHash,
+        'updated_at': _timeText(fetchedAt),
+        'version': current.version + 1,
+      }, log);
+      await transaction.update(
+        'subscriptions',
+        _subscriptionRow(updatedPayload),
+        where: 'id = ? AND version = ?',
+        whereArgs: [current.id, current.version],
+      );
+      await _writeSubscriptionOutbox(
+        transaction,
+        updatedPayload,
+        operation: 'update',
+      );
+    });
+    return log;
+  }
+
+  @override
+  Future<void> recordSubscriptionRefreshFailure(
+    CalendarSubscription current, {
+    required DateTime fetchedAt,
+    required String error,
+    int? httpStatus,
+  }) async {
+    await _db.transaction((transaction) async {
+      final rows = await transaction.query(
+        'subscriptions',
+        where: 'id = ? AND version = ? AND deleted_at IS NULL',
+        whereArgs: [current.id, current.version],
+        limit: 1,
+      );
+      if (rows.isEmpty) return;
+      final log = SubscriptionFetchLog(
+        status: 'failed',
+        fetchedAt: fetchedAt,
+        httpStatus: httpStatus,
+        error: error,
+      );
+      final updatedPayload = _appendSubscriptionLog({
+        ..._subscriptionPayloadFromRow(rows.single),
+        'last_fetched_at': _timeText(fetchedAt),
+        'last_error': error,
+        'updated_at': _timeText(fetchedAt),
+        'version': current.version + 1,
+      }, log);
+      await transaction.update(
+        'subscriptions',
+        _subscriptionRow(updatedPayload),
+        where: 'id = ? AND version = ?',
+        whereArgs: [current.id, current.version],
+      );
+      await _writeSubscriptionOutbox(
+        transaction,
+        updatedPayload,
+        operation: 'update',
+      );
+    });
+  }
+
+  @override
+  Future<List<SubscriptionFetchLog>> listSubscriptionFetchLogs(
+    String subscriptionId,
+  ) async {
+    final rows = await _db.query(
+      'subscriptions',
+      where: 'id = ?',
+      whereArgs: [subscriptionId],
+      limit: 1,
+    );
+    if (rows.isEmpty) return const [];
+    final payload = _subscriptionPayloadFromRow(rows.single);
+    final metadata = payload['metadata'];
+    if (metadata is! Map) return const [];
+    final logs = metadata['_fetch_logs'];
+    if (logs is! List) return const [];
+    return logs
+        .whereType<Map>()
+        .map(
+          (value) =>
+              SubscriptionFetchLog.fromJson(value.cast<String, Object?>()),
+        )
+        .toList(growable: false);
+  }
+
   static String _tableForBackupKey(String key) => switch (key) {
     'collections' => 'collections',
     'items' => 'items',
@@ -1236,6 +1455,69 @@ class LocalItemRepository
     'deleted_at': null,
     'version': version,
   };
+
+  static Map<String, Object?> _appendSubscriptionLog(
+    Map<String, Object?> payload,
+    SubscriptionFetchLog log,
+  ) {
+    final metadata = Map<String, Object?>.from(
+      payload['metadata'] is Map
+          ? (payload['metadata'] as Map).cast<String, Object?>()
+          : const {},
+    );
+    final previous = metadata['_fetch_logs'];
+    final logs = <Object?>[
+      log.toJson(),
+      if (previous is List) ...previous.take(99),
+    ];
+    metadata['_fetch_logs'] = logs;
+    return {...payload, 'metadata': metadata};
+  }
+
+  String _subscriptionItemId(String subscriptionId, String externalId) =>
+      'item_ics_${_uuid.v5(Namespace.url.value, '$subscriptionId|$externalId').replaceAll('-', '')}';
+
+  static CalendarItem _subscriptionItem({
+    required String id,
+    required String collectionId,
+    required ItemDraft draft,
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    required int version,
+  }) => CalendarItem(
+    id: id,
+    collectionId: collectionId,
+    type: ItemType.event,
+    title: draft.title.trim(),
+    body: _optional(draft.body),
+    startAt: draft.startAt,
+    endAt: draft.endAt,
+    recurrence: draft.recurrence,
+    timezone: draft.timezone,
+    allDay: draft.allDay,
+    location: _optional(draft.location),
+    status: draft.status,
+    reminderEnabled: false,
+    reminderMinutes: 30,
+    tags: _normalizeTags(draft.tags),
+    createdAt: createdAt,
+    updatedAt: updatedAt,
+    version: version,
+  );
+
+  static bool _sameSubscriptionItem(CalendarItem item, ItemDraft draft) =>
+      item.title == draft.title.trim() &&
+      item.body == _optional(draft.body) &&
+      item.startAt == draft.startAt &&
+      item.endAt == draft.endAt &&
+      item.recurrence?.rrule == draft.recurrence?.rrule &&
+      jsonEncode(item.recurrence?.exdates ?? const []) ==
+          jsonEncode(draft.recurrence?.exdates ?? const []) &&
+      item.timezone == draft.timezone &&
+      item.allDay == draft.allDay &&
+      item.location == _optional(draft.location) &&
+      item.status == draft.status &&
+      jsonEncode(item.tags) == jsonEncode(_normalizeTags(draft.tags));
 
   static String _validateSubscriptionUrl(String value) {
     final normalized = value.trim().startsWith('webcal://')

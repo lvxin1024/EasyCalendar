@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:easy_calendar/application/item_controller.dart';
 import 'package:easy_calendar/config/app_config.dart';
 import 'package:easy_calendar/data/item_repository.dart';
+import 'package:easy_calendar/data/local_ics_service.dart';
 import 'package:easy_calendar/data/service_probe_client.dart';
 import 'package:easy_calendar/data/transfer_models.dart';
 import 'package:easy_calendar/device/device_identity.dart';
@@ -170,7 +171,7 @@ void main() {
     },
   );
 
-  testWidgets('subscriptions stop before API calls when capability is absent', (
+  testWidgets('local subscriptions work without feature capability', (
     tester,
   ) async {
     final controller = ItemController(
@@ -188,11 +189,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('不支持网址订阅'), findsOneWidget);
+    expect(find.text('还没有网址订阅'), findsOneWidget);
     final addButton = tester.widget<FilledButton>(
       find.widgetWithText(FilledButton, '添加订阅'),
     );
-    expect(addButton.onPressed, isNull);
+    expect(addButton.onPressed, isNotNull);
 
     await tester.pumpWidget(const SizedBox.shrink());
     controller.dispose();
@@ -438,6 +439,31 @@ class _MemoryRepository implements ItemRepository {
 
   @override
   Future<void> deleteSubscription(CalendarSubscription current) async {}
+
+  @override
+  Future<SubscriptionFetchLog> applySubscriptionRefresh(
+    CalendarSubscription current, {
+    required List<LocalIcsEvent> events,
+    required bool notModified,
+    required int httpStatus,
+    required DateTime fetchedAt,
+    String? etag,
+    String? lastModified,
+    String? sourceHash,
+  }) async => throw UnimplementedError();
+
+  @override
+  Future<void> recordSubscriptionRefreshFailure(
+    CalendarSubscription current, {
+    required DateTime fetchedAt,
+    required String error,
+    int? httpStatus,
+  }) async {}
+
+  @override
+  Future<List<SubscriptionFetchLog>> listSubscriptionFetchLogs(
+    String subscriptionId,
+  ) async => const [];
 
   @override
   Future<ClientPreferences> loadPreferences(ClientPreferences defaults) async =>

@@ -130,7 +130,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 keyboardType: TextInputType.url,
                 decoration: const InputDecoration(
                   labelText: '功能服务地址',
-                  helperText: '网址订阅等可选远程功能请填写 Python Core 地址',
+                  helperText: '兼容 Python Core API；安装包本地功能不依赖此地址',
                   prefixIcon: Icon(Icons.hub_outlined),
                 ),
                 validator: _validateUrl,

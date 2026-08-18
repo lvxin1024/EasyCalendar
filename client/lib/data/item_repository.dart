@@ -1,5 +1,6 @@
 import '../domain/item.dart';
 import '../domain/subscription.dart';
+import 'local_ics_service.dart';
 import 'transfer_models.dart';
 
 abstract interface class ItemRepository {
@@ -64,6 +65,28 @@ abstract interface class ItemRepository {
   });
 
   Future<void> deleteSubscription(CalendarSubscription current);
+
+  Future<SubscriptionFetchLog> applySubscriptionRefresh(
+    CalendarSubscription current, {
+    required List<LocalIcsEvent> events,
+    required bool notModified,
+    required int httpStatus,
+    required DateTime fetchedAt,
+    String? etag,
+    String? lastModified,
+    String? sourceHash,
+  });
+
+  Future<void> recordSubscriptionRefreshFailure(
+    CalendarSubscription current, {
+    required DateTime fetchedAt,
+    required String error,
+    int? httpStatus,
+  });
+
+  Future<List<SubscriptionFetchLog>> listSubscriptionFetchLogs(
+    String subscriptionId,
+  );
 
   Future<ClientPreferences> loadPreferences(ClientPreferences defaults);
 

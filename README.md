@@ -35,7 +35,7 @@
 - 💻 macOS / Windows / Android 三平台 Flutter 桌面客户端
 - 🔒 数据完全在你手里：本地 SQLite 存储，可选自托管同步服务
 - 🤖 可选 AI 助手（OpenAI / Ollama），确认后才写入正式日程
-- 📡 支持 ICS 日历订阅（通过同步服务抓取）
+- 📡 支持 ICS 日历订阅（客户端本地条件抓取）
 
 > **EasyCalendar** is a personal calendar & due manager. Use it fully offline, or connect your own sync server for multi-device sync. Natural-language parsing, day/week/month views, due management, tag filters, recurrence — all stored in your local SQLite database.
 
@@ -69,13 +69,13 @@ EasyCalendar 由三个独立组件组成，可以根据需要分别部署。
 
 | 组件 | 技术栈 | 说明 |
 |---|---|---|
-| **Python Core** | Python 3.11+ / FastAPI / SQLite | 规则解析、网址订阅、AI 助手和兼容 API |
+| **Python Core** | Python 3.11+ / FastAPI / SQLite | 独立 API 与参考实现；Flutter 安装包的 ICS 功能不依赖它 |
 | **Flutter Client** | Flutter 3.44.9 / Dart / SQLite | macOS / Windows 桌面端和 Android 移动端，离线可用 |
 | **Sync Server** | TypeScript / Cloudflare Workers / D1 | 多设备同步（可选，离线使用不需要） |
 
 ### 1. Python Core
 
-规则解析、导入导出和 AI 助手等服务端功能的核心。它可以部署到已有远程服务器，但目前不承担 Flutter 客户端的多设备同步。
+规则解析、导入导出和 AI 助手等服务端 API 的参考实现。它可以独立部署，但不承担 Flutter 客户端的多设备同步；Flutter 安装包的 ICS 文件传输和网址订阅已在本机完成。
 
 ```bash
 git clone https://github.com/lvxin1024/easycalendar.git
@@ -223,7 +223,7 @@ cd ..
 | 设置项 | 如何填写 | 示例 |
 |---|---|---|
 | **同步服务地址** | 所有设备填写同一个 Cloudflare Worker HTTPS 地址 | `https://calendar.example.com` |
-| **功能服务地址** | 网址订阅等可选远程功能使用的 Python Core 地址；ICS 文件导入导出不需要 | `https://core.example.com` |
+| **功能服务地址** | 兼容 Python Core API 的可选地址；当前安装包本地功能不依赖 | `https://core.example.com` |
 | **同步服务令牌** | Cloudflare Worker 的 `ADMIN_TOKEN`；需要同步的设备填写同一个值 | 上面生成的 64 位字符串 |
 | **功能服务令牌** | Python Core 配置了 `ADMIN_TOKEN` 时填写；未配置鉴权时留空 | Core 实例自己的 token |
 | **设备名称** | 用于区分设备，可按习惯修改 | `工作电脑`、`手机` |
@@ -272,7 +272,7 @@ cd server && npm test      # Worker 测试
 | AI | OpenAI-compatible / Ollama Provider, Candidate 确认流程 |
 | 解析 | 中文规则引擎 (date_extractor + event_detector), 不依赖 AI |
 
-离线优先架构：客户端 `LocalItemRepository` 直连本地 SQLite，所有 CRUD 即时完成。同步层通过 outbox push / cursor pull 异步交换变更，确定性 LWW 冲突恢复。ICS 订阅由服务端抓取（ETag/Last-Modified 条件请求、SSRF 防护），解析后通过同步协议下发客户端。
+离线优先架构：客户端 `LocalItemRepository` 直连本地 SQLite，所有 CRUD 即时完成。同步层通过 outbox push / cursor pull 异步交换变更，确定性 LWW 冲突恢复。ICS 订阅由客户端直接执行 ETag/Last-Modified 条件请求，解析到只读 Collection 后通过同一同步协议交换。
 
 ---
 
@@ -292,7 +292,7 @@ cd server && npm test      # Worker 测试
 | P0.2 | **自动生成并持久化设备身份（已完成）** | 首次启动生成并保存唯一 ID，同时迁移旧固定默认值 | 设置页提供可读设备名称；技术 ID 仅在高级区域复制或经确认后重建；旧 outbox 保持原 ID 并可继续上传 |
 | P0.3 | **建立多平台 Release 流水线** | tag 工作流已定义；待配置签名 Secrets 并完成三平台首次真实 Runner/安装验证 | Git tag 自动产出 macOS 签名并公证的 DMG/PKG、Windows 签名安装包、Android release 签名 APK（AAB 可选），同时上传 SHA-256、版本说明和必要的调试符号；签名材料只存在 CI Secrets |
 | P0.4 | **干净安装和覆盖升级验收** | 目前的运行说明面向开发环境，尚未证明安装包脱离源码配置可用 | 在全新 macOS、Windows、Android 环境验证：无需 `config/client.json`、Python、Flutter、Node 即可启动和本地使用；重启后设置仍在；覆盖升级不丢数据库、同步令牌和 AI Key；形成可重复的 smoke test 清单 |
-| P0.5 | **收敛 Python Core 与客户端的运行时边界（进行中）** | ICS 文件传输和订阅数据生命周期已在 Flutter 本地完成；URL 抓取、订阅页面和部分规则解析仍依赖 Python Core | 继续把安装包承诺的本地能力移植到 Flutter；用户不需要手工启动后台进程；功能说明与安装包实际能力一致 |
+| P0.5 | **收敛 Python Core 与客户端的运行时边界（进行中）** | ICS 文件传输和网址订阅已在 Flutter 本地完成；规则解析边界和遗留功能服务配置仍待收敛 | 继续把安装包承诺的本地能力移植到 Flutter；用户不需要手工启动后台进程；功能说明与安装包实际能力一致 |
 | P0.6 | **验证 Release 环境下的安全存储** | 代码已使用 `flutter_secure_storage`，但缺少签名安装包中的 Keychain/Credential Manager/Android Keystore 端到端验收 | AI Key 和同步令牌可新增、替换、清除并在重启/升级后读取；不会写入 SQLite、JSON 备份、日志或崩溃报告；macOS entitlements、Windows 包身份和 Android 备份策略均通过真机验证 |
 
 ### P1：设置闭环与产品化

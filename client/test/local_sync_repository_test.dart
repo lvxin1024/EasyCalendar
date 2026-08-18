@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:easy_calendar/config/app_config.dart';
 import 'package:easy_calendar/data/item_repository.dart';
 import 'package:easy_calendar/data/local_item_repository.dart';
+import 'package:easy_calendar/data/local_ics_service.dart';
 import 'package:easy_calendar/domain/item.dart';
 import 'package:easy_calendar/domain/recurrence.dart';
 import 'package:easy_calendar/sync/sync_models.dart';
@@ -317,6 +318,69 @@ void main() {
             .map((change) => change.operation);
     expect(operations, ['create', 'update', 'delete']);
   });
+
+  test(
+    'applies subscription refreshes atomically with stable item ids',
+    () async {
+      final created = await repository.createSubscription(
+        title: 'Team calendar',
+        url: 'https://example.com/team.ics',
+        refreshIntervalMinutes: 60,
+      );
+      final firstFetch = DateTime.utc(2026, 8, 18, 1);
+      final firstLog = await repository.applySubscriptionRefresh(
+        created,
+        events: [
+          LocalIcsEvent(
+            externalId: 'meeting@example.com',
+            draft: ItemDraft(
+              type: ItemType.event,
+              title: 'Team meeting',
+              startAt: DateTime.utc(2026, 8, 19, 1),
+              endAt: DateTime.utc(2026, 8, 19, 2),
+              timezone: 'UTC',
+            ),
+          ),
+        ],
+        notModified: false,
+        httpStatus: 200,
+        fetchedAt: firstFetch,
+        etag: '"v1"',
+        sourceHash: 'hash-v1',
+      );
+
+      expect(firstLog.createdCount, 1);
+      final firstItem = (await repository.listItems()).single;
+      expect(firstItem.collectionId, created.collectionId);
+      expect(firstItem.title, 'Team meeting');
+      final refreshed = (await repository.listSubscriptions()).single;
+      expect(refreshed.etag, '"v1"');
+      expect(refreshed.sourceHash, 'hash-v1');
+
+      final unchangedLog = await repository.applySubscriptionRefresh(
+        refreshed,
+        events: const [],
+        notModified: true,
+        httpStatus: 304,
+        fetchedAt: DateTime.utc(2026, 8, 18, 2),
+        etag: refreshed.etag,
+        sourceHash: refreshed.sourceHash,
+      );
+      expect(unchangedLog.status, 'not_modified');
+      expect((await repository.listItems()).single.id, firstItem.id);
+      final logs = await repository.listSubscriptionFetchLogs(created.id);
+      expect(logs.map((value) => value.status), ['not_modified', 'success']);
+
+      final pending = await repository.listPendingChanges(now: DateTime.now());
+      expect(
+        pending
+            .where((change) => change.entityId == firstItem.id)
+            .single
+            .operation,
+        'create',
+      );
+    },
+  );
 
   test('schema v2 upgrades with pending entity heads intact', () async {
     final directory = await Directory.systemTemp.createTemp(

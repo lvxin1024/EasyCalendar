@@ -88,6 +88,19 @@ class SubscriptionFetchLog {
   final int updatedCount;
   final int deletedCount;
   final int unchangedCount;
+
+  Map<String, Object?> toJson() => {
+    'status': status,
+    'fetched_at': fetchedAt?.toUtc().toIso8601String(),
+    'http_status': httpStatus,
+    'error': error,
+    'etag': etag,
+    'source_hash': sourceHash,
+    'created_count': createdCount,
+    'updated_count': updatedCount,
+    'deleted_count': deletedCount,
+    'unchanged_count': unchangedCount,
+  };
 }
 
 DateTime? _date(Object? value) =>
