@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../../application/item_controller.dart';
 import '../../domain/subscription.dart';
@@ -230,7 +229,7 @@ class _SubscriptionsPageState extends State<SubscriptionsPage> {
   static String _time(BuildContext context, DateTime? value) {
     if (value == null) return '未知时间';
     final local = inConfiguredTimezone(value);
-    return '${DateFormat('yyyy-MM-dd', 'zh_CN').format(local)} ${formatTime(context, local)}';
+    return '${formatNumericDate(context, local)} ${formatTime(context, local)}';
   }
 
   static String _short(String value) =>

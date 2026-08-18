@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../../domain/item.dart';
+import '../../utils/date_formatters.dart';
 import '../../utils/tag_colors.dart';
 import 'calendar_navigation_controller.dart';
 
@@ -83,7 +83,7 @@ class _WeekdayHeader extends StatelessWidget {
           Expanded(
             child: Center(
               child: Text(
-                DateFormat('EEE', 'zh_CN').format(date),
+                formatWeekday(context, date),
                 style: Theme.of(context).textTheme.labelMedium,
               ),
             ),
@@ -241,7 +241,7 @@ class _MonthDayCell extends StatelessWidget {
     await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(DateFormat('yyyy年M月d日', 'zh_CN').format(date)),
+        title: Text(formatDate(context, date)),
         content: SizedBox(
           width: 440,
           child: ListView.separated(

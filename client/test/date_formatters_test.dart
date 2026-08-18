@@ -44,4 +44,18 @@ void main() {
     await pump(ClockFormat.hour24, system24Hour: false);
     expect(find.text('15:05'), findsOneWidget);
   });
+
+  testWidgets('date formatting follows the active locale', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('en'),
+        home: Builder(
+          builder: (context) =>
+              Text(formatDate(context, DateTime.utc(2026, 8, 18))),
+        ),
+      ),
+    );
+
+    expect(find.text('August 18, 2026'), findsOneWidget);
+  });
 }

@@ -606,7 +606,7 @@ class _DateTimeField extends StatelessWidget {
   Widget _dateButton(BuildContext context) => OutlinedButton.icon(
     icon: const Icon(Icons.calendar_today_outlined),
     label: Text(
-      value == null ? '选择日期' : formatDate(value!),
+      value == null ? '选择日期' : formatDate(context, value!),
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
     ),

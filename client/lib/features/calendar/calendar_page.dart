@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../../application/item_controller.dart';
 import '../../domain/item.dart';
@@ -151,7 +150,7 @@ class _PinnedDueStrip extends StatelessWidget {
 
   static String _dueLabel(BuildContext context, DateTime value) {
     final local = inConfiguredTimezone(value);
-    return '${DateFormat('M/d', 'zh_CN').format(local)} ${formatTime(context, local)}';
+    return '${formatMonthDay(context, local)} ${formatTime(context, local)}';
   }
 }
 
@@ -188,7 +187,7 @@ class _CalendarToolbar extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             Text(
-              _rangeTitle(navigation),
+              _rangeTitle(context, navigation),
               style: Theme.of(context).textTheme.titleMedium,
             ),
           ],
@@ -221,20 +220,18 @@ class _CalendarToolbar extends StatelessWidget {
 }
 
 String _rangeTitle(
+  BuildContext context,
   CalendarNavigationController navigation,
 ) => switch (navigation.mode) {
-  CalendarViewMode.day => DateFormat(
-    'yyyy年M月d日 EEEE',
-    'zh_CN',
-  ).format(navigation.selectedDate),
+  CalendarViewMode.day => formatDateWithWeekday(
+    context,
+    navigation.selectedDate,
+  ),
   CalendarViewMode.week =>
-    '${DateFormat('M月d日', 'zh_CN').format(navigation.rangeStart)}'
+    '${formatMonthDay(context, navigation.rangeStart)}'
         ' - '
-        '${DateFormat('M月d日', 'zh_CN').format(navigation.rangeEnd.subtract(const Duration(days: 1)))}',
-  CalendarViewMode.month => DateFormat(
-    'yyyy年M月',
-    'zh_CN',
-  ).format(navigation.selectedDate),
+        '${formatMonthDay(context, navigation.rangeEnd.subtract(const Duration(days: 1)))}',
+  CalendarViewMode.month => formatMonth(context, navigation.selectedDate),
 };
 
 String _periodLabel(CalendarViewMode mode) => switch (mode) {

@@ -4,11 +4,31 @@ import 'package:intl/intl.dart';
 import '../domain/item.dart';
 import 'configured_time.dart';
 
-String formatToday(DateTime value) =>
-    DateFormat('M月d日 EEEE', 'zh_CN').format(inConfiguredTimezone(value));
+String formatToday(BuildContext context, DateTime value) =>
+    DateFormat.MMMMEEEEd(
+      _localeName(context),
+    ).format(inConfiguredTimezone(value));
 
-String formatDate(DateTime value) =>
-    DateFormat('yyyy年M月d日', 'zh_CN').format(inConfiguredTimezone(value));
+String formatDate(BuildContext context, DateTime value) =>
+    DateFormat.yMMMMd(_localeName(context)).format(inConfiguredTimezone(value));
+
+String formatMonth(BuildContext context, DateTime value) =>
+    DateFormat.yMMMM(_localeName(context)).format(value);
+
+String formatMonthDay(BuildContext context, DateTime value) =>
+    DateFormat.MMMd(_localeName(context)).format(value);
+
+String formatNumericDate(BuildContext context, DateTime value) =>
+    DateFormat.yMd(_localeName(context)).format(value);
+
+String formatWeekday(BuildContext context, DateTime value) =>
+    DateFormat.E(_localeName(context)).format(value);
+
+String formatDateWithWeekday(BuildContext context, DateTime value) =>
+    DateFormat.yMMMMEEEEd(_localeName(context)).format(value);
+
+String formatCompactDateWithWeekday(BuildContext context, DateTime value) =>
+    DateFormat.MEd(_localeName(context)).format(value);
 
 class DateFormattingScope extends InheritedWidget {
   const DateFormattingScope({
@@ -42,7 +62,7 @@ bool uses24HourClock(BuildContext context) {
 
 String formatTime(BuildContext context, DateTime value) {
   final local = inConfiguredTimezone(value);
-  final locale = Localizations.maybeLocaleOf(context)?.toString();
+  final locale = _localeName(context);
   return DateFormat(
     uses24HourClock(context) ? 'HH:mm' : 'h:mm a',
     locale,
@@ -50,7 +70,7 @@ String formatTime(BuildContext context, DateTime value) {
 }
 
 String formatHourLabel(BuildContext context, int hour) {
-  final locale = Localizations.maybeLocaleOf(context)?.toString();
+  final locale = _localeName(context);
   return DateFormat(
     uses24HourClock(context) ? 'HH:mm' : 'h a',
     locale,
@@ -58,17 +78,20 @@ String formatHourLabel(BuildContext context, int hour) {
 }
 
 bool _localeDefaultsTo24Hours(BuildContext context) {
-  final locale = Localizations.maybeLocaleOf(context)?.toString();
+  final locale = _localeName(context);
   final pattern = DateFormat.jm(locale).pattern ?? '';
   return pattern.contains('H') || pattern.contains('k');
 }
+
+String _localeName(BuildContext context) =>
+    Localizations.maybeLocaleOf(context)?.toString() ?? 'en';
 
 String formatSchedule(BuildContext context, CalendarItem item) {
   final raw = item.scheduleAt;
   final value = raw == null ? null : inConfiguredTimezone(raw);
   if (value == null) return '未设置时间';
-  if (item.allDay) return '${formatDate(value)} · 全天';
-  final prefix = item.type == ItemType.task ? '截止' : formatDate(value);
+  if (item.allDay) return '${formatDate(context, value)} · 全天';
+  final prefix = item.type == ItemType.task ? '截止' : formatDate(context, value);
   if (item.type == ItemType.event && item.endAt != null) {
     return '$prefix ${formatTime(context, value)}–${formatTime(context, item.endAt!)}';
   }

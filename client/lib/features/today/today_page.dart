@@ -38,7 +38,7 @@ class TodayPage extends StatelessWidget {
       children: [
         _PageHeader(
           title: '今天',
-          subtitle: formatToday(configuredNow()),
+          subtitle: formatToday(context, configuredNow()),
           count: items.length,
         ),
         Expanded(

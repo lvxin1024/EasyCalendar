@@ -198,6 +198,35 @@ void main() {
   });
 
   test(
+    'changing display timezone does not rewrite stored UTC instants',
+    () async {
+      final start = DateTime.utc(2026, 8, 18, 7, 30);
+      await repository.createItem(
+        ItemDraft(
+          type: ItemType.event,
+          title: 'Timezone invariant event',
+          startAt: start,
+          endAt: start.add(const Duration(hours: 1)),
+          timezone: 'UTC',
+        ),
+      );
+      final defaults = ClientPreferences(
+        apiUrl: _config.apiUrl,
+        syncEnabled: _config.syncEnabled,
+        notificationsEnabled: _config.notificationsEnabled,
+      );
+
+      await repository.savePreferences(
+        defaults.copyWith(timezone: 'America/Los_Angeles'),
+      );
+
+      final stored = (await repository.listItems()).single;
+      expect(stored.startAt, start);
+      expect(stored.endAt, start.add(const Duration(hours: 1)));
+    },
+  );
+
+  test(
     'runtime settings drive new collection and outbox device identity',
     () async {
       await repository.configureRuntime(

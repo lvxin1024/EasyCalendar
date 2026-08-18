@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:intl/intl.dart';
 
 import '../../domain/item.dart';
 import '../../utils/configured_time.dart';
@@ -359,7 +358,7 @@ class _DateHeader extends StatelessWidget {
                 ),
                 child: Center(
                   child: Text(
-                    DateFormat('M/d E', 'zh_CN').format(date),
+                    formatCompactDateWithWeekday(context, date),
                     style: Theme.of(context).textTheme.labelLarge,
                   ),
                 ),

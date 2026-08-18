@@ -167,8 +167,6 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
   String _formatDeletedAt(BuildContext context, DateTime? value) {
     if (value == null) return '未知时间';
     final local = inConfiguredTimezone(value);
-    final month = local.month.toString().padLeft(2, '0');
-    final day = local.day.toString().padLeft(2, '0');
-    return '$month-$day ${formatTime(context, local)}';
+    return '${formatMonthDay(context, local)} ${formatTime(context, local)}';
   }
 }
