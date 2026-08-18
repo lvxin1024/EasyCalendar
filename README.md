@@ -267,18 +267,44 @@ cd server && npm test      # Worker 测试
 
 ## 📋 待办事项 / TODO
 
-按优先级排列的已知问题和未完成工作。
+目标：普通用户下载 Release 安装包后即可使用本地功能；除可选的云同步服务部署外，不需要安装 Python、Flutter 或 Node.js，不需要编辑配置文件或设置环境变量。所有运行时配置都应能在 App 内完成。
+
+完整实施顺序、任务状态和验收标准见 **[ROADMAP.md](ROADMAP.md)**。本节保留优先级摘要，具体状态以 Roadmap 为准。
+
+当前已经具备的基础能力：同步地址、同步令牌、设备 ID、默认 Collection、AI Provider/API Key、通知开关和桌面窗口参数可以在设置页维护；同步令牌和 AI Key 使用系统安全存储。下面只列尚未闭环的工作。
+
+### P0：Release / 开箱即用阻塞项
+
+| ID | 任务 | 当前缺口 | 完成标准 |
+|---|---|---|---|
+| P0.1 | **拆分服务配置并做能力发现** | 同一个“API 地址”同时被同步、网址订阅和远程导入导出使用；Cloudflare Worker 只实现同步接口，Python Core 又不实现同步，按现有文档配置必有页面请求 404 | 设置中明确区分“同步服务”和“功能服务”，或提供统一网关；保存前请求 `/v1/health`、`/v1/capabilities` 和鉴权接口；只展示服务实际支持的功能；本地模式不要求 token |
+| P0.2 | **自动生成并持久化设备身份** | 所有安装包默认使用同一个 `my-easycalendar-client`，用户必须手工避免冲突 | 首次启动自动生成全局唯一且长期稳定的设备 ID；另设可读的设备名称；普通设置不要求填写技术 ID；高级重置有风险提示，并能兼容已有 outbox 和旧默认值 |
+| P0.3 | **建立多平台 Release 流水线** | 当前只有测试工作流，没有客户端 Release 工作流；Android release 仍使用 debug 签名 | Git tag 自动产出 macOS 签名并公证的 DMG/PKG、Windows 签名安装包、Android release 签名 APK（AAB 可选），同时上传 SHA-256、版本说明和必要的调试符号；签名材料只存在 CI Secrets |
+| P0.4 | **干净安装和覆盖升级验收** | 目前的运行说明面向开发环境，尚未证明安装包脱离源码配置可用 | 在全新 macOS、Windows、Android 环境验证：无需 `config/client.json`、Python、Flutter、Node 即可启动和本地使用；重启后设置仍在；覆盖升级不丢数据库、同步令牌和 AI Key；形成可重复的 smoke test 清单 |
+| P0.5 | **收敛 Python Core 与客户端的运行时边界** | README 宣传的规则解析、网址订阅等能力有一部分只在 Python Core；安装 Flutter 客户端不会自动获得这些能力 | 明确选择并完成一种交付方式：移植到 Flutter、本地打包并托管 Core sidecar，或连接独立功能服务；用户不需要手工启动后台进程；设置页可看到组件状态和错误；功能说明与安装包实际能力一致 |
+| P0.6 | **验证 Release 环境下的安全存储** | 代码已使用 `flutter_secure_storage`，但缺少签名安装包中的 Keychain/Credential Manager/Android Keystore 端到端验收 | AI Key 和同步令牌可新增、替换、清除并在重启/升级后读取；不会写入 SQLite、JSON 备份、日志或崩溃报告；macOS entitlements、Windows 包身份和 Android 备份策略均通过真机验证 |
+
+### P1：设置闭环与产品化
+
+| ID | 任务 | 当前缺口 | 完成标准 |
+|---|---|---|---|
+| P1.1 | **首次启动向导与配置诊断** | 设置项虽已存在，但首次启动没有引导，保存后也缺少独立、清晰的连通性诊断 | 首次启动可选择“仅本地使用”或“连接已有服务”；同步和 AI Provider 均有“测试连接”；错误能区分 DNS、TLS、超时、401、版本/能力不兼容；诊断失败不影响本地数据 |
+| P1.2 | **时区、语言和日期偏好改为运行时设置** | 时区和语言由构建参数固定，设置页只能查看；发布包默认锁定 `Asia/Shanghai` 和 `zh-CN` | 首次启动默认跟随系统，并允许在设置中覆盖时区、语言、每周起始日和 12/24 小时制；修改后日历、解析、提醒、Widget 和导入导出使用同一配置，已有 UTC 数据不被错误改写 |
+| P1.3 | **隐藏技术性 Collection ID** | 用户需要理解并手填 Collection ID，同步设备之间还要保证完全相同 | 普通界面只选择默认日历；Collection ID 由 App 生成和维护；连接已有数据时通过服务端列表、邀请/配置码或导入选择，不要求复制内部 ID；保留高级查看和复制入口 |
+| P1.4 | **完善 AI Provider 配置向导** | Provider、URL、模型和参数主要依赖手填，模型不能自动获取，新配置不能在编辑弹窗内先测试 | 提供常见 OpenAI-compatible/Ollama 预设；可从 `/models` 或 Ollama tags 获取模型列表；编辑时可用尚未保存的 Key 测试；支持代理、超时和常用请求参数；提供 Key 的替换/清除状态但永不回显完整值 |
+| P1.5 | **接入真实系统通知与权限设置** | 设置中已有通知开关，但运行时仍使用 InMemory adapter，用户不会收到系统通知 | macOS、Windows、Android 接入真实通知实现；设置页展示权限状态、申请/跳转系统设置、发送测试通知；提醒创建、修改、删除、重启恢复和时区变化均有自动化与真机测试 |
+| P1.6 | **客户端备份、迁移和故障恢复** | 有手工 JSON 导出，但安装包升级前没有自动本地备份，也没有设置/数据库健康检查 | 数据库 schema 升级前创建可恢复备份；设置页支持查看备份、恢复和清理；启动迁移失败时保留原库并给出恢复入口；非敏感设置可单独导入导出，secret 和设备 ID 默认排除 |
+| P1.7 | **应用内版本与更新入口** | 用户只能自行查看 GitHub Release，不知道当前版本是否过期 | “关于”页显示版本、构建号、平台和数据 schema；可检查 GitHub Release、打开对应安装包并展示更新说明；后续可按平台增加签名校验后的自动更新，且不绕过系统安全机制 |
+| P1.8 | **统一应用身份与安装元数据** | macOS/Windows/Android 仍有 `easy_calendar`、模板注释和不一致的产品元数据 | 固定应用名、bundle/application ID、发布者、图标、版本规则和安装路径；Windows 卸载项、macOS About/签名信息、Android 应用标签一致；升级不会因标识变化创建第二份数据目录 |
+| P1.9 | **补齐客户端 CI 质量门禁** | CI 未运行 Flutter analyze/test，也没有原生构建检查 | PR 必须通过 Flutter analyze/test、Python tests、Worker tests；至少编译 macOS、Windows、Android release；对首次启动、设置持久化、设备 ID 唯一性、能力发现和安全存储增加覆盖 |
 
 ### 待修复 / Known Issues
 
 | # | 问题 | 说明 | 优先级 |
 |---|------|------|--------|
-| 1 | **ICS 订阅需要 token** | 未配置同步服务时，订阅页面直接报错而非友好引导 | 高 |
-| 2 | **Parser 覆盖有限** | 复杂时间范围、自然语言时长、重复规则需补充 fixture | 中 |
-| 3 | **平台通知 adapter** | 接口和 InMemory 实现已完成，macOS/Windows/Android 真实系统通知待接入 | 中 |
-| 4 | **自动备份未接入** | `auto_backup_before_migrate` 仍待实现 | 低 |
-| 5 | **Android/Windows 原生验收** | macOS 已通过 Xcode 启动验收，Android 和 Windows 待对应 SDK 工具链 | 低 |
-| 6 | **标签可复用** | 编辑标签时需手动输入，应列出已有标签供直接选择，避免重复和不一致 | 中 |
+| 1 | **Parser 覆盖有限** | 复杂时间范围、自然语言时长、重复规则需补充 fixture | 中 |
+| 2 | **服务端自动备份未接入** | `auto_backup_before_migrate` 仍待实现；这是云端部署任务，不阻塞纯本地安装包 | 低 |
+| 3 | **标签可复用** | 编辑标签时需手动输入，应列出已有标签供直接选择，避免重复和不一致 | 中 |
 
 ### 暂缓任务 / Deferred
 
