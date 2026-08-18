@@ -5,6 +5,22 @@ on:
   pull_request:
 
 jobs:
+  client:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.9"
+          channel: stable
+          cache: true
+      - run: flutter pub get
+        working-directory: client
+      - run: flutter analyze
+        working-directory: client
+      - run: flutter test
+        working-directory: client
+
   worker:
     runs-on: ubuntu-latest
     steps:

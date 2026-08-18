@@ -147,3 +147,13 @@ def test_android_release_build_never_falls_back_to_debug_signing():
     assert "releaseBuildRequested" in build_gradle
     assert "Release signing is not configured" in build_gradle
     assert key_template.is_file()
+
+
+def test_ci_runs_flutter_analysis_and_tests_with_the_pinned_sdk():
+    workflow = (ROOT / ".github" / "workflows" / "tests.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'flutter-version: "3.44.9"' in workflow
+    assert "flutter analyze" in workflow
+    assert "flutter test" in workflow
