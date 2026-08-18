@@ -38,6 +38,18 @@ void main() {
     expect(navigation.selectedDate, DateTime(2026, 2, 28));
   });
 
+  test('custom first day changes week and month ranges', () {
+    final navigation = CalendarNavigationController(
+      selectedDate: DateTime(2026, 8, 12),
+      initialFirstDayOfWeek: DateTime.sunday,
+    );
+
+    navigation.setMode(CalendarViewMode.week);
+    expect(navigation.rangeStart, DateTime(2026, 8, 9));
+    expect(navigation.rangeEnd, DateTime(2026, 8, 16));
+    expect(navigation.monthGridStart, DateTime(2026, 7, 26));
+  });
+
   test(
     'range query includes overlapping events and excludes cancelled items',
     () {

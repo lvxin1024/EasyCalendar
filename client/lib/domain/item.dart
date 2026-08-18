@@ -173,6 +173,7 @@ class ClientPreferences {
     this.featureApiUrl = 'http://localhost:8000',
     this.timezone = 'Asia/Shanghai',
     this.localeName = 'zh-CN',
+    this.firstDayOfWeek = 0,
     this.deviceId = 'my-easycalendar-client',
     this.deviceName = '',
     this.defaultCollectionId = 'collection_local',
@@ -190,6 +191,9 @@ class ClientPreferences {
   final String featureApiUrl;
   final String timezone;
   final String localeName;
+
+  /// 0 follows the active locale; 1..7 map to Monday..Sunday.
+  final int firstDayOfWeek;
   final String deviceId;
   final String deviceName;
   final String defaultCollectionId;
@@ -207,6 +211,7 @@ class ClientPreferences {
     String? featureApiUrl,
     String? timezone,
     String? localeName,
+    int? firstDayOfWeek,
     String? deviceId,
     String? deviceName,
     String? defaultCollectionId,
@@ -223,6 +228,7 @@ class ClientPreferences {
     featureApiUrl: featureApiUrl ?? this.featureApiUrl,
     timezone: timezone ?? this.timezone,
     localeName: localeName ?? this.localeName,
+    firstDayOfWeek: firstDayOfWeek ?? this.firstDayOfWeek,
     deviceId: deviceId ?? this.deviceId,
     deviceName: deviceName ?? this.deviceName,
     defaultCollectionId: defaultCollectionId ?? this.defaultCollectionId,

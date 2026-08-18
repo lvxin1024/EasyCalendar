@@ -1550,6 +1550,10 @@ class LocalItemRepository
       featureApiUrl: values['feature_api_url'] ?? defaults.featureApiUrl,
       timezone: values['timezone'] ?? defaults.timezone,
       localeName: values['locale_name'] ?? defaults.localeName,
+      firstDayOfWeek: _storedFirstDayOfWeek(
+        values['first_day_of_week'],
+        defaults.firstDayOfWeek,
+      ),
       deviceId: values['device_id'] ?? defaults.deviceId,
       deviceName: values['device_name'] ?? defaults.deviceName,
       defaultCollectionId:
@@ -1589,6 +1593,7 @@ class LocalItemRepository
         'feature_api_url': preferences.featureApiUrl.trim(),
         'timezone': preferences.timezone.trim(),
         'locale_name': preferences.localeName.trim(),
+        'first_day_of_week': preferences.firstDayOfWeek.toString(),
         'device_id': preferences.deviceId.trim(),
         'device_name': preferences.deviceName.trim(),
         'default_collection_id': preferences.defaultCollectionId.trim(),
@@ -1618,6 +1623,11 @@ class LocalItemRepository
   static double _storedOpacity(String? value, double fallback) {
     final parsed = double.tryParse(value ?? '');
     return (parsed ?? fallback).clamp(0.2, 1.0).toDouble();
+  }
+
+  static int _storedFirstDayOfWeek(String? value, int fallback) {
+    final parsed = int.tryParse(value ?? '');
+    return parsed != null && parsed >= 0 && parsed <= 7 ? parsed : fallback;
   }
 
   static List<AiProviderConfig> _storedProviders(

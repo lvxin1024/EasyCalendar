@@ -32,72 +32,71 @@ class _CalendarPageState extends State<CalendarPage> {
   Set<String> _selectedTags = const {};
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
+  Widget build(BuildContext context) {
+    final configured = widget.controller.preferences.firstDayOfWeek;
     final materialIndex = MaterialLocalizations.of(context).firstDayOfWeekIndex;
     widget.navigation.updateFirstDayOfWeek(
-      materialWeekdayToDateTime(materialIndex),
+      configured == 0 ? materialWeekdayToDateTime(materialIndex) : configured,
+      notify: false,
+    );
+    return AnimatedBuilder(
+      animation: widget.navigation,
+      builder: (context, _) {
+        final filteredItems = widget.controller.items
+            .where((item) => matchesTagFilter(item, _selectedTags))
+            .toList(growable: false);
+        final events = widget.navigation.eventsInRange(filteredItems);
+        final dues =
+            filteredItems
+                .where(
+                  (item) =>
+                      item.type == ItemType.task &&
+                      item.status == ItemStatus.todo,
+                )
+                .toList(growable: false)
+              ..sort((left, right) => left.dueAt!.compareTo(right.dueAt!));
+        final availableTags = tagsFromItems(widget.controller.items);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _CalendarToolbar(navigation: widget.navigation),
+            const Divider(),
+            TagFilterBar(
+              tags: availableTags,
+              selectedTags: _selectedTags,
+              colors: widget.controller.preferences.tagColors,
+              onChanged: (value) => setState(() => _selectedTags = value),
+            ),
+            if (dues.isNotEmpty)
+              _PinnedDueStrip(items: dues, onEdit: widget.onEdit),
+            Expanded(
+              child: widget.navigation.mode == CalendarViewMode.month
+                  ? CalendarMonthGrid(
+                      navigation: widget.navigation,
+                      items: widget.navigation.calendarItemsInRange(
+                        widget.controller.items,
+                      ),
+                      onEdit: widget.onEdit,
+                      tagColors: widget.controller.preferences.tagColors,
+                    )
+                  : CalendarTimeGrid(
+                      dates: widget.navigation.visibleDates,
+                      items: events,
+                      dueItems: dues,
+                      tagColors: widget.controller.preferences.tagColors,
+                      selectedDate: widget.navigation.selectedDate,
+                      hourHeight: _hourHeight,
+                      onHourHeightChanged: (value) =>
+                          setState(() => _hourHeight = value.clamp(16, 120)),
+                      onDateSelected: widget.navigation.selectDate,
+                      onEdit: widget.onEdit,
+                    ),
+            ),
+          ],
+        );
+      },
     );
   }
-
-  @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-    animation: widget.navigation,
-    builder: (context, _) {
-      final filteredItems = widget.controller.items
-          .where((item) => matchesTagFilter(item, _selectedTags))
-          .toList(growable: false);
-      final events = widget.navigation.eventsInRange(filteredItems);
-      final dues =
-          filteredItems
-              .where(
-                (item) =>
-                    item.type == ItemType.task &&
-                    item.status == ItemStatus.todo,
-              )
-              .toList(growable: false)
-            ..sort((left, right) => left.dueAt!.compareTo(right.dueAt!));
-      final availableTags = tagsFromItems(widget.controller.items);
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _CalendarToolbar(navigation: widget.navigation),
-          const Divider(),
-          TagFilterBar(
-            tags: availableTags,
-            selectedTags: _selectedTags,
-            colors: widget.controller.preferences.tagColors,
-            onChanged: (value) => setState(() => _selectedTags = value),
-          ),
-          if (dues.isNotEmpty)
-            _PinnedDueStrip(items: dues, onEdit: widget.onEdit),
-          Expanded(
-            child: widget.navigation.mode == CalendarViewMode.month
-                ? CalendarMonthGrid(
-                    navigation: widget.navigation,
-                    items: widget.navigation.calendarItemsInRange(
-                      widget.controller.items,
-                    ),
-                    onEdit: widget.onEdit,
-                    tagColors: widget.controller.preferences.tagColors,
-                  )
-                : CalendarTimeGrid(
-                    dates: widget.navigation.visibleDates,
-                    items: events,
-                    dueItems: dues,
-                    tagColors: widget.controller.preferences.tagColors,
-                    selectedDate: widget.navigation.selectedDate,
-                    hourHeight: _hourHeight,
-                    onHourHeightChanged: (value) =>
-                        setState(() => _hourHeight = value.clamp(16, 120)),
-                    onDateSelected: widget.navigation.selectDate,
-                    onEdit: widget.onEdit,
-                  ),
-          ),
-        ],
-      );
-    },
-  );
 }
 
 class _PinnedDueStrip extends StatelessWidget {

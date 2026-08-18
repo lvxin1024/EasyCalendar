@@ -72,11 +72,11 @@ class CalendarNavigationController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void updateFirstDayOfWeek(int value) {
+  void updateFirstDayOfWeek(int value, {bool notify = true}) {
     if (value < DateTime.monday || value > DateTime.sunday) return;
     if (_firstDayOfWeek == value) return;
     _firstDayOfWeek = value;
-    notifyListeners();
+    if (notify) notifyListeners();
   }
 
   void goToToday({bool useDayView = false}) {

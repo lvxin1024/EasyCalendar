@@ -24,6 +24,16 @@ const _timezoneOptions = [
   'Europe/London',
   'America/Los_Angeles',
 ];
+const _firstDayOfWeekOptions = <int, String>{
+  0: '跟随语言',
+  1: '周一',
+  2: '周二',
+  3: '周三',
+  4: '周四',
+  5: '周五',
+  6: '周六',
+  7: '周日',
+};
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
@@ -56,6 +66,7 @@ class _SettingsPageState extends State<SettingsPage> {
   late bool _assistantEnabled;
   late String _timezone;
   late String _localeName;
+  late int _firstDayOfWeek;
   late List<AiProviderConfig> _aiProviders;
   late Map<String, int> _tagColors;
   bool _obscureToken = true;
@@ -92,6 +103,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _assistantEnabled = preferences.assistantEnabled;
     _timezone = preferences.timezone;
     _localeName = preferences.localeName;
+    _firstDayOfWeek = preferences.firstDayOfWeek;
     _aiProviders = [...preferences.aiProviders];
     _tagColors = {...preferences.tagColors};
     widget.controller.desktopWindowController?.addListener(_windowChanged);
@@ -428,6 +440,28 @@ class _SettingsPageState extends State<SettingsPage> {
                   if (value != null) setState(() => _timezone = value);
                 },
               ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<int>(
+                initialValue:
+                    _firstDayOfWeekOptions.containsKey(_firstDayOfWeek)
+                    ? _firstDayOfWeek
+                    : 0,
+                decoration: const InputDecoration(
+                  labelText: '每周起始日',
+                  prefixIcon: Icon(Icons.date_range_outlined),
+                ),
+                items: _firstDayOfWeekOptions.entries
+                    .map(
+                      (entry) => DropdownMenuItem(
+                        value: entry.key,
+                        child: Text(entry.value),
+                      ),
+                    )
+                    .toList(growable: false),
+                onChanged: (value) {
+                  if (value != null) setState(() => _firstDayOfWeek = value);
+                },
+              ),
               _InfoRow(
                 icon: Icons.folder_outlined,
                 label: '默认 Collection',
@@ -519,6 +553,7 @@ class _SettingsPageState extends State<SettingsPage> {
           featureApiUrl: _featureApiUrlController.text.trim(),
           timezone: _timezone,
           localeName: _localeName,
+          firstDayOfWeek: _firstDayOfWeek,
           deviceId: _deviceIdController.text.trim(),
           deviceName: _deviceNameController.text.trim(),
           defaultCollectionId: _collectionIdController.text.trim(),

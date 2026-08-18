@@ -183,11 +183,12 @@ void main() {
     expect(loaded.tagColors, {'工作': 0xFF2563EB});
 
     await repository.savePreferences(
-      defaults.copyWith(timezone: 'UTC', localeName: 'en'),
+      defaults.copyWith(timezone: 'UTC', localeName: 'en', firstDayOfWeek: 7),
     );
     final localized = await repository.loadPreferences(defaults);
     expect(localized.timezone, 'UTC');
     expect(localized.localeName, 'en');
+    expect(localized.firstDayOfWeek, 7);
   });
 
   test(
