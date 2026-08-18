@@ -7,6 +7,7 @@ import 'package:easy_calendar/data/service_probe_client.dart';
 import 'package:easy_calendar/data/transfer_models.dart';
 import 'package:easy_calendar/device/device_identity.dart';
 import 'package:easy_calendar/domain/item.dart';
+import 'package:easy_calendar/domain/subscription.dart';
 import 'package:easy_calendar/features/subscriptions/subscriptions_page.dart';
 import 'package:easy_calendar/features/transfer/transfer_page.dart';
 import 'package:easy_calendar/sync/token_store.dart';
@@ -415,6 +416,28 @@ class _MemoryRepository implements ItemRepository {
 
   @override
   Future<void> commitLocalJsonImport(String content) async {}
+
+  @override
+  Future<List<CalendarSubscription>> listSubscriptions() async => const [];
+
+  @override
+  Future<CalendarSubscription> createSubscription({
+    required String title,
+    required String url,
+    required int refreshIntervalMinutes,
+  }) async => throw UnimplementedError();
+
+  @override
+  Future<CalendarSubscription> updateSubscription(
+    CalendarSubscription current, {
+    required String title,
+    required String url,
+    required bool enabled,
+    required int refreshIntervalMinutes,
+  }) async => throw UnimplementedError();
+
+  @override
+  Future<void> deleteSubscription(CalendarSubscription current) async {}
 
   @override
   Future<ClientPreferences> loadPreferences(ClientPreferences defaults) async =>

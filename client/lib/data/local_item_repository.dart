@@ -11,6 +11,7 @@ import '../config/app_config.dart';
 import '../ai/ai_provider.dart';
 import '../domain/item.dart';
 import '../domain/recurrence.dart';
+import '../domain/subscription.dart';
 import '../sync/sync_models.dart';
 import '../sync/sync_repository.dart';
 import 'item_repository.dart';
@@ -790,14 +791,18 @@ class LocalItemRepository
     final issues = <TransferIssue>[];
 
     final backupCollectionIds = <String>{};
-    for (final key in ['collections', 'items', 'subscriptions', 'outbox', 'sync_state']) {
+    for (final key in [
+      'collections',
+      'items',
+      'subscriptions',
+      'outbox',
+      'sync_state',
+    ]) {
       final values = decoded[key];
       if (values is! List) {
-        issues.add(TransferIssue(
-          resourceType: key,
-          index: 0,
-          message: '$key 必须是数组',
-        ));
+        issues.add(
+          TransferIssue(resourceType: key, index: 0, message: '$key 必须是数组'),
+        );
         continue;
       }
       if (key == 'collections') {
@@ -813,20 +818,16 @@ class LocalItemRepository
       for (var i = 0; i < values.length; i++) {
         final entry = values[i];
         if (entry is! Map) {
-          issues.add(TransferIssue(
-            resourceType: key,
-            index: i,
-            message: '条目必须是对象',
-          ));
+          issues.add(
+            TransferIssue(resourceType: key, index: i, message: '条目必须是对象'),
+          );
           continue;
         }
         final id = entry['id'];
         if (id is! String || id.isEmpty) {
-          issues.add(TransferIssue(
-            resourceType: key,
-            index: i,
-            message: '缺少有效 ID',
-          ));
+          issues.add(
+            TransferIssue(resourceType: key, index: i, message: '缺少有效 ID'),
+          );
           continue;
         }
         if (existingIds.contains(id)) {
@@ -851,12 +852,14 @@ class LocalItemRepository
             collectionId.isNotEmpty &&
             !allCollectionIds.contains(collectionId)) {
           final itemId = entry['id'];
-          issues.add(TransferIssue(
-            resourceType: 'items',
-            index: i,
-            message: 'Collection $collectionId 不存在',
-            resourceId: itemId is String ? itemId : null,
-          ));
+          issues.add(
+            TransferIssue(
+              resourceType: 'items',
+              index: i,
+              message: 'Collection $collectionId 不存在',
+              resourceId: itemId is String ? itemId : null,
+            ),
+          );
           conflicts['items'] = (conflicts['items'] ?? 0) + 1;
         }
       }
@@ -871,12 +874,14 @@ class LocalItemRepository
             collectionId.isNotEmpty &&
             !allCollectionIds.contains(collectionId)) {
           final subId = entry['id'];
-          issues.add(TransferIssue(
-            resourceType: 'subscriptions',
-            index: i,
-            message: 'Collection $collectionId 不存在',
-            resourceId: subId is String ? subId : null,
-          ));
+          issues.add(
+            TransferIssue(
+              resourceType: 'subscriptions',
+              index: i,
+              message: 'Collection $collectionId 不存在',
+              resourceId: subId is String ? subId : null,
+            ),
+          );
           conflicts['subscriptions'] = (conflicts['subscriptions'] ?? 0) + 1;
         }
       }
@@ -900,7 +905,13 @@ class LocalItemRepository
       throw const FormatException('备份文件根节点必须是 JSON object');
     }
     await _db.transaction((transaction) async {
-      for (final key in ['collections', 'items', 'subscriptions', 'outbox', 'sync_state']) {
+      for (final key in [
+        'collections',
+        'items',
+        'subscriptions',
+        'outbox',
+        'sync_state',
+      ]) {
         final values = decoded[key];
         if (values is! List) continue;
         final table = _tableForBackupKey(key);
@@ -911,9 +922,260 @@ class LocalItemRepository
           final id = entry['id'];
           if (id is! String || id.isEmpty) continue;
           if (existingIds.contains(id)) continue;
-          final row = Map<String, Object?>.from(entry.map((k, v) => MapEntry(k, v)));
+          final row = Map<String, Object?>.from(
+            entry.map((k, v) => MapEntry(k, v)),
+          );
           await transaction.insert(table, row);
         }
+      }
+    });
+  }
+
+  @override
+  Future<List<CalendarSubscription>> listSubscriptions() async {
+    final rows = await _db.query(
+      'subscriptions',
+      where: 'deleted_at IS NULL',
+      orderBy: 'updated_at DESC, id',
+    );
+    return rows.map(_subscriptionFromRow).toList(growable: false);
+  }
+
+  @override
+  Future<CalendarSubscription> createSubscription({
+    required String title,
+    required String url,
+    required int refreshIntervalMinutes,
+  }) async {
+    final normalizedTitle = title.trim();
+    final normalizedUrl = _validateSubscriptionUrl(url);
+    _validateRefreshInterval(refreshIntervalMinutes);
+    if (normalizedTitle.isEmpty) {
+      throw const RepositoryConflict('订阅名称不能为空。');
+    }
+    final now = DateTime.now();
+    final subscriptionId = 'subscription_${_uuid.v4()}';
+    final collectionId = 'collection_${_uuid.v4()}';
+    final collection = {
+      'id': collectionId,
+      'name': normalizedTitle,
+      'kind': 'subscription',
+      'color': _colorText(config.defaultCollectionColor.toARGB32()),
+      'readonly': 1,
+      'created_at': _timeText(now),
+      'updated_at': _timeText(now),
+      'deleted_at': null,
+      'version': 1,
+    };
+    final payload = _subscriptionPayload(
+      id: subscriptionId,
+      collectionId: collectionId,
+      title: normalizedTitle,
+      url: normalizedUrl,
+      enabled: true,
+      refreshIntervalMinutes: refreshIntervalMinutes,
+      createdAt: now,
+      updatedAt: now,
+      version: 1,
+    );
+    await _db.transaction((transaction) async {
+      await transaction.insert('collections', collection);
+      await _writeCollectionOutbox(
+        transaction,
+        collection,
+        operation: 'create',
+      );
+      await transaction.insert('subscriptions', _subscriptionRow(payload));
+      await _writeSubscriptionOutbox(transaction, payload, operation: 'create');
+    });
+    return CalendarSubscription.fromJson(payload);
+  }
+
+  @override
+  Future<CalendarSubscription> updateSubscription(
+    CalendarSubscription current, {
+    required String title,
+    required String url,
+    required bool enabled,
+    required int refreshIntervalMinutes,
+  }) async {
+    final normalizedTitle = title.trim();
+    final normalizedUrl = _validateSubscriptionUrl(url);
+    _validateRefreshInterval(refreshIntervalMinutes);
+    if (normalizedTitle.isEmpty) {
+      throw const RepositoryConflict('订阅名称不能为空。');
+    }
+    final now = DateTime.now();
+    late Map<String, Object?> updatedPayload;
+    await _db.transaction((transaction) async {
+      final rows = await transaction.query(
+        'subscriptions',
+        where: 'id = ? AND version = ? AND deleted_at IS NULL',
+        whereArgs: [current.id, current.version],
+        limit: 1,
+      );
+      if (rows.isEmpty) {
+        throw const RepositoryConflict('订阅已更新或删除，请刷新后重试。');
+      }
+      final payload = _subscriptionPayloadFromRow(rows.single);
+      final metadata = Map<String, Object?>.from(
+        payload['metadata'] is Map
+            ? (payload['metadata'] as Map).cast<String, Object?>()
+            : const {},
+      )..['refresh_interval_minutes'] = refreshIntervalMinutes;
+      updatedPayload = {
+        ...payload,
+        'title': normalizedTitle,
+        'url': normalizedUrl,
+        'enabled': enabled,
+        'metadata': metadata,
+        'updated_at': _timeText(now),
+        'version': current.version + 1,
+        if (normalizedUrl != current.url) ...{
+          'last_fetched_at': null,
+          'last_success_at': null,
+          'last_error': null,
+          'etag': null,
+          'last_modified': null,
+          'source_hash': null,
+        },
+      };
+      await transaction.update(
+        'subscriptions',
+        _subscriptionRow(updatedPayload),
+        where: 'id = ? AND version = ? AND deleted_at IS NULL',
+        whereArgs: [current.id, current.version],
+      );
+      await _writeSubscriptionOutbox(
+        transaction,
+        updatedPayload,
+        operation: 'update',
+      );
+      if (normalizedTitle != current.title) {
+        final collectionRows = await transaction.query(
+          'collections',
+          where: 'id = ? AND deleted_at IS NULL',
+          whereArgs: [current.collectionId],
+          limit: 1,
+        );
+        if (collectionRows.isNotEmpty) {
+          final collection = {
+            ...collectionRows.single,
+            'name': normalizedTitle,
+            'updated_at': _timeText(now),
+            'version': (collectionRows.single['version'] as int) + 1,
+          };
+          await transaction.update(
+            'collections',
+            collection,
+            where: 'id = ?',
+            whereArgs: [current.collectionId],
+          );
+          await _writeCollectionOutbox(
+            transaction,
+            collection,
+            operation: 'update',
+          );
+        }
+      }
+    });
+    return CalendarSubscription.fromJson(updatedPayload);
+  }
+
+  @override
+  Future<void> deleteSubscription(CalendarSubscription current) async {
+    final now = DateTime.now();
+    await _db.transaction((transaction) async {
+      final rows = await transaction.query(
+        'subscriptions',
+        where: 'id = ? AND version = ? AND deleted_at IS NULL',
+        whereArgs: [current.id, current.version],
+        limit: 1,
+      );
+      if (rows.isEmpty) {
+        throw const RepositoryConflict('订阅已更新或删除，请刷新后重试。');
+      }
+      final deletedPayload = {
+        ..._subscriptionPayloadFromRow(rows.single),
+        'updated_at': _timeText(now),
+        'deleted_at': _timeText(now),
+        'version': current.version + 1,
+      };
+      await transaction.update(
+        'subscriptions',
+        _subscriptionRow(deletedPayload),
+        where: 'id = ? AND version = ?',
+        whereArgs: [current.id, current.version],
+      );
+      await _writeSubscriptionOutbox(
+        transaction,
+        deletedPayload,
+        operation: 'delete',
+      );
+
+      final itemRows = await transaction.query(
+        'items',
+        where: 'collection_id = ? AND deleted_at IS NULL',
+        whereArgs: [current.collectionId],
+      );
+      for (final row in itemRows) {
+        final item = _itemFromRow(row);
+        final deletedItem = CalendarItem(
+          id: item.id,
+          collectionId: item.collectionId,
+          type: item.type,
+          title: item.title,
+          body: item.body,
+          startAt: item.startAt,
+          endAt: item.endAt,
+          dueAt: item.dueAt,
+          recurrence: item.recurrence,
+          timezone: item.timezone,
+          allDay: item.allDay,
+          location: item.location,
+          status: item.status,
+          priority: item.priority,
+          reminderEnabled: item.reminderEnabled,
+          reminderMinutes: item.reminderMinutes,
+          tags: item.tags,
+          createdAt: item.createdAt,
+          updatedAt: now,
+          deletedAt: now,
+          version: item.version + 1,
+        );
+        await transaction.update(
+          'items',
+          _itemToRow(deletedItem),
+          where: 'id = ?',
+          whereArgs: [item.id],
+        );
+        await _writeOutbox(transaction, deletedItem, 'delete');
+      }
+
+      final collectionRows = await transaction.query(
+        'collections',
+        where: 'id = ? AND deleted_at IS NULL',
+        whereArgs: [current.collectionId],
+        limit: 1,
+      );
+      if (collectionRows.isNotEmpty) {
+        final collection = {
+          ...collectionRows.single,
+          'updated_at': _timeText(now),
+          'deleted_at': _timeText(now),
+          'version': (collectionRows.single['version'] as int) + 1,
+        };
+        await transaction.update(
+          'collections',
+          collection,
+          where: 'id = ?',
+          whereArgs: [current.collectionId],
+        );
+        await _writeCollectionOutbox(
+          transaction,
+          collection,
+          operation: 'delete',
+        );
       }
     });
   }
@@ -927,6 +1189,74 @@ class LocalItemRepository
     _ => throw FormatException('Unknown backup key: $key'),
   };
 
+  static CalendarSubscription _subscriptionFromRow(Map<String, Object?> row) =>
+      CalendarSubscription.fromJson(_subscriptionPayloadFromRow(row));
+
+  static Map<String, Object?> _subscriptionPayloadFromRow(
+    Map<String, Object?> row,
+  ) => (jsonDecode(row['payload_json'] as String) as Map<String, dynamic>)
+      .cast<String, Object?>();
+
+  static Map<String, Object?> _subscriptionRow(Map<String, Object?> payload) =>
+      {
+        'id': payload['id'],
+        'collection_id': payload['collection_id'],
+        'payload_json': jsonEncode(payload),
+        'updated_at': payload['updated_at'],
+        'deleted_at': payload['deleted_at'],
+        'version': payload['version'],
+      };
+
+  static Map<String, Object?> _subscriptionPayload({
+    required String id,
+    required String collectionId,
+    required String title,
+    required String url,
+    required bool enabled,
+    required int refreshIntervalMinutes,
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    required int version,
+  }) => {
+    'id': id,
+    'collection_id': collectionId,
+    'type': 'ics',
+    'title': title,
+    'url': url,
+    'enabled': enabled,
+    'last_fetched_at': null,
+    'last_success_at': null,
+    'last_error': null,
+    'etag': null,
+    'last_modified': null,
+    'source_hash': null,
+    'metadata': {'refresh_interval_minutes': refreshIntervalMinutes},
+    'created_at': _timeText(createdAt),
+    'updated_at': _timeText(updatedAt),
+    'deleted_at': null,
+    'version': version,
+  };
+
+  static String _validateSubscriptionUrl(String value) {
+    final normalized = value.trim().startsWith('webcal://')
+        ? value.trim().replaceFirst('webcal://', 'https://')
+        : value.trim();
+    final uri = Uri.tryParse(normalized);
+    if (uri == null ||
+        !uri.hasAuthority ||
+        (uri.scheme != 'http' && uri.scheme != 'https') ||
+        uri.userInfo.isNotEmpty) {
+      throw const RepositoryConflict('订阅地址必须是无内嵌凭据的 HTTP(S) 或 webcal URL。');
+    }
+    return normalized;
+  }
+
+  static void _validateRefreshInterval(int value) {
+    if (value < 1 || value > 10080) {
+      throw const RepositoryConflict('刷新间隔必须在 1 分钟到 7 天之间。');
+    }
+  }
+
   @override
   Future<ClientPreferences> loadPreferences(ClientPreferences defaults) async {
     final rows = await _db.query('app_settings');
@@ -935,8 +1265,7 @@ class LocalItemRepository
     };
     return ClientPreferences(
       apiUrl: values['api_url'] ?? defaults.apiUrl,
-      featureApiUrl:
-          values['feature_api_url'] ?? defaults.featureApiUrl,
+      featureApiUrl: values['feature_api_url'] ?? defaults.featureApiUrl,
       deviceId: values['device_id'] ?? defaults.deviceId,
       deviceName: values['device_name'] ?? defaults.deviceName,
       defaultCollectionId:
@@ -1122,6 +1451,42 @@ class LocalItemRepository
         operation: operation,
         version: collection['version'] as int,
         updatedAt: DateTime.parse(collection['updated_at'] as String),
+        payload: payload,
+      ),
+    );
+  }
+
+  Future<void> _writeSubscriptionOutbox(
+    Transaction transaction,
+    Map<String, Object?> payload, {
+    required String operation,
+  }) async {
+    final changeId = 'change_${_uuid.v4()}';
+    await transaction.insert('outbox', {
+      'change_id': changeId,
+      'device_id': _runtimeDeviceId,
+      'entity_type': 'subscription',
+      'entity_id': payload['id'],
+      'operation': operation,
+      'entity_version': payload['version'],
+      'payload_json': jsonEncode(payload),
+      'created_at': payload['updated_at'],
+      'retry_count': 0,
+      'last_error': null,
+      'next_attempt_at': null,
+      'permanent_failure': 0,
+      'sent_at': null,
+    });
+    await _upsertSyncHead(
+      transaction,
+      RemoteSyncChange(
+        changeId: changeId,
+        deviceId: _runtimeDeviceId,
+        entityType: 'subscription',
+        entityId: payload['id'] as String,
+        operation: operation,
+        version: payload['version'] as int,
+        updatedAt: DateTime.parse(payload['updated_at'] as String),
         payload: payload,
       ),
     );

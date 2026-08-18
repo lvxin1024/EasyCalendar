@@ -1,4 +1,5 @@
 import '../domain/item.dart';
+import '../domain/subscription.dart';
 import 'transfer_models.dart';
 
 abstract interface class ItemRepository {
@@ -45,6 +46,24 @@ abstract interface class ItemRepository {
   Future<TransferResult> previewLocalJsonImport(String content);
 
   Future<void> commitLocalJsonImport(String content);
+
+  Future<List<CalendarSubscription>> listSubscriptions();
+
+  Future<CalendarSubscription> createSubscription({
+    required String title,
+    required String url,
+    required int refreshIntervalMinutes,
+  });
+
+  Future<CalendarSubscription> updateSubscription(
+    CalendarSubscription current, {
+    required String title,
+    required String url,
+    required bool enabled,
+    required int refreshIntervalMinutes,
+  });
+
+  Future<void> deleteSubscription(CalendarSubscription current);
 
   Future<ClientPreferences> loadPreferences(ClientPreferences defaults);
 

@@ -12,6 +12,7 @@ import '../data/service_probe_client.dart';
 import '../data/transfer_models.dart';
 import '../device/device_identity.dart';
 import '../domain/item.dart';
+import '../domain/subscription.dart';
 import '../notification/notification_service.dart';
 import '../sync/sync_coordinator.dart';
 import '../sync/sync_models.dart';
@@ -356,6 +357,48 @@ class ItemController extends ChangeNotifier {
       }
     });
   }
+
+  Future<List<CalendarSubscription>> listSubscriptions() =>
+      repository.listSubscriptions();
+
+  Future<CalendarSubscription> createSubscription({
+    required String title,
+    required String url,
+    required int refreshIntervalMinutes,
+  }) async {
+    late CalendarSubscription result;
+    await _mutate(() async {
+      result = await repository.createSubscription(
+        title: title,
+        url: url,
+        refreshIntervalMinutes: refreshIntervalMinutes,
+      );
+    });
+    return result;
+  }
+
+  Future<CalendarSubscription> updateSubscription(
+    CalendarSubscription current, {
+    required String title,
+    required String url,
+    required bool enabled,
+    required int refreshIntervalMinutes,
+  }) async {
+    late CalendarSubscription result;
+    await _mutate(() async {
+      result = await repository.updateSubscription(
+        current,
+        title: title,
+        url: url,
+        enabled: enabled,
+        refreshIntervalMinutes: refreshIntervalMinutes,
+      );
+    });
+    return result;
+  }
+
+  Future<void> deleteSubscription(CalendarSubscription current) =>
+      _mutate(() => repository.deleteSubscription(current));
 
   Future<void> setTaskCompleted(CalendarItem item, {required bool completed}) =>
       _mutate(() async {

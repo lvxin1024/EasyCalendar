@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:easy_calendar/config/app_config.dart';
+import 'package:easy_calendar/data/item_repository.dart';
 import 'package:easy_calendar/data/local_item_repository.dart';
 import 'package:easy_calendar/domain/item.dart';
 import 'package:easy_calendar/domain/recurrence.dart';
@@ -252,6 +253,64 @@ void main() {
     await repository.deleteCollection(updated);
 
     expect((await repository.listCollections()), hasLength(1));
+    final operations =
+        (await repository.listPendingChanges(now: DateTime.now()))
+            .where((change) => change.entityId == created.id)
+            .map((change) => change.operation);
+    expect(operations, ['create', 'update', 'delete']);
+  });
+
+  test('owns subscription lifecycle and readonly collection locally', () async {
+    final created = await repository.createSubscription(
+      title: 'Team calendar',
+      url: 'webcal://example.com/team.ics',
+      refreshIntervalMinutes: 180,
+    );
+
+    expect(created.url, 'https://example.com/team.ics');
+    expect(created.enabled, isTrue);
+    expect(created.refreshIntervalMinutes, 180);
+    final collection = (await repository.listCollections()).singleWhere(
+      (value) => value.id == created.collectionId,
+    );
+    expect(collection.readonly, isTrue);
+    expect(collection.kind, 'subscription');
+    await expectLater(
+      repository.createItem(
+        ItemDraft(
+          collectionId: collection.id,
+          type: ItemType.event,
+          title: 'Cannot edit',
+          startAt: DateTime.utc(2026, 8, 18),
+          timezone: 'UTC',
+        ),
+      ),
+      throwsA(isA<RepositoryConflict>()),
+    );
+
+    final updated = await repository.updateSubscription(
+      created,
+      title: 'Updated team calendar',
+      url: created.url,
+      enabled: false,
+      refreshIntervalMinutes: 360,
+    );
+    expect(updated.version, 2);
+    expect(updated.enabled, isFalse);
+    expect(updated.refreshIntervalMinutes, 360);
+    expect(
+      (await repository.listCollections())
+          .singleWhere((value) => value.id == created.collectionId)
+          .name,
+      'Updated team calendar',
+    );
+
+    await repository.deleteSubscription(updated);
+    expect(await repository.listSubscriptions(), isEmpty);
+    expect(
+      (await repository.listCollections()).map((value) => value.id),
+      isNot(contains(created.collectionId)),
+    );
     final operations =
         (await repository.listPendingChanges(now: DateTime.now()))
             .where((change) => change.entityId == created.id)
