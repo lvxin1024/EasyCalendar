@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 import '../ai/ai_key_store.dart';
 import '../ai/ai_provider.dart';
@@ -88,6 +89,8 @@ class ItemController extends ChangeNotifier {
   ClientPreferences get _defaultPreferences => ClientPreferences(
     apiUrl: config.apiUrl,
     featureApiUrl: config.featureApiUrl,
+    timezone: config.timezone,
+    localeName: config.locale.toLanguageTag(),
     deviceId: config.deviceId,
     defaultCollectionId: config.defaultCollectionId,
     defaultCollectionName: config.defaultCollectionName,
@@ -340,7 +343,7 @@ class ItemController extends ChangeNotifier {
       _localIcsService
           .planImport(
             content,
-            defaultTimezone: config.timezone,
+            defaultTimezone: preferences.timezone,
             existingItems: _items,
           )
           .result;
@@ -349,7 +352,7 @@ class ItemController extends ChangeNotifier {
     await _mutate(() async {
       final plan = _localIcsService.planImport(
         content,
-        defaultTimezone: config.timezone,
+        defaultTimezone: preferences.timezone,
         existingItems: _items,
       );
       if (!plan.result.accepted) {
@@ -415,7 +418,7 @@ class ItemController extends ChangeNotifier {
       if (!response.notModified) {
         final plan = _localIcsService.planImport(
           response.content,
-          defaultTimezone: config.timezone,
+          defaultTimezone: preferences.timezone,
           deduplicate: false,
         );
         if (!plan.result.accepted) {
@@ -506,6 +509,11 @@ class ItemController extends ChangeNotifier {
         defaultCollectionName: value.defaultCollectionName,
       );
     }
+    try {
+      tz.setLocalLocation(tz.getLocation(value.timezone));
+    } catch (_) {
+      throw FormatException('无法识别时区：${value.timezone}');
+    }
   }
 
   Future<void> _mutate(
@@ -539,7 +547,7 @@ class ItemController extends ChangeNotifier {
     try {
       await widgetSnapshotWriter?.write(
         items: _items,
-        timezone: config.timezone,
+        timezone: preferences.timezone,
       );
     } catch (_) {
       // Widget refresh is derived state and must not block local CRUD.

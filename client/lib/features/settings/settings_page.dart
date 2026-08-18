@@ -16,6 +16,15 @@ import '../../widgets/tag_filter_bar.dart';
 import '../recycle_bin/recycle_bin_page.dart';
 import '../transfer/transfer_page.dart';
 
+const _localeOptions = ['zh-CN', 'en'];
+const _timezoneOptions = [
+  'Asia/Shanghai',
+  'Asia/Tokyo',
+  'UTC',
+  'Europe/London',
+  'America/Los_Angeles',
+];
+
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
     super.key,
@@ -45,6 +54,8 @@ class _SettingsPageState extends State<SettingsPage> {
   late double _windowOpacity;
   late bool _windowAlwaysOnTop;
   late bool _assistantEnabled;
+  late String _timezone;
+  late String _localeName;
   late List<AiProviderConfig> _aiProviders;
   late Map<String, int> _tagColors;
   bool _obscureToken = true;
@@ -79,6 +90,8 @@ class _SettingsPageState extends State<SettingsPage> {
     _windowOpacity = preferences.windowOpacity;
     _windowAlwaysOnTop = preferences.windowAlwaysOnTop;
     _assistantEnabled = preferences.assistantEnabled;
+    _timezone = preferences.timezone;
+    _localeName = preferences.localeName;
     _aiProviders = [...preferences.aiProviders];
     _tagColors = {...preferences.tagColors};
     widget.controller.desktopWindowController?.addListener(_windowChanged);
@@ -378,15 +391,42 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               const SizedBox(height: 24),
               _SectionLabel(label: '本地环境'),
-              _InfoRow(
-                icon: Icons.language,
-                label: '语言',
-                value: widget.config.locale.toLanguageTag(),
+              DropdownButtonFormField<String>(
+                initialValue: _localeOptions.contains(_localeName)
+                    ? _localeName
+                    : _localeOptions.first,
+                decoration: const InputDecoration(
+                  labelText: '语言',
+                  prefixIcon: Icon(Icons.language),
+                ),
+                items: _localeOptions
+                    .map(
+                      (value) =>
+                          DropdownMenuItem(value: value, child: Text(value)),
+                    )
+                    .toList(growable: false),
+                onChanged: (value) {
+                  if (value != null) setState(() => _localeName = value);
+                },
               ),
-              _InfoRow(
-                icon: Icons.schedule,
-                label: '时区',
-                value: widget.config.timezone,
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                initialValue: _timezoneOptions.contains(_timezone)
+                    ? _timezone
+                    : _timezoneOptions.first,
+                decoration: const InputDecoration(
+                  labelText: '时区',
+                  prefixIcon: Icon(Icons.schedule),
+                ),
+                items: _timezoneOptions
+                    .map(
+                      (value) =>
+                          DropdownMenuItem(value: value, child: Text(value)),
+                    )
+                    .toList(growable: false),
+                onChanged: (value) {
+                  if (value != null) setState(() => _timezone = value);
+                },
               ),
               _InfoRow(
                 icon: Icons.folder_outlined,
@@ -477,6 +517,8 @@ class _SettingsPageState extends State<SettingsPage> {
         ClientPreferences(
           apiUrl: _apiUrlController.text.trim(),
           featureApiUrl: _featureApiUrlController.text.trim(),
+          timezone: _timezone,
+          localeName: _localeName,
           deviceId: _deviceIdController.text.trim(),
           deviceName: _deviceNameController.text.trim(),
           defaultCollectionId: _collectionIdController.text.trim(),

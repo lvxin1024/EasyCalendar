@@ -30,56 +30,65 @@ class EasyCalendarApp extends StatelessWidget {
       error: const Color(0xFFB42318),
       surface: const Color(0xFFFCFCFD),
     );
-    return MaterialApp(
-      title: config.appName,
-      debugShowCheckedModeBanner: false,
-      locale: config.locale,
-      supportedLocales: const [Locale('zh', 'CN'), Locale('en')],
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: scheme,
-        scaffoldBackgroundColor: const Color(0xFFF7F8FA),
-        dividerTheme: const DividerThemeData(
-          color: Color(0xFFE4E7EC),
-          thickness: 1,
-          space: 1,
-        ),
-        cardTheme: const CardThemeData(
-          margin: EdgeInsets.zero,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            side: BorderSide(color: Color(0xFFE4E7EC)),
-            borderRadius: BorderRadius.all(Radius.circular(8)),
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) => MaterialApp(
+        title: config.appName,
+        debugShowCheckedModeBanner: false,
+        locale: _locale(controller.preferences.localeName, config.locale),
+        supportedLocales: const [Locale('zh', 'CN'), Locale('en')],
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        theme: ThemeData(
+          useMaterial3: true,
+          colorScheme: scheme,
+          scaffoldBackgroundColor: const Color(0xFFF7F8FA),
+          dividerTheme: const DividerThemeData(
+            color: Color(0xFFE4E7EC),
+            thickness: 1,
+            space: 1,
+          ),
+          cardTheme: const CardThemeData(
+            margin: EdgeInsets.zero,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              side: BorderSide(color: Color(0xFFE4E7EC)),
+              borderRadius: BorderRadius.all(Radius.circular(8)),
+            ),
+          ),
+          inputDecorationTheme: const InputDecorationTheme(
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.all(Radius.circular(6)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderSide: BorderSide(color: Color(0xFFD0D5DD)),
+              borderRadius: BorderRadius.all(Radius.circular(6)),
+            ),
+            filled: true,
+            fillColor: Colors.white,
+          ),
+          navigationRailTheme: const NavigationRailThemeData(
+            backgroundColor: Colors.white,
+            indicatorShape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(Radius.circular(6)),
+            ),
           ),
         ),
-        inputDecorationTheme: const InputDecorationTheme(
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.all(Radius.circular(6)),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderSide: BorderSide(color: Color(0xFFD0D5DD)),
-            borderRadius: BorderRadius.all(Radius.circular(6)),
-          ),
-          filled: true,
-          fillColor: Colors.white,
+        home: HomeShell(
+          config: config,
+          controller: controller,
+          widgetDeepLinks: widgetDeepLinks,
         ),
-        navigationRailTheme: const NavigationRailThemeData(
-          backgroundColor: Colors.white,
-          indicatorShape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(6)),
-          ),
-        ),
-      ),
-      home: HomeShell(
-        config: config,
-        controller: controller,
-        widgetDeepLinks: widgetDeepLinks,
       ),
     );
+  }
+
+  static Locale _locale(String value, Locale fallback) {
+    final parts = value.replaceAll('_', '-').split('-');
+    if (parts.first.isEmpty) return fallback;
+    return Locale(parts.first, parts.length > 1 ? parts[1] : null);
   }
 }

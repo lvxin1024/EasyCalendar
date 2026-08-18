@@ -171,6 +171,8 @@ class ClientPreferences {
   const ClientPreferences({
     required this.apiUrl,
     this.featureApiUrl = 'http://localhost:8000',
+    this.timezone = 'Asia/Shanghai',
+    this.localeName = 'zh-CN',
     this.deviceId = 'my-easycalendar-client',
     this.deviceName = '',
     this.defaultCollectionId = 'collection_local',
@@ -186,6 +188,8 @@ class ClientPreferences {
 
   final String apiUrl;
   final String featureApiUrl;
+  final String timezone;
+  final String localeName;
   final String deviceId;
   final String deviceName;
   final String defaultCollectionId;
@@ -201,6 +205,8 @@ class ClientPreferences {
   ClientPreferences copyWith({
     String? apiUrl,
     String? featureApiUrl,
+    String? timezone,
+    String? localeName,
     String? deviceId,
     String? deviceName,
     String? defaultCollectionId,
@@ -215,6 +221,8 @@ class ClientPreferences {
   }) => ClientPreferences(
     apiUrl: apiUrl ?? this.apiUrl,
     featureApiUrl: featureApiUrl ?? this.featureApiUrl,
+    timezone: timezone ?? this.timezone,
+    localeName: localeName ?? this.localeName,
     deviceId: deviceId ?? this.deviceId,
     deviceName: deviceName ?? this.deviceName,
     defaultCollectionId: defaultCollectionId ?? this.defaultCollectionId,

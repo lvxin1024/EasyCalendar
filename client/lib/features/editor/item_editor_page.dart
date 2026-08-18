@@ -422,7 +422,7 @@ class _ItemEditorPageState extends State<ItemEditorPage> {
       endAt: _type == ItemType.event ? endAt : null,
       dueAt: _type == ItemType.task ? _dueAt : null,
       recurrence: _type == ItemType.event ? _buildRecurrence() : null,
-      timezone: widget.config.timezone,
+      timezone: widget.controller.preferences.timezone,
       allDay: _type == ItemType.event && _allDay,
       location: _type == ItemType.event ? _locationController.text : null,
       status: _status,

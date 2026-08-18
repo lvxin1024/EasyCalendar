@@ -168,12 +168,12 @@ class _AssistantPageState extends State<AssistantPage> {
           ? _localParser.extract(
               text,
               now: configuredNow(),
-              timezone: widget.config.timezone,
+              timezone: widget.controller.preferences.timezone,
             )
           : await _client.extract(
               provider: provider,
               text: text,
-              timezone: widget.config.timezone,
+              timezone: widget.controller.preferences.timezone,
             );
       if (!mounted) return;
       setState(() {

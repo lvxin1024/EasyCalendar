@@ -181,6 +181,13 @@ void main() {
     expect(loaded.deviceName, '工作电脑');
     expect(loaded.featureApiUrl, 'https://core.example.com');
     expect(loaded.tagColors, {'工作': 0xFF2563EB});
+
+    await repository.savePreferences(
+      defaults.copyWith(timezone: 'UTC', localeName: 'en'),
+    );
+    final localized = await repository.loadPreferences(defaults);
+    expect(localized.timezone, 'UTC');
+    expect(localized.localeName, 'en');
   });
 
   test(
