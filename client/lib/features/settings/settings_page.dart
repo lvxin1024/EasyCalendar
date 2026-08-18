@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 import '../../ai/ai_provider.dart';
 import '../../application/item_controller.dart';
@@ -16,14 +17,11 @@ import '../../widgets/tag_filter_bar.dart';
 import '../recycle_bin/recycle_bin_page.dart';
 import '../transfer/transfer_page.dart';
 
-const _localeOptions = ['zh-CN', 'en'];
-const _timezoneOptions = [
-  'Asia/Shanghai',
-  'Asia/Tokyo',
-  'UTC',
-  'Europe/London',
-  'America/Los_Angeles',
-];
+const _localeOptions = <String, String>{
+  'system': '跟随系统',
+  'zh-CN': '简体中文',
+  'en': 'English',
+};
 const _firstDayOfWeekOptions = <int, String>{
   0: '跟随语言',
   1: '周一',
@@ -411,17 +409,19 @@ class _SettingsPageState extends State<SettingsPage> {
               const SizedBox(height: 24),
               _SectionLabel(label: '本地环境'),
               DropdownButtonFormField<String>(
-                initialValue: _localeOptions.contains(_localeName)
+                initialValue: _localeOptions.containsKey(_localeName)
                     ? _localeName
-                    : _localeOptions.first,
+                    : 'system',
                 decoration: const InputDecoration(
                   labelText: '语言',
                   prefixIcon: Icon(Icons.language),
                 ),
-                items: _localeOptions
+                items: _localeOptions.entries
                     .map(
-                      (value) =>
-                          DropdownMenuItem(value: value, child: Text(value)),
+                      (entry) => DropdownMenuItem(
+                        value: entry.key,
+                        child: Text(entry.value),
+                      ),
                     )
                     .toList(growable: false),
                 onChanged: (value) {
@@ -429,23 +429,15 @@ class _SettingsPageState extends State<SettingsPage> {
                 },
               ),
               const SizedBox(height: 10),
-              DropdownButtonFormField<String>(
-                initialValue: _timezoneOptions.contains(_timezone)
-                    ? _timezone
-                    : _timezoneOptions.first,
+              TextFormField(
+                initialValue: _timezone,
                 decoration: const InputDecoration(
                   labelText: '时区',
+                  helperText: '填写 system 跟随系统，或填写 IANA 时区（如 Asia/Shanghai）',
                   prefixIcon: Icon(Icons.schedule),
                 ),
-                items: _timezoneOptions
-                    .map(
-                      (value) =>
-                          DropdownMenuItem(value: value, child: Text(value)),
-                    )
-                    .toList(growable: false),
-                onChanged: (value) {
-                  if (value != null) setState(() => _timezone = value);
-                },
+                validator: _validateTimezone,
+                onChanged: (value) => _timezone = value.trim(),
               ),
               const SizedBox(height: 10),
               DropdownButtonFormField<int>(
@@ -561,6 +553,17 @@ class _SettingsPageState extends State<SettingsPage> {
 
   String? _validateRequired(String? raw) =>
       raw?.trim().isNotEmpty == true ? null : '不能为空';
+
+  String? _validateTimezone(String? raw) {
+    final value = raw?.trim() ?? '';
+    if (value == 'system') return null;
+    try {
+      tz.getLocation(value);
+      return null;
+    } catch (_) {
+      return '请输入 system 或有效的 IANA 时区';
+    }
+  }
 
   String? _validateDeviceId(String? raw) {
     final value = raw?.trim() ?? '';

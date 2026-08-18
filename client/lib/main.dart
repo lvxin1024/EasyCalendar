@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
@@ -21,8 +22,19 @@ import 'window/desktop_window_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final config = AppConfig.fromEnvironment();
   tz_data.initializeTimeZones();
+  String? systemTimezone;
+  try {
+    final candidate = (await FlutterTimezone.getLocalTimezone()).identifier;
+    tz.getLocation(candidate);
+    systemTimezone = candidate;
+  } catch (_) {
+    // The bundled fallback keeps startup available on unsupported platforms.
+  }
+  final config = AppConfig.fromEnvironment(
+    systemLocale: WidgetsBinding.instance.platformDispatcher.locale,
+    systemTimezone: systemTimezone,
+  );
   tz.setLocalLocation(tz.getLocation(config.timezone));
   await initializeDateFormatting('zh_CN');
   final repository = LocalItemRepository(config);

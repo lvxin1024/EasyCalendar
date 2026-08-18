@@ -85,12 +85,13 @@ class ItemController extends ChangeNotifier {
   bool get featureTokenConfigured => _featureTokenConfigured;
   ServiceProbeResult? get syncServiceProbe => _syncServiceProbe;
   ServiceProbeResult? get featureServiceProbe => _featureServiceProbe;
+  String get activeTimezone => _resolveTimezone(preferences);
 
   ClientPreferences get _defaultPreferences => ClientPreferences(
     apiUrl: config.apiUrl,
     featureApiUrl: config.featureApiUrl,
-    timezone: config.timezone,
-    localeName: config.locale.toLanguageTag(),
+    timezone: config.timezonePreference ?? config.timezone,
+    localeName: config.localePreference ?? config.locale.toLanguageTag(),
     deviceId: config.deviceId,
     defaultCollectionId: config.defaultCollectionId,
     defaultCollectionName: config.defaultCollectionName,
@@ -343,7 +344,7 @@ class ItemController extends ChangeNotifier {
       _localIcsService
           .planImport(
             content,
-            defaultTimezone: preferences.timezone,
+            defaultTimezone: activeTimezone,
             existingItems: _items,
           )
           .result;
@@ -352,7 +353,7 @@ class ItemController extends ChangeNotifier {
     await _mutate(() async {
       final plan = _localIcsService.planImport(
         content,
-        defaultTimezone: preferences.timezone,
+        defaultTimezone: activeTimezone,
         existingItems: _items,
       );
       if (!plan.result.accepted) {
@@ -418,7 +419,7 @@ class ItemController extends ChangeNotifier {
       if (!response.notModified) {
         final plan = _localIcsService.planImport(
           response.content,
-          defaultTimezone: preferences.timezone,
+          defaultTimezone: activeTimezone,
           deduplicate: false,
         );
         if (!plan.result.accepted) {
@@ -470,6 +471,11 @@ class ItemController extends ChangeNotifier {
       });
 
   Future<void> savePreferences(ClientPreferences value) async {
+    try {
+      tz.getLocation(_resolveTimezone(value));
+    } catch (_) {
+      throw FormatException('无法识别时区：${value.timezone}');
+    }
     await _mutate(() async {
       await repository.savePreferences(value);
       if (preferences.apiUrl != value.apiUrl) _syncServiceProbe = null;
@@ -510,11 +516,14 @@ class ItemController extends ChangeNotifier {
       );
     }
     try {
-      tz.setLocalLocation(tz.getLocation(value.timezone));
+      tz.setLocalLocation(tz.getLocation(_resolveTimezone(value)));
     } catch (_) {
       throw FormatException('无法识别时区：${value.timezone}');
     }
   }
+
+  String _resolveTimezone(ClientPreferences value) =>
+      value.timezone == 'system' ? config.timezone : value.timezone;
 
   Future<void> _mutate(
     Future<void> Function() operation, {
@@ -547,7 +556,7 @@ class ItemController extends ChangeNotifier {
     try {
       await widgetSnapshotWriter?.write(
         items: _items,
-        timezone: preferences.timezone,
+        timezone: activeTimezone,
       );
     } catch (_) {
       // Widget refresh is derived state and must not block local CRUD.

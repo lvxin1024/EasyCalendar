@@ -17,14 +17,27 @@ class AppConfig {
     required this.syncEnabled,
     required this.syncRetryLimit,
     required this.notificationsEnabled,
+    this.localePreference,
+    this.timezonePreference,
   });
 
-  factory AppConfig.fromEnvironment({DeviceIdentity? deviceIdentity}) {
+  factory AppConfig.fromEnvironment({
+    DeviceIdentity? deviceIdentity,
+    Locale? systemLocale,
+    String? systemTimezone,
+  }) {
     final identity = deviceIdentity ?? DeviceIdentity();
     const localeName = String.fromEnvironment(
       'EASYCALENDAR_LOCALE',
-      defaultValue: 'zh-CN',
+      defaultValue: '',
     );
+    const timezoneName = String.fromEnvironment('EASYCALENDAR_TIMEZONE');
+    final resolvedLocale = localeName.trim().isEmpty
+        ? systemLocale ?? const Locale('zh', 'CN')
+        : _parseLocale(localeName);
+    final resolvedTimezone = timezoneName.trim().isEmpty
+        ? systemTimezone ?? 'Asia/Shanghai'
+        : timezoneName.trim();
     const colorValue = String.fromEnvironment(
       'EASYCALENDAR_DEFAULT_COLLECTION_COLOR',
       defaultValue: '#2563EB',
@@ -38,11 +51,12 @@ class AppConfig {
         'EASYCALENDAR_APP_NAME',
         defaultValue: 'EasyCalendar',
       ),
-      locale: _parseLocale(localeName),
-      timezone: const String.fromEnvironment(
-        'EASYCALENDAR_TIMEZONE',
-        defaultValue: 'Asia/Shanghai',
-      ),
+      locale: resolvedLocale,
+      timezone: resolvedTimezone,
+      localePreference: localeName.trim().isEmpty ? 'system' : localeName,
+      timezonePreference: timezoneName.trim().isEmpty
+          ? 'system'
+          : timezoneName.trim(),
       defaultCollectionId: const String.fromEnvironment(
         'EASYCALENDAR_DEFAULT_COLLECTION_ID',
         defaultValue: 'collection_local',
@@ -97,6 +111,8 @@ class AppConfig {
   final bool syncEnabled;
   final int syncRetryLimit;
   final bool notificationsEnabled;
+  final String? localePreference;
+  final String? timezonePreference;
 
   static bool _parseBool(String value) => value.toLowerCase() == 'true';
 

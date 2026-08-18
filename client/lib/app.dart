@@ -92,6 +92,7 @@ class EasyCalendarApp extends StatelessWidget {
   }
 
   static Locale _locale(String value, Locale fallback) {
+    if (value == 'system') return fallback;
     final parts = value.replaceAll('_', '-').split('-');
     if (parts.first.isEmpty) return fallback;
     return Locale(parts.first, parts.length > 1 ? parts[1] : null);

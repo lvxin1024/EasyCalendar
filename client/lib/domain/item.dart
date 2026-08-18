@@ -173,8 +173,8 @@ class ClientPreferences {
   const ClientPreferences({
     required this.apiUrl,
     this.featureApiUrl = 'http://localhost:8000',
-    this.timezone = 'Asia/Shanghai',
-    this.localeName = 'zh-CN',
+    this.timezone = 'system',
+    this.localeName = 'system',
     this.firstDayOfWeek = 0,
     this.clockFormat = ClockFormat.system,
     this.deviceId = 'my-easycalendar-client',

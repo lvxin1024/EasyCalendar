@@ -1,8 +1,9 @@
 # EasyCalendar Flutter client
 
 The client is local-first and uses SQLite on Android, macOS, and Windows. Its
-runtime defaults come from `config/client.json`; no user-specific endpoint,
-timezone, collection, or feature toggle is stored in Dart source.
+runtime defaults follow the host locale and IANA timezone unless
+`config/client.json` overrides them; no user-specific endpoint, timezone,
+collection, or feature toggle is stored in Dart source.
 
 ```bash
 cp config/client.example.json config/client.json
