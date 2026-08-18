@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/item_controller.dart';
 import '../../config/app_config.dart';
+import '../../data/transfer_models.dart';
 import '../../domain/item.dart';
 import '../../widget/widget_deep_link_controller.dart';
 import '../calendar/calendar_navigation_controller.dart';
@@ -99,10 +100,7 @@ class _HomeShellState extends State<HomeShell> {
         return const Scaffold(body: Center(child: CircularProgressIndicator()));
       }
       if (!widget.controller.initialized && widget.controller.error != null) {
-        return _StartupError(
-          error: widget.controller.error!,
-          onRetry: widget.controller.initialize,
-        );
+        return _StartupError(controller: widget.controller);
       }
       return LayoutBuilder(
         builder: (context, constraints) {
@@ -326,11 +324,17 @@ class _HomeShellState extends State<HomeShell> {
   }
 }
 
-class _StartupError extends StatelessWidget {
-  const _StartupError({required this.error, required this.onRetry});
+class _StartupError extends StatefulWidget {
+  const _StartupError({required this.controller});
 
-  final Object error;
-  final VoidCallback onRetry;
+  final ItemController controller;
+
+  @override
+  State<_StartupError> createState() => _StartupErrorState();
+}
+
+class _StartupErrorState extends State<_StartupError> {
+  bool _restoring = false;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -354,16 +358,28 @@ class _StartupError extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                error.toString(),
+                widget.controller.error.toString(),
                 textAlign: TextAlign.center,
                 maxLines: 4,
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 20),
-              FilledButton.icon(
-                onPressed: onRetry,
-                icon: const Icon(Icons.refresh),
-                label: const Text('重试'),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.center,
+                children: [
+                  FilledButton.icon(
+                    onPressed: _restoring ? null : widget.controller.initialize,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('重试'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _restoring ? null : _chooseBackup,
+                    icon: const Icon(Icons.settings_backup_restore),
+                    label: const Text('从恢复点恢复'),
+                  ),
+                ],
               ),
             ],
           ),
@@ -371,4 +387,73 @@ class _StartupError extends StatelessWidget {
       ),
     ),
   );
+
+  Future<void> _chooseBackup() async {
+    List<LocalDatabaseBackup> backups;
+    try {
+      backups = await widget.controller.listLocalDatabaseBackups();
+    } catch (error) {
+      _showError('无法读取恢复点：$error');
+      return;
+    }
+    if (!mounted) return;
+    if (backups.isEmpty) {
+      _showError('没有可用的本地恢复点');
+      return;
+    }
+    final selected = await showDialog<LocalDatabaseBackup>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('选择恢复点'),
+        content: SizedBox(
+          width: 480,
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: backups.length,
+            separatorBuilder: (_, _) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              final backup = backups[index];
+              return ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.restore_page_outlined),
+                title: Text(_reasonLabel(backup.reason)),
+                subtitle: Text(
+                  '${backup.createdAt.toLocal()} · schema v${backup.schemaVersion}',
+                ),
+                onTap: () => Navigator.pop(context, backup),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+        ],
+      ),
+    );
+    if (selected == null) return;
+    setState(() => _restoring = true);
+    try {
+      await widget.controller.restoreLocalDatabaseBackup(selected.path);
+    } catch (error) {
+      if (mounted) _showError('恢复失败：$error');
+    } finally {
+      if (mounted) setState(() => _restoring = false);
+    }
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  static String _reasonLabel(LocalBackupReason reason) => switch (reason) {
+    LocalBackupReason.migration => '升级前自动恢复点',
+    LocalBackupReason.manual => '手动恢复点',
+    LocalBackupReason.preRestore => '恢复操作前的状态',
+  };
 }

@@ -109,6 +109,18 @@ abstract interface class RuntimeSettingsPort {
   });
 }
 
+abstract interface class LocalRecoveryPort {
+  Future<List<LocalDatabaseBackup>> listLocalDatabaseBackups();
+
+  Future<LocalDatabaseBackup> createLocalDatabaseBackup({
+    LocalBackupReason reason = LocalBackupReason.manual,
+  });
+
+  Future<void> restoreLocalDatabaseBackup(String backupPath);
+
+  Future<void> deleteLocalDatabaseBackup(String backupPath);
+}
+
 class RepositoryConflict implements Exception {
   const RepositoryConflict(this.message);
 

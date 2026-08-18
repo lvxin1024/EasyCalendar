@@ -97,7 +97,9 @@ class AiProviderConfig {
 
   Map<String, dynamic> get nonSensitiveRequestParameters => {
     for (final entry in requestParameters.entries)
-      if (!_sensitiveParameter(entry.key)) entry.key: entry.value,
+      if (!_sensitiveParameter(entry.key) &&
+          !_credentialUrl(entry.key, entry.value))
+        entry.key: _sanitizeValue(entry.value),
   };
 
   Map<String, dynamic> get payloadRequestParameters => {
@@ -121,7 +123,7 @@ class AiProviderConfig {
     'id': id,
     'name': name,
     'kind': aiProviderKindToJson(kind),
-    'base_url': baseUrl,
+    'base_url': _withoutUrlCredentials(baseUrl),
     'model': model,
     'enabled': enabled,
     'request_parameters': nonSensitiveRequestParameters,
@@ -166,7 +168,36 @@ class AiProviderConfig {
       'refreshtoken',
       'secret',
       'clientsecret',
+      'password',
+      'credential',
+      'credentials',
+      'privatekey',
     }.contains(normalized);
+  }
+
+  static Object? _sanitizeValue(Object? value) {
+    if (value is Map) {
+      return <String, dynamic>{
+        for (final entry in value.entries)
+          if (entry.key is String && !_sensitiveParameter(entry.key as String))
+            entry.key as String: _sanitizeValue(entry.value),
+      };
+    }
+    if (value is List) {
+      return value.map(_sanitizeValue).toList(growable: false);
+    }
+    return value;
+  }
+
+  static bool _credentialUrl(String key, Object? value) {
+    if (key != 'proxy_url' || value is! String) return false;
+    return Uri.tryParse(value)?.userInfo.isNotEmpty == true;
+  }
+
+  static String _withoutUrlCredentials(String value) {
+    final uri = Uri.tryParse(value);
+    if (uri == null || uri.userInfo.isEmpty) return value;
+    return uri.replace(userInfo: '').toString();
   }
 
   int _integerParameter(

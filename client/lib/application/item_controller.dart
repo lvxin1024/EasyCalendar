@@ -11,6 +11,7 @@ import '../data/item_repository.dart';
 import '../data/calendar_connection_code.dart';
 import '../data/local_ics_service.dart';
 import '../data/service_probe_client.dart';
+import '../data/settings_transfer.dart';
 import '../data/subscription_fetch_client.dart';
 import '../data/transfer_models.dart';
 import '../device/device_identity.dart';
@@ -387,6 +388,84 @@ class ItemController extends ChangeNotifier {
 
   Future<void> commitLocalJsonImport(String content) async {
     await _mutate(() => repository.commitLocalJsonImport(content));
+  }
+
+  LocalRecoveryPort get _localRecovery {
+    final value = repository;
+    if (value is! LocalRecoveryPort) {
+      throw UnsupportedError('当前数据源不支持本地数据库快照');
+    }
+    return value as LocalRecoveryPort;
+  }
+
+  Future<List<LocalDatabaseBackup>> listLocalDatabaseBackups() =>
+      _localRecovery.listLocalDatabaseBackups();
+
+  Future<LocalDatabaseBackup> createLocalDatabaseBackup() =>
+      _localRecovery.createLocalDatabaseBackup();
+
+  Future<void> restoreLocalDatabaseBackup(String backupPath) async {
+    await _mutate(() async {
+      await _localRecovery.restoreLocalDatabaseBackup(backupPath);
+      final loaded = await repository.loadPreferences(_defaultPreferences);
+      final deviceId = _deviceIdentity.ensurePersistedId(
+        loaded.deviceId,
+        fallbackId: config.deviceId,
+      );
+      _preferences = loaded.copyWith(
+        deviceId: deviceId,
+        deviceName: _deviceIdentity.ensureDeviceName(
+          loaded.deviceName,
+          deviceId: deviceId,
+        ),
+      );
+      await _applyRuntimeSettings(_preferences!);
+      syncCoordinator?.configure(
+        enabled: _preferences!.syncEnabled,
+        serverUrl: _preferences!.apiUrl,
+      );
+      _initialized = true;
+    });
+  }
+
+  Future<void> deleteLocalDatabaseBackup(String backupPath) =>
+      _localRecovery.deleteLocalDatabaseBackup(backupPath);
+
+  String exportPortableSettings() => PortableClientSettings(
+    apiUrl: preferences.apiUrl,
+    featureApiUrl: preferences.featureApiUrl,
+    timezone: preferences.timezone,
+    localeName: preferences.localeName,
+    firstDayOfWeek: preferences.firstDayOfWeek,
+    clockFormat: preferences.clockFormat,
+    syncEnabled: preferences.syncEnabled,
+    notificationsEnabled: preferences.notificationsEnabled,
+    windowOpacity: preferences.windowOpacity,
+    windowAlwaysOnTop: preferences.windowAlwaysOnTop,
+    assistantEnabled: preferences.assistantEnabled,
+    aiProviders: preferences.aiProviders,
+    tagColors: preferences.tagColors,
+  ).encode();
+
+  Future<void> importPortableSettings(String content) async {
+    final imported = PortableClientSettings.decode(content);
+    await savePreferences(
+      preferences.copyWith(
+        apiUrl: imported.apiUrl,
+        featureApiUrl: imported.featureApiUrl,
+        timezone: imported.timezone,
+        localeName: imported.localeName,
+        firstDayOfWeek: imported.firstDayOfWeek,
+        clockFormat: imported.clockFormat,
+        syncEnabled: imported.syncEnabled,
+        notificationsEnabled: imported.notificationsEnabled,
+        windowOpacity: imported.windowOpacity,
+        windowAlwaysOnTop: imported.windowAlwaysOnTop,
+        assistantEnabled: imported.assistantEnabled,
+        aiProviders: imported.aiProviders,
+        tagColors: imported.tagColors,
+      ),
+    );
   }
 
   Future<String> exportLocalIcs() async => _localIcsService.export(_items);

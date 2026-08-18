@@ -76,6 +76,7 @@ class AiProviderConnectionTester {
     final base = Uri.tryParse(config.baseUrl.trim());
     if (base == null ||
         !base.hasAuthority ||
+        base.userInfo.isNotEmpty ||
         !{'http', 'https'}.contains(base.scheme)) {
       throw const AiProviderProbeException(
         AiProviderProbeFailureKind.invalidUrl,

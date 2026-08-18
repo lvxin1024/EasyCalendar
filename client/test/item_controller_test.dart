@@ -8,6 +8,7 @@ import 'package:easy_calendar/data/calendar_connection_code.dart';
 import 'package:easy_calendar/data/item_repository.dart';
 import 'package:easy_calendar/data/local_ics_service.dart';
 import 'package:easy_calendar/data/service_probe_client.dart';
+import 'package:easy_calendar/data/settings_transfer.dart';
 import 'package:easy_calendar/data/transfer_models.dart';
 import 'package:easy_calendar/device/device_identity.dart';
 import 'package:easy_calendar/domain/item.dart';
@@ -189,6 +190,45 @@ void main() {
       expect(
         repository.storedPreferences?.defaultCollectionId,
         'collection_shared',
+      );
+    },
+  );
+
+  test(
+    'portable settings import preserves device and collection identity',
+    () async {
+      final controller = ItemController(
+        repository: _MemoryRepository(),
+        config: config,
+      );
+      await controller.initialize();
+      final originalDeviceId = controller.preferences.deviceId;
+      final originalCollectionId = controller.preferences.defaultCollectionId;
+      final content = const PortableClientSettings(
+        apiUrl: 'https://sync.example.com',
+        featureApiUrl: 'https://core.example.com',
+        timezone: 'Asia/Shanghai',
+        localeName: 'en',
+        firstDayOfWeek: 7,
+        clockFormat: ClockFormat.hour12,
+        syncEnabled: false,
+        notificationsEnabled: false,
+        windowOpacity: 0.8,
+        windowAlwaysOnTop: true,
+        assistantEnabled: false,
+        aiProviders: [],
+        tagColors: {},
+      ).encode();
+
+      await controller.importPortableSettings(content);
+
+      expect(controller.preferences.deviceId, originalDeviceId);
+      expect(controller.preferences.defaultCollectionId, originalCollectionId);
+      expect(controller.preferences.localeName, 'en');
+      expect(controller.preferences.clockFormat, ClockFormat.hour12);
+      expect(
+        controller.exportPortableSettings(),
+        isNot(contains(originalDeviceId)),
       );
     },
   );

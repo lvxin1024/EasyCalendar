@@ -18,7 +18,7 @@ void main() {
       id: 'cloud-main',
       name: 'Cloud',
       kind: AiProviderKind.openaiCompatible,
-      baseUrl: 'https://ai.example.com/v1',
+      baseUrl: 'https://user:url-secret@ai.example.com/v1',
       model: 'gpt-test',
       keyConfigured: true,
       requestParameters: const {
@@ -27,11 +27,18 @@ void main() {
         'retry_count': 1,
         'proxy_url': 'http://127.0.0.1:7890',
         'api_key': 'nested-secret',
+        'headers': {
+          'Authorization': 'Bearer nested-authorization',
+          'X-Mode': 'safe',
+        },
       },
     );
 
     expect(config.toStorageJson(), isNot(contains('api_key')));
     expect(config.toStorageJson(), isNot(contains('secret')));
+    expect(config.toStorageJson(), isNot(contains('nested-authorization')));
+    expect(config.toStorageJson(), isNot(contains('url-secret')));
+    expect(config.toStorageJson(), contains('X-Mode'));
     expect(config.toStorageJson(), contains('temperature'));
     expect(config.requestTimeoutSeconds, 30);
     expect(config.retryCount, 1);

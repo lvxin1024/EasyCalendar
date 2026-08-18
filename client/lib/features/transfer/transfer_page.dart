@@ -24,6 +24,13 @@ class _TransferPageState extends State<TransferPage> {
   bool _busy = false;
   String? _statusMessage;
   bool _statusError = false;
+  List<LocalDatabaseBackup> _backups = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBackups();
+  }
 
   @override
   Widget build(BuildContext context) => Column(
@@ -37,6 +44,87 @@ class _TransferPageState extends State<TransferPage> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 4, 20, 96),
           children: [
+            _SectionLabel(label: '本地恢复点'),
+            const SizedBox(height: 8),
+            Text(
+              '数据库升级前会自动创建恢复点，也可以随时手动创建。恢复前会再保留当前状态。',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              children: [
+                FilledButton.tonalIcon(
+                  onPressed: _busy ? null : _createBackup,
+                  icon: const Icon(Icons.add_to_drive_outlined),
+                  label: const Text('创建恢复点'),
+                ),
+                IconButton(
+                  tooltip: '刷新恢复点',
+                  onPressed: _busy ? null : _loadBackups,
+                  icon: const Icon(Icons.refresh),
+                ),
+              ],
+            ),
+            if (_backups.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 10),
+                child: Text('暂无本地恢复点'),
+              )
+            else
+              for (final backup in _backups)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.restore_page_outlined),
+                  title: Text(_backupReasonLabel(backup.reason)),
+                  subtitle: Text(
+                    '${backup.createdAt.toLocal()} · schema v${backup.schemaVersion} · ${_formatBytes(backup.byteSize)}',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  trailing: Wrap(
+                    children: [
+                      IconButton(
+                        tooltip: '恢复此版本',
+                        onPressed: _busy ? null : () => _restoreBackup(backup),
+                        icon: const Icon(Icons.settings_backup_restore),
+                      ),
+                      IconButton(
+                        tooltip: '删除恢复点',
+                        onPressed: _busy ? null : () => _deleteBackup(backup),
+                        icon: const Icon(Icons.delete_outline),
+                      ),
+                    ],
+                  ),
+                ),
+            const SizedBox(height: 24),
+            _SectionLabel(label: '非敏感设置'),
+            const SizedBox(height: 8),
+            Text(
+              '迁移界面和服务设置，但不包含设备身份、默认日历内部 ID、服务令牌或 AI Key。',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: _busy ? null : _exportSettings,
+                  icon: const Icon(Icons.download_outlined),
+                  label: const Text('导出设置'),
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: _busy ? null : _importSettings,
+                  icon: const Icon(Icons.upload_outlined),
+                  label: const Text('导入设置'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
             _SectionLabel(label: 'JSON 备份'),
             const SizedBox(height: 8),
             Text(
@@ -137,6 +225,154 @@ class _TransferPageState extends State<TransferPage> {
       _previewContent = null;
       _previewFormat = null;
     });
+  }
+
+  Future<void> _loadBackups() async {
+    try {
+      final backups = await widget.controller.listLocalDatabaseBackups();
+      if (mounted) setState(() => _backups = backups);
+    } catch (_) {
+      // Recovery points are unavailable for in-memory test repositories.
+    }
+  }
+
+  Future<void> _createBackup() async {
+    setState(() => _busy = true);
+    try {
+      final backup = await widget.controller.createLocalDatabaseBackup();
+      await _loadBackups();
+      if (mounted) _showStatus('恢复点已创建：${backup.fileName}');
+    } catch (error) {
+      if (mounted) _showStatus('创建恢复点失败：$error', error: true);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _restoreBackup(LocalDatabaseBackup backup) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('恢复数据库？'),
+        content: const Text('当前数据库会先自动创建恢复点，然后替换为所选版本。应用数据视图会立即刷新。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(context, true),
+            icon: const Icon(Icons.settings_backup_restore),
+            label: const Text('确认恢复'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    setState(() => _busy = true);
+    try {
+      await widget.controller.restoreLocalDatabaseBackup(backup.path);
+      await _loadBackups();
+      if (mounted) _showStatus('数据库已恢复，恢复前状态也已保留');
+    } catch (error) {
+      if (mounted) _showStatus('恢复失败：$error', error: true);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _deleteBackup(LocalDatabaseBackup backup) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('删除恢复点？'),
+        content: Text(backup.fileName),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    setState(() => _busy = true);
+    try {
+      await widget.controller.deleteLocalDatabaseBackup(backup.path);
+      await _loadBackups();
+      if (mounted) _showStatus('恢复点已删除');
+    } catch (error) {
+      if (mounted) _showStatus('删除恢复点失败：$error', error: true);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _exportSettings() async {
+    setState(() => _busy = true);
+    try {
+      final directory = await getApplicationSupportDirectory();
+      final timestamp = _fileTimestamp();
+      final file = File(
+        '${directory.path}${Platform.pathSeparator}easycalendar-settings-$timestamp.json',
+      );
+      await file.writeAsString(
+        widget.controller.exportPortableSettings(),
+        flush: true,
+      );
+      if (mounted) _showStatus('非敏感设置已保存到：${file.path}');
+    } catch (error) {
+      if (mounted) _showStatus('设置导出失败：$error', error: true);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _importSettings() async {
+    final picked = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['json'],
+      withData: true,
+    );
+    if (picked == null || picked.files.isEmpty) return;
+    final bytes = picked.files.single.bytes;
+    if (bytes == null) {
+      _showStatus('无法读取设置文件', error: true);
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      await widget.controller.importPortableSettings(utf8.decode(bytes));
+      if (mounted) _showStatus('非敏感设置已导入；设备身份、日历和密钥保持不变');
+    } catch (error) {
+      if (mounted) _showStatus('设置导入失败：$error', error: true);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  static String _fileTimestamp() => DateTime.now()
+      .toUtc()
+      .toIso8601String()
+      .replaceAll(':', '-')
+      .split('.')
+      .first;
+
+  static String _backupReasonLabel(LocalBackupReason reason) =>
+      switch (reason) {
+        LocalBackupReason.migration => '升级前自动恢复点',
+        LocalBackupReason.manual => '手动恢复点',
+        LocalBackupReason.preRestore => '恢复操作前的状态',
+      };
+
+  static String _formatBytes(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 
   Future<void> _exportJson() async {

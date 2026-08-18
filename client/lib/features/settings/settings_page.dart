@@ -506,6 +506,7 @@ class _SettingsPageState extends State<SettingsPage> {
               const SizedBox(height: 24),
               _SectionLabel(label: '本地环境'),
               DropdownButtonFormField<String>(
+                key: ValueKey(_localeName),
                 initialValue: _localeOptions.containsKey(_localeName)
                     ? _localeName
                     : 'system',
@@ -527,6 +528,7 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               const SizedBox(height: 10),
               TextFormField(
+                key: ValueKey(_timezone),
                 initialValue: _timezone,
                 decoration: const InputDecoration(
                   labelText: '时区',
@@ -538,6 +540,7 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               const SizedBox(height: 10),
               DropdownButtonFormField<int>(
+                key: ValueKey(_firstDayOfWeek),
                 initialValue:
                     _firstDayOfWeekOptions.containsKey(_firstDayOfWeek)
                     ? _firstDayOfWeek
@@ -560,6 +563,7 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               const SizedBox(height: 10),
               DropdownButtonFormField<ClockFormat>(
+                key: ValueKey(_clockFormat),
                 initialValue: _clockFormat,
                 decoration: const InputDecoration(
                   labelText: '时间显示',
@@ -589,8 +593,8 @@ class _SettingsPageState extends State<SettingsPage> {
                 title: const Text('导入 / 导出'),
                 subtitle: const Text('JSON 备份恢复、ICS 日历文件导入导出'),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  Navigator.of(context).push(
+                onTap: () async {
+                  await Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (_) => Scaffold(
                         appBar: AppBar(title: const Text('导入导出')),
@@ -598,6 +602,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       ),
                     ),
                   );
+                  if (mounted) _reloadPreferencesIntoForm();
                 },
               ),
               ListTile(
@@ -714,6 +719,29 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _refreshAiProviderKeys() async {
     final providers = await widget.controller.refreshAiProviderKeyStatus();
     if (mounted) setState(() => _aiProviders = providers);
+  }
+
+  void _reloadPreferencesIntoForm() {
+    final preferences = widget.controller.preferences;
+    setState(() {
+      _apiUrlController.text = preferences.apiUrl;
+      _featureApiUrlController.text = preferences.featureApiUrl;
+      _deviceNameController.text = preferences.deviceName;
+      _deviceIdController.text = preferences.deviceId;
+      _collectionIdController.text = preferences.defaultCollectionId;
+      _collectionNameController.text = preferences.defaultCollectionName;
+      _syncEnabled = preferences.syncEnabled;
+      _notificationsEnabled = preferences.notificationsEnabled;
+      _windowOpacity = preferences.windowOpacity;
+      _windowAlwaysOnTop = preferences.windowAlwaysOnTop;
+      _assistantEnabled = preferences.assistantEnabled;
+      _timezone = preferences.timezone;
+      _localeName = preferences.localeName;
+      _firstDayOfWeek = preferences.firstDayOfWeek;
+      _clockFormat = preferences.clockFormat;
+      _aiProviders = [...preferences.aiProviders];
+      _tagColors = {...preferences.tagColors};
+    });
   }
 
   Future<void> _copyDeviceId() async {
@@ -2219,6 +2247,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
         final baseUrl = Uri.tryParse(_baseUrl.text.trim());
         if (baseUrl == null ||
             !baseUrl.hasAuthority ||
+            baseUrl.userInfo.isNotEmpty ||
             !{'http', 'https'}.contains(baseUrl.scheme)) {
           throw const FormatException('请输入有效的 HTTP(S) 地址');
         }
@@ -2299,6 +2328,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
     final baseUrl = Uri.tryParse(_baseUrl.text.trim());
     if (baseUrl == null ||
         !baseUrl.hasAuthority ||
+        baseUrl.userInfo.isNotEmpty ||
         !{'http', 'https'}.contains(baseUrl.scheme)) {
       throw const FormatException('请输入有效的 HTTP(S) 地址');
     }

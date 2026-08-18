@@ -27,6 +27,7 @@ class AiAssistantClient {
     final base = Uri.tryParse(provider.baseUrl.trim());
     if (base == null ||
         !base.hasAuthority ||
+        base.userInfo.isNotEmpty ||
         !{'http', 'https'}.contains(base.scheme)) {
       throw const AiAssistantException('Provider 地址无效');
     }

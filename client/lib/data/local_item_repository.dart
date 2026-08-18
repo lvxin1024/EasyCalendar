@@ -19,7 +19,11 @@ import 'local_ics_service.dart';
 import 'transfer_models.dart';
 
 class LocalItemRepository
-    implements ItemRepository, RuntimeSettingsPort, SyncRepository {
+    implements
+        ItemRepository,
+        LocalRecoveryPort,
+        RuntimeSettingsPort,
+        SyncRepository {
   LocalItemRepository(
     this.config, {
     Uuid? uuid,
@@ -37,6 +41,8 @@ class LocalItemRepository
   late String _runtimeDeviceId = config.deviceId;
   late String _runtimeDefaultCollectionId = config.defaultCollectionId;
   late String _runtimeDefaultCollectionName = config.defaultCollectionName;
+
+  static const schemaVersion = 4;
 
   @override
   String? databasePath;
@@ -86,10 +92,11 @@ class LocalItemRepository
       databasePath = configuredPath;
     }
     final factory = _databaseFactoryOverride ?? _databaseFactory();
+    await _backupBeforeMigrationIfNeeded(factory);
     _database = await factory.openDatabase(
       databasePath!,
       options: OpenDatabaseOptions(
-        version: 4,
+        version: schemaVersion,
         onConfigure: (database) async {
           await database.execute('PRAGMA foreign_keys = ON');
         },
@@ -99,6 +106,188 @@ class LocalItemRepository
     );
     await _ensureDefaultCollection();
     await _ensureLegacySyncHeads();
+  }
+
+  Future<void> _backupBeforeMigrationIfNeeded(DatabaseFactory factory) async {
+    final source = File(databasePath!);
+    if (_isMemoryDatabase(databasePath!) || !await source.exists()) return;
+    Database? probe;
+    try {
+      probe = await factory.openDatabase(
+        databasePath!,
+        options: OpenDatabaseOptions(singleInstance: false),
+      );
+      await probe.execute('PRAGMA wal_checkpoint(FULL)');
+      final rows = await probe.rawQuery('PRAGMA user_version');
+      final existingVersion = _firstInteger(rows) ?? 0;
+      await probe.close();
+      probe = null;
+      if (existingVersion > 0 && existingVersion < schemaVersion) {
+        await _copyDatabaseBackup(
+          reason: LocalBackupReason.migration,
+          sourceSchemaVersion: existingVersion,
+        );
+      }
+    } finally {
+      await probe?.close();
+    }
+  }
+
+  @override
+  Future<List<LocalDatabaseBackup>> listLocalDatabaseBackups() async {
+    final directory = _backupDirectory();
+    if (!await directory.exists()) return const [];
+    final backups = <LocalDatabaseBackup>[];
+    await for (final entity in directory.list(followLinks: false)) {
+      if (entity is! File) continue;
+      final match = RegExp(
+        r'^easycalendar_(migration|manual|preRestore)_v(\d+)_(\d+)\.sqlite3$',
+      ).firstMatch(path.basename(entity.path));
+      if (match == null) continue;
+      final reason = switch (match.group(1)) {
+        'migration' => LocalBackupReason.migration,
+        'preRestore' => LocalBackupReason.preRestore,
+        _ => LocalBackupReason.manual,
+      };
+      final stat = await entity.stat();
+      backups.add(
+        LocalDatabaseBackup(
+          path: entity.path,
+          createdAt: DateTime.fromMicrosecondsSinceEpoch(
+            int.parse(match.group(3)!),
+            isUtc: true,
+          ),
+          byteSize: stat.size,
+          reason: reason,
+          schemaVersion: int.parse(match.group(2)!),
+        ),
+      );
+    }
+    backups.sort((left, right) => right.createdAt.compareTo(left.createdAt));
+    return backups;
+  }
+
+  @override
+  Future<LocalDatabaseBackup> createLocalDatabaseBackup({
+    LocalBackupReason reason = LocalBackupReason.manual,
+  }) async {
+    if (_isMemoryDatabase(databasePath ?? '')) {
+      throw UnsupportedError('内存数据库不支持本地快照');
+    }
+    await _db.execute('PRAGMA wal_checkpoint(FULL)');
+    final rows = await _db.rawQuery('PRAGMA user_version');
+    return _copyDatabaseBackup(
+      reason: reason,
+      sourceSchemaVersion: _firstInteger(rows) ?? schemaVersion,
+    );
+  }
+
+  Future<LocalDatabaseBackup> _copyDatabaseBackup({
+    required LocalBackupReason reason,
+    required int sourceSchemaVersion,
+  }) async {
+    final source = File(databasePath!);
+    if (!await source.exists()) throw StateError('本地数据库文件不存在');
+    final directory = _backupDirectory();
+    await directory.create(recursive: true);
+    final timestamp = DateTime.now().toUtc().microsecondsSinceEpoch;
+    final target = File(
+      path.join(
+        directory.path,
+        'easycalendar_${reason.name}_v${sourceSchemaVersion}_$timestamp.sqlite3',
+      ),
+    );
+    await source.copy(target.path);
+    final stat = await target.stat();
+    return LocalDatabaseBackup(
+      path: target.path,
+      createdAt: DateTime.fromMicrosecondsSinceEpoch(timestamp, isUtc: true),
+      byteSize: stat.size,
+      reason: reason,
+      schemaVersion: sourceSchemaVersion,
+    );
+  }
+
+  @override
+  Future<void> restoreLocalDatabaseBackup(String backupPath) async {
+    final selected = await _validatedBackupFile(backupPath);
+    final safety = _database == null
+        ? await _copyDatabaseBackup(
+            reason: LocalBackupReason.preRestore,
+            sourceSchemaVersion: await _closedDatabaseSchemaVersion(),
+          )
+        : await createLocalDatabaseBackup(reason: LocalBackupReason.preRestore);
+    await close();
+    try {
+      await _replaceDatabaseWith(selected);
+      await initialize();
+    } catch (error) {
+      await close();
+      await _replaceDatabaseWith(File(safety.path));
+      await initialize();
+      throw RepositoryConflict('恢复失败，已回滚到恢复前状态：$error');
+    }
+  }
+
+  Future<int> _closedDatabaseSchemaVersion() async {
+    final factory = _databaseFactoryOverride ?? _databaseFactory();
+    Database? probe;
+    try {
+      probe = await factory.openDatabase(
+        databasePath!,
+        options: OpenDatabaseOptions(singleInstance: false),
+      );
+      final rows = await probe.rawQuery('PRAGMA user_version');
+      return _firstInteger(rows) ?? 0;
+    } finally {
+      await probe?.close();
+    }
+  }
+
+  @override
+  Future<void> deleteLocalDatabaseBackup(String backupPath) async {
+    final backup = await _validatedBackupFile(backupPath);
+    await backup.delete();
+  }
+
+  Future<File> _validatedBackupFile(String backupPath) async {
+    final directory = path.normalize(path.absolute(_backupDirectory().path));
+    final candidate = path.normalize(path.absolute(backupPath));
+    if (path.dirname(candidate) != directory ||
+        !RegExp(
+          r'^easycalendar_(migration|manual|preRestore)_v\d+_\d+\.sqlite3$',
+        ).hasMatch(path.basename(candidate))) {
+      throw const FormatException('备份文件不在 EasyCalendar 恢复目录中');
+    }
+    final file = File(candidate);
+    if (!await file.exists()) throw const FormatException('备份文件不存在');
+    return file;
+  }
+
+  Future<void> _replaceDatabaseWith(File source) async {
+    final targetPath = databasePath!;
+    for (final suffix in const ['', '-wal', '-shm', '-journal']) {
+      final file = File('$targetPath$suffix');
+      if (await file.exists()) await file.delete();
+    }
+    await source.copy(targetPath);
+  }
+
+  Directory _backupDirectory() {
+    final value = databasePath;
+    if (value == null || _isMemoryDatabase(value)) {
+      throw StateError('本地数据库路径不可用于备份');
+    }
+    return Directory(path.join(path.dirname(value), 'backups'));
+  }
+
+  static bool _isMemoryDatabase(String value) =>
+      value.isEmpty || value == inMemoryDatabasePath || value == ':memory:';
+
+  static int? _firstInteger(List<Map<String, Object?>> rows) {
+    if (rows.isEmpty || rows.first.isEmpty) return null;
+    final value = rows.first.values.first;
+    return value is int ? value : null;
   }
 
   DatabaseFactory _databaseFactory() {

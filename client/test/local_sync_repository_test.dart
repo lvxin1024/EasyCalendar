@@ -4,6 +4,7 @@ import 'package:easy_calendar/config/app_config.dart';
 import 'package:easy_calendar/data/item_repository.dart';
 import 'package:easy_calendar/data/local_item_repository.dart';
 import 'package:easy_calendar/data/local_ics_service.dart';
+import 'package:easy_calendar/data/transfer_models.dart';
 import 'package:easy_calendar/domain/item.dart';
 import 'package:easy_calendar/domain/recurrence.dart';
 import 'package:easy_calendar/sync/sync_models.dart';
@@ -497,6 +498,12 @@ void main() {
     await migrated.initialize();
     addTearDown(migrated.close);
 
+    final migrationBackups = await migrated.listLocalDatabaseBackups();
+    expect(migrationBackups, hasLength(1));
+    expect(migrationBackups.single.reason, LocalBackupReason.migration);
+    expect(migrationBackups.single.schemaVersion, 2);
+    expect(await File(migrationBackups.single.path).exists(), isTrue);
+
     final pending = await migrated.listPendingChanges(now: DateTime.now());
     expect(pending.map((change) => change.entityType), ['collection', 'item']);
     final item = (await migrated.listItems()).single;
@@ -508,6 +515,97 @@ void main() {
       'Pending before migration',
     );
     expect(await migrated.listSyncConflicts(), hasLength(1));
+  });
+
+  test(
+    'manual database snapshots restore data and preserve pre-restore state',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'easycalendar-local-recovery-',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final stored = LocalItemRepository(
+        _config,
+        databaseFactory: databaseFactoryFfi,
+        databasePath: '${directory.path}/client.sqlite3',
+      );
+      await stored.initialize();
+      addTearDown(stored.close);
+      await stored.createItem(
+        const ItemDraft(
+          type: ItemType.task,
+          title: 'Included in snapshot',
+          timezone: 'Asia/Shanghai',
+        ),
+      );
+      final snapshot = await stored.createLocalDatabaseBackup();
+      await stored.createItem(
+        const ItemDraft(
+          type: ItemType.task,
+          title: 'Created after snapshot',
+          timezone: 'Asia/Shanghai',
+        ),
+      );
+
+      await stored.restoreLocalDatabaseBackup(snapshot.path);
+
+      expect((await stored.listItems()).map((item) => item.title), [
+        'Included in snapshot',
+      ]);
+      final backups = await stored.listLocalDatabaseBackups();
+      expect(
+        backups.map((item) => item.reason),
+        contains(LocalBackupReason.preRestore),
+      );
+      await stored.deleteLocalDatabaseBackup(snapshot.path);
+      expect(
+        (await stored.listLocalDatabaseBackups()).map((item) => item.path),
+        isNot(contains(snapshot.path)),
+      );
+    },
+  );
+
+  test('failed schema migration keeps a readable source backup', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'easycalendar-failed-migration-',
+    );
+    addTearDown(() => directory.delete(recursive: true));
+    final databasePath = '${directory.path}/client.sqlite3';
+    final original = LocalItemRepository(
+      _config,
+      databaseFactory: databaseFactoryFfi,
+      databasePath: databasePath,
+    );
+    await original.initialize();
+    await original.createItem(
+      const ItemDraft(
+        type: ItemType.task,
+        title: 'Must survive failed migration',
+        timezone: 'Asia/Shanghai',
+      ),
+    );
+    await original.close();
+    final incompatible = await databaseFactoryFfi.openDatabase(databasePath);
+    await incompatible.execute('PRAGMA user_version = 3');
+    await incompatible.close();
+
+    final failing = LocalItemRepository(
+      _config,
+      databaseFactory: databaseFactoryFfi,
+      databasePath: databasePath,
+    );
+    await expectLater(failing.initialize(), throwsA(anything));
+    addTearDown(failing.close);
+
+    final backups = await failing.listLocalDatabaseBackups();
+    expect(backups.single.reason, LocalBackupReason.migration);
+    expect(backups.single.schemaVersion, 3);
+    final backupDatabase = await databaseFactoryFfi.openDatabase(
+      backups.single.path,
+    );
+    addTearDown(backupDatabase.close);
+    final items = await backupDatabase.query('items');
+    expect(items.single['title'], 'Must survive failed migration');
   });
 }
 

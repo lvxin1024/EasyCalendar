@@ -33,3 +33,23 @@ class TransferIssue {
   final String? resourceId;
   final String code;
 }
+
+enum LocalBackupReason { migration, manual, preRestore }
+
+class LocalDatabaseBackup {
+  const LocalDatabaseBackup({
+    required this.path,
+    required this.createdAt,
+    required this.byteSize,
+    required this.reason,
+    required this.schemaVersion,
+  });
+
+  final String path;
+  final DateTime createdAt;
+  final int byteSize;
+  final LocalBackupReason reason;
+  final int schemaVersion;
+
+  String get fileName => path.replaceAll('\\', '/').split('/').last;
+}
