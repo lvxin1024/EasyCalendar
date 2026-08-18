@@ -292,7 +292,7 @@ cd server && npm test      # Worker 测试
 | P0.2 | **自动生成并持久化设备身份（已完成）** | 首次启动生成并保存唯一 ID，同时迁移旧固定默认值 | 设置页提供可读设备名称；技术 ID 仅在高级区域复制或经确认后重建；旧 outbox 保持原 ID 并可继续上传 |
 | P0.3 | **建立多平台 Release 流水线** | tag 工作流已定义；待配置签名 Secrets 并完成三平台首次真实 Runner/安装验证 | Git tag 自动产出 macOS 签名并公证的 DMG/PKG、Windows 签名安装包、Android release 签名 APK（AAB 可选），同时上传 SHA-256、版本说明和必要的调试符号；签名材料只存在 CI Secrets |
 | P0.4 | **干净安装和覆盖升级验收** | 目前的运行说明面向开发环境，尚未证明安装包脱离源码配置可用 | 在全新 macOS、Windows、Android 环境验证：无需 `config/client.json`、Python、Flutter、Node 即可启动和本地使用；重启后设置仍在；覆盖升级不丢数据库、同步令牌和 AI Key；形成可重复的 smoke test 清单 |
-| P0.5 | **收敛 Python Core 与客户端的运行时边界（进行中）** | ICS 文件传输和网址订阅已在 Flutter 本地完成；规则解析边界和遗留功能服务配置仍待收敛 | 继续把安装包承诺的本地能力移植到 Flutter；用户不需要手工启动后台进程；功能说明与安装包实际能力一致 |
+| P0.5 | **收敛 Python Core 与客户端的运行时边界（客户端本地能力已完成）** | ICS 文件传输、网址订阅和基础中文规则解析已在 Flutter 本地完成；复杂自然语言规则仍需 AI Provider 或手动校对 | 安装包不需要手工启动 Python；本地功能有明确错误状态；Python Core 仅作为可选兼容 API |
 | P0.6 | **验证 Release 环境下的安全存储** | 代码已使用 `flutter_secure_storage`，但缺少签名安装包中的 Keychain/Credential Manager/Android Keystore 端到端验收 | AI Key 和同步令牌可新增、替换、清除并在重启/升级后读取；不会写入 SQLite、JSON 备份、日志或崩溃报告；macOS entitlements、Windows 包身份和 Android 备份策略均通过真机验证 |
 
 ### P1：设置闭环与产品化

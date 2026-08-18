@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../ai/ai_assistant_client.dart';
+import '../../ai/local_rule_parser.dart';
 import '../../ai/ai_provider.dart';
 import '../../ai/assistant_models.dart';
 import '../../application/item_controller.dart';
 import '../../config/app_config.dart';
 import '../../domain/item.dart';
+import '../../utils/configured_time.dart';
 
 class AssistantPage extends StatefulWidget {
   const AssistantPage({
@@ -24,6 +26,7 @@ class AssistantPage extends StatefulWidget {
 class _AssistantPageState extends State<AssistantPage> {
   final _textController = TextEditingController();
   late final AiAssistantClient _client;
+  static const _localParser = LocalRuleParser();
   CandidateWorkbench? _workbench;
   List<AiCandidateIssue> _candidateIssues = const [];
   List<String> _warnings = const [];
@@ -154,10 +157,6 @@ class _AssistantPageState extends State<AssistantPage> {
       setState(() => _error = '请输入需要拆分的文本');
       return;
     }
-    if (provider == null) {
-      setState(() => _error = '请先在设置中添加并启用 Provider');
-      return;
-    }
     setState(() {
       _extracting = true;
       _error = null;
@@ -165,11 +164,17 @@ class _AssistantPageState extends State<AssistantPage> {
       _warnings = const [];
     });
     try {
-      final result = await _client.extract(
-        provider: provider,
-        text: text,
-        timezone: widget.config.timezone,
-      );
+      final result = provider == null
+          ? _localParser.extract(
+              text,
+              now: configuredNow(),
+              timezone: widget.config.timezone,
+            )
+          : await _client.extract(
+              provider: provider,
+              text: text,
+              timezone: widget.config.timezone,
+            );
       if (!mounted) return;
       setState(() {
         _workbench = CandidateWorkbench(result.candidates);

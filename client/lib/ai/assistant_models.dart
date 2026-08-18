@@ -1,4 +1,5 @@
 import '../domain/item.dart';
+import '../domain/recurrence.dart';
 
 class AiTextSpan {
   const AiTextSpan({required this.start, required this.end});
@@ -43,6 +44,7 @@ class AiCandidate {
     this.reasoning,
     this.sourceTextSpan,
     this.reminders = const [],
+    this.recurrence,
   });
 
   factory AiCandidate.fromJson(Map<String, dynamic> json) {
@@ -82,6 +84,7 @@ class AiCandidate {
     final startAt = _date(json['start_at']);
     final endAt = _date(json['end_at']);
     final dueAt = _date(json['due_at']);
+    final recurrence = json['recurrence'];
     if (type == ItemType.event && startAt == null) {
       throw const FormatException('Event candidate requires start_at');
     }
@@ -118,6 +121,9 @@ class AiCandidate {
                 .map((value) => Map<String, dynamic>.from(value))
                 .toList(growable: false)
           : const [],
+      recurrence: recurrence is Map
+          ? RecurrenceRule.fromJson(recurrence.cast<String, Object?>())
+          : null,
     );
   }
 
@@ -136,6 +142,7 @@ class AiCandidate {
   final String? reasoning;
   final AiTextSpan? sourceTextSpan;
   final List<Map<String, dynamic>> reminders;
+  final RecurrenceRule? recurrence;
 
   AiCandidate copyWith({
     ItemType? type,
@@ -146,6 +153,7 @@ class AiCandidate {
     DateTime? dueAt,
     String? location,
     int? priority,
+    RecurrenceRule? recurrence,
   }) => AiCandidate(
     tempId: tempId,
     type: type ?? this.type,
@@ -162,6 +170,7 @@ class AiCandidate {
     reasoning: reasoning,
     sourceTextSpan: sourceTextSpan,
     reminders: reminders,
+    recurrence: recurrence ?? this.recurrence,
   );
 
   ItemDraft toDraft() => ItemDraft(
@@ -179,6 +188,7 @@ class AiCandidate {
       (value) => value['enabled'] as bool? ?? true,
     ),
     reminderMinutes: _suggestedReminderMinutes,
+    recurrence: recurrence,
   );
 
   int get _suggestedReminderMinutes {
@@ -213,6 +223,7 @@ class AiCandidate {
         'end': sourceTextSpan!.end,
       },
     'reminders': reminders,
+    if (recurrence != null) 'recurrence': recurrence!.toJson(),
   };
 
   static String _required(Object? value, String field) {
