@@ -173,13 +173,41 @@ jobs:
           flutter-version: "3.44.9"
           channel: stable
           cache: true
-      - name: Import signing certificate
+      - name: Detect macOS signing configuration
+        id: signing
         shell: bash
         run: |
           set -euo pipefail
-          for value in MACOS_CERTIFICATE_P12_BASE64 MACOS_CERTIFICATE_PASSWORD MACOS_SIGNING_IDENTITY MACOS_APP_PROVISION_PROFILE_BASE64 MACOS_WIDGET_PROVISION_PROFILE_BASE64 APPLE_ID APPLE_APP_PASSWORD APPLE_TEAM_ID; do
-            test -n "${!value}"
+          required=(
+            MACOS_CERTIFICATE_P12_BASE64
+            MACOS_CERTIFICATE_PASSWORD
+            MACOS_SIGNING_IDENTITY
+            MACOS_APP_PROVISION_PROFILE_BASE64
+            MACOS_WIDGET_PROVISION_PROFILE_BASE64
+            APPLE_ID
+            APPLE_APP_PASSWORD
+            APPLE_TEAM_ID
+          )
+          configured=0
+          for name in "${required[@]}"; do
+            if test -n "${!name}"; then
+              configured=$((configured + 1))
+            fi
           done
+          if test "$configured" -eq 0; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "Apple signing secrets are absent; an ad-hoc signed DMG will be built without the Widget."
+          elif test "$configured" -eq "${#required[@]}"; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Configure all macOS signing secrets or remove all of them."
+            exit 1
+          fi
+      - name: Import signing certificate
+        if: steps.signing.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
           certificate_path="$RUNNER_TEMP/easycalendar-release.p12"
           keychain_path="$RUNNER_TEMP/easycalendar.keychain-db"
           printf '%s' "$MACOS_CERTIFICATE_P12_BASE64" | base64 -D > "$certificate_path"
@@ -207,6 +235,7 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             build
       - name: Sign, package, and notarize DMG
+        if: steps.signing.outputs.enabled == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -234,6 +263,41 @@ jobs:
           xcrun notarytool submit "$dmg" --apple-id "$APPLE_ID" --password "$APPLE_APP_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
           xcrun stapler staple "$dmg"
           xcrun stapler validate "$dmg"
+      - name: Ad-hoc sign and package unsigned DMG
+        if: steps.signing.outputs.enabled == 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="client/build/macos/Build/Products/Release/EasyCalendar.app"
+          widget="$app/Contents/PlugIns/EasyCalendarWidget.appex"
+          rm -rf "$widget"
+          rmdir "$app/Contents/PlugIns" 2>/dev/null || true
+
+          entitlements="$RUNNER_TEMP/easycalendar-adhoc.entitlements"
+          cp client/macos/Runner/Release.entitlements "$entitlements"
+          /usr/libexec/PlistBuddy -c "Delete :com.apple.security.application-groups" "$entitlements"
+          /usr/libexec/PlistBuddy -c "Delete :keychain-access-groups" "$entitlements"
+
+          find "$app/Contents/Frameworks" -type f \( -name '*.dylib' -o -perm -111 \) -print0 | while IFS= read -r -d '' binary; do
+            codesign --force --options runtime --sign - "$binary"
+          done
+          find "$app/Contents/Frameworks" -type d -name '*.framework' -print0 | while IFS= read -r -d '' framework; do
+            codesign --force --options runtime --sign - "$framework"
+          done
+          codesign --force --options runtime --sign - \
+            --entitlements "$entitlements" "$app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+
+          mkdir -p client/build/release/dmg
+          cp -R "$app" client/build/release/dmg/EasyCalendar.app
+          ln -s /Applications client/build/release/dmg/Applications
+          dmg="client/build/release/EasyCalendar-${{ needs.version.outputs.name }}-macos-unsigned.dmg"
+          hdiutil create -volname EasyCalendar -srcfolder client/build/release/dmg -ov -format UDZO "$dmg"
+      - name: Package macOS debug symbols
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="client/build/macos/Build/Products/Release/EasyCalendar.app"
           if test -d "$app.dSYM"; then
             ditto -c -k --keepParent "$app.dSYM" "client/build/release/EasyCalendar-${{ needs.version.outputs.name }}-macos-symbols.zip"
           fi
