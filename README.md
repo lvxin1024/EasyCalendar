@@ -307,7 +307,7 @@ cd server && npm test      # Worker 测试
 | P1.6 | **客户端备份、迁移和故障恢复（已完成）** | schema 升级前自动创建 SQLite 恢复点；设置内可创建、查看、恢复和删除，启动迁移失败也有恢复入口；非敏感设置支持独立迁移 | 数据库 schema 升级前创建可恢复备份；设置页支持查看备份、恢复和清理；启动迁移失败时保留原库并给出恢复入口；非敏感设置可单独导入导出，secret 和设备 ID 默认排除 |
 | P1.7 | **应用内版本与更新入口（已完成）** | 设置内已可查看当前版本、构建号、平台和数据 schema，并比较 GitHub latest Release | 更新页展示说明并只打开官方仓库对应平台的 HTTPS 安装包；下载和安装交由系统处理，不绕过平台安全机制 |
 | P1.8 | **统一应用身份与安装元数据（已完成）** | 三平台的显示名、品牌图标、Windows EXE/卸载项和 macOS About 元数据已统一 | 平台安装标识和版本规则已固定；Windows 首次启动会迁移旧数据与加密凭据目录，安装器保持同一 AppId |
-| P1.9 | **补齐客户端 CI 质量门禁** | CI 未运行 Flutter analyze/test，也没有原生构建检查 | PR 必须通过 Flutter analyze/test、Python tests、Worker tests；至少编译 macOS、Windows、Android release；对首次启动、设置持久化、设备 ID 唯一性、能力发现和安全存储增加覆盖 |
+| P1.9 | **补齐客户端 CI 质量门禁（已完成）** | push/PR 已并行运行 Flutter、Python 和 Worker 全量检查 | macOS、Windows、Android 分别在原生 Runner 编译 Release 产物；测试签名与正式发布 Secrets 隔离，且不上传未签名产物 |
 
 ### 待修复 / Known Issues
 

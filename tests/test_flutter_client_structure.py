@@ -38,7 +38,7 @@ def test_flutter_project_declares_pinned_sdk_and_offline_dependencies():
     assert pubspec["dependencies"]["sqflite"] == "2.4.3"
     assert pubspec["dependencies"]["sqflite_common_ffi"] == "2.4.2"
     assert pubspec["dependencies"]["path_provider"] == "2.1.6"
-    assert pubspec["dependencies"]["timezone"] == "0.11.1"
+    assert pubspec["dependencies"]["timezone"] == "0.10.1"
     assert pubspec["dependencies"]["uuid"] == "4.6.0"
     assert pubspec["dependencies"]["http"] == "1.6.0"
     assert pubspec["dependencies"]["connectivity_plus"] == "7.3.1"
@@ -129,7 +129,8 @@ def test_t24_conflict_heads_and_recovery_history_are_persisted():
         encoding="utf-8"
     )
 
-    assert "version: 4" in repository
+    assert "static const schemaVersion = 4;" in repository
+    assert "version: schemaVersion" in repository
     assert "CREATE TABLE sync_entity_heads" in repository
     assert "CREATE TABLE sync_conflicts" in repository
     assert "listSyncConflicts" in repository
@@ -157,6 +158,16 @@ def test_ci_runs_flutter_analysis_and_tests_with_the_pinned_sdk():
     assert 'flutter-version: "3.44.9"' in workflow
     assert "flutter analyze" in workflow
     assert "flutter test" in workflow
+    assert "android-release:" in workflow
+    assert "flutter build apk --release --no-pub" in workflow
+    assert "macos-release:" in workflow
+    assert "-configuration Release" in workflow
+    assert "CODE_SIGNING_ALLOWED=NO" in workflow
+    assert "windows-release:" in workflow
+    assert "flutter build windows --release --no-pub" in workflow
+    assert "quality-gate:" in workflow
+    assert "needs.android-release.result" in workflow
+    assert "actions/upload-artifact" not in workflow
 
 
 def test_tag_release_builds_signed_installers_and_checksums():

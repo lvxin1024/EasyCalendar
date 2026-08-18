@@ -120,10 +120,10 @@ P0.2 先于 P0.1 实施，因为它可以独立消除多台默认安装使用相
 
 ### P1.9 补齐客户端 CI 质量门禁
 
-- 状态：进行中。
+- 状态：已完成（2026-08-19）。push/PR 必须通过 Flutter analyze 和完整客户端测试、Python 3.11/3.13 测试以及 Worker 类型检查/测试/本地 migration；独立 Runner 会编译 Android APK、macOS App 和 Windows EXE 的 Release 产物。Android 使用一次性 CI keystore，macOS 禁用签名，测试工作流不读取发布 Secrets 也不上传产物。首次启动偏好、设置持久化、设备 ID 唯一性、能力发现和安全存储失败降级均有自动化覆盖。
 - 内容：PR 运行 Flutter analyze/test，并至少编译 macOS、Windows、Android release；补充安装和设置相关测试。
 - 验收：Python、Worker、Flutter 测试全部是合并门禁；首次启动、设置持久化、设备 ID 唯一性、能力发现和安全存储有覆盖。
-- 进度：push/PR 已运行固定 Flutter 版本的依赖解析、静态分析和完整客户端测试；待补三平台原生 Release 编译门禁。
+- 验证：本机已通过 macOS 无签名 Release 编译；Windows/Android job 因当前不推送且本机缺少对应原生环境，将在下次 push/PR 时由 hosted Runner 执行。六组结果最终汇总为单一 `quality-gate` 状态，供分支保护设为必选检查。
 
 ## 中低优先级与暂缓项
 
@@ -153,3 +153,4 @@ P0.2 先于 P0.1 实施，因为它可以独立消除多台默认安装使用相
 - 2026-08-19：完成 P1.6；增加迁移前自动备份、本地恢复点管理、失败回滚和非敏感设置迁移。
 - 2026-08-19：完成 P1.7；增加应用内版本信息、GitHub Release 检查和受信任的分平台下载入口。
 - 2026-08-19：完成 P1.8；统一三平台应用名、图标和安装元数据，固定平台身份并增加 Windows 旧数据目录迁移。
+- 2026-08-19：完成 P1.9；push/PR 加入 Android、macOS、Windows 原生 Release 编译，并保留 Flutter、Python 和 Worker 的全量门禁。
