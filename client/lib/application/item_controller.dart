@@ -187,6 +187,21 @@ class ItemController extends ChangeNotifier {
     await _aiProviderConnectionTester.test(provider, apiKey: key);
   }
 
+  Future<List<String>> discoverAiModels(
+    AiProviderConfig provider, {
+    String pendingApiKey = '',
+  }) async {
+    String? key = pendingApiKey.trim();
+    if (key.isEmpty) {
+      try {
+        key = await _aiApiKeyStore.read(provider.id);
+      } catch (_) {
+        // Local Ollama discovery and keyless endpoints remain usable.
+      }
+    }
+    return _aiProviderConnectionTester.discoverModels(provider, apiKey: key);
+  }
+
   List<CalendarItem> get todayItems {
     final now = configuredNow();
     return _items

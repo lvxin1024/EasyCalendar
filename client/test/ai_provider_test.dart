@@ -114,6 +114,30 @@ void main() {
       ),
     );
   });
+
+  test('provider model discovery returns sorted OpenAI model ids', () async {
+    final tester = AiProviderConnectionTester(
+      client: MockClient(
+        (_) async => http.Response(
+          '{"data":[{"id":"z-model"},{"id":"a-model"},{"id":"a-model"}]}',
+          200,
+        ),
+      ),
+    );
+
+    final models = await tester.discoverModels(
+      const AiProviderConfig(
+        id: 'models',
+        name: 'Models provider',
+        kind: AiProviderKind.openaiCompatible,
+        baseUrl: 'https://ai.example.com/v1',
+        model: 'manual-fallback',
+      ),
+      apiKey: 'pending-secret',
+    );
+
+    expect(models, ['a-model', 'z-model']);
+  });
 }
 
 const _config = AppConfig(

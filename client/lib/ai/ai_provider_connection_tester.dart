@@ -34,6 +34,45 @@ class AiProviderConnectionTester {
   final http.Client _client;
 
   Future<void> test(AiProviderConfig config, {String? apiKey}) async {
+    await _request(config, apiKey: apiKey);
+  }
+
+  Future<List<String>> discoverModels(
+    AiProviderConfig config, {
+    String? apiKey,
+  }) async {
+    final body = await _request(config, apiKey: apiKey);
+    final rawModels = config.kind == AiProviderKind.ollama
+        ? body['models']
+        : body['data'];
+    if (rawModels is! List) {
+      throw const AiProviderProbeException(
+        AiProviderProbeFailureKind.invalidResponse,
+        'Provider 的模型列表结构无效。',
+      );
+    }
+    final models = <String>{};
+    for (final entry in rawModels.whereType<Map>()) {
+      final value = config.kind == AiProviderKind.ollama
+          ? entry['name']
+          : entry['id'];
+      if (value is String && value.trim().isNotEmpty) {
+        models.add(value.trim());
+      }
+    }
+    if (models.isEmpty) {
+      throw const AiProviderProbeException(
+        AiProviderProbeFailureKind.invalidResponse,
+        'Provider 没有返回可用模型，请手动填写模型名称。',
+      );
+    }
+    return models.toList(growable: false)..sort();
+  }
+
+  Future<Map<String, dynamic>> _request(
+    AiProviderConfig config, {
+    String? apiKey,
+  }) async {
     final base = Uri.tryParse(config.baseUrl.trim());
     if (base == null ||
         !base.hasAuthority ||
@@ -127,6 +166,7 @@ class AiProviderConnectionTester {
         'Provider 返回的 JSON 结构无效。',
       );
     }
+    return body;
   }
 
   static bool _looksLikeDnsFailure(String message) {

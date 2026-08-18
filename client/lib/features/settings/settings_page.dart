@@ -1576,6 +1576,8 @@ class _ProviderDialog extends StatefulWidget {
   State<_ProviderDialog> createState() => _ProviderDialogState();
 }
 
+enum _ProviderPreset { ollama, openAI, deepSeek, custom }
+
 class _ProviderDialogState extends State<_ProviderDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _name;
@@ -1583,10 +1585,13 @@ class _ProviderDialogState extends State<_ProviderDialog> {
   late final TextEditingController _model;
   late final TextEditingController _apiKey;
   late AiProviderKind _kind;
+  late _ProviderPreset _preset;
   bool _importMode = false;
   bool _testing = false;
+  bool _discovering = false;
   bool _testFailed = false;
   String? _testStatus;
+  List<String> _discoveredModels = const [];
   final _importController = TextEditingController();
 
   @override
@@ -1600,6 +1605,12 @@ class _ProviderDialogState extends State<_ProviderDialog> {
     _model = TextEditingController(text: current?.model ?? '');
     _apiKey = TextEditingController();
     _kind = current?.kind ?? AiProviderKind.ollama;
+    _preset = switch (current?.baseUrl) {
+      null || 'http://localhost:11434' => _ProviderPreset.ollama,
+      'https://api.openai.com/v1' => _ProviderPreset.openAI,
+      'https://api.deepseek.com' => _ProviderPreset.deepSeek,
+      _ => _ProviderPreset.custom,
+    };
   }
 
   @override
@@ -1637,7 +1648,32 @@ class _ProviderDialogState extends State<_ProviderDialog> {
     child: ListView(
       shrinkWrap: true,
       children: [
+        DropdownButtonFormField<_ProviderPreset>(
+          key: ValueKey(_preset),
+          initialValue: _preset,
+          decoration: const InputDecoration(labelText: '预设'),
+          items: const [
+            DropdownMenuItem(
+              value: _ProviderPreset.ollama,
+              child: Text('Ollama（本机）'),
+            ),
+            DropdownMenuItem(
+              value: _ProviderPreset.openAI,
+              child: Text('OpenAI-compatible'),
+            ),
+            DropdownMenuItem(
+              value: _ProviderPreset.deepSeek,
+              child: Text('DeepSeek'),
+            ),
+            DropdownMenuItem(value: _ProviderPreset.custom, child: Text('自定义')),
+          ],
+          onChanged: (value) {
+            if (value != null) _applyPreset(value);
+          },
+        ),
+        const SizedBox(height: 10),
         DropdownButtonFormField<AiProviderKind>(
+          key: ValueKey(_kind),
           initialValue: _kind,
           decoration: const InputDecoration(labelText: '类型'),
           items: const [
@@ -1650,7 +1686,11 @@ class _ProviderDialogState extends State<_ProviderDialog> {
               child: Text('OpenAI-compatible'),
             ),
           ],
-          onChanged: (value) => setState(() => _kind = value ?? _kind),
+          onChanged: (value) => setState(() {
+            _kind = value ?? _kind;
+            _preset = _ProviderPreset.custom;
+            _discoveredModels = const [];
+          }),
         ),
         const SizedBox(height: 10),
         TextFormField(
@@ -1663,6 +1703,10 @@ class _ProviderDialogState extends State<_ProviderDialog> {
           controller: _baseUrl,
           decoration: const InputDecoration(labelText: 'API 地址'),
           validator: _required,
+          onChanged: (_) => setState(() {
+            _preset = _ProviderPreset.custom;
+            _discoveredModels = const [];
+          }),
         ),
         const SizedBox(height: 10),
         TextFormField(
@@ -1676,6 +1720,38 @@ class _ProviderDialogState extends State<_ProviderDialog> {
             controller: _apiKey,
             obscureText: true,
             decoration: const InputDecoration(labelText: 'API key（留空保持原密钥）'),
+            onChanged: (_) => setState(() => _discoveredModels = const []),
+          ),
+        ],
+        const SizedBox(height: 10),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: FilledButton.tonalIcon(
+            onPressed: _discovering || _testing ? null : _discoverModels,
+            icon: _discovering
+                ? const SizedBox.square(
+                    dimension: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.manage_search),
+            label: const Text('获取模型列表'),
+          ),
+        ),
+        if (_discoveredModels.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            key: ValueKey(_discoveredModels.join('\u0000')),
+            initialValue: _discoveredModels.contains(_model.text)
+                ? _model.text
+                : null,
+            decoration: const InputDecoration(labelText: '发现的模型'),
+            items: [
+              for (final model in _discoveredModels)
+                DropdownMenuItem(value: model, child: Text(model)),
+            ],
+            onChanged: (value) {
+              if (value != null) setState(() => _model.text = value);
+            },
           ),
         ],
         _testControls(),
@@ -1740,6 +1816,101 @@ class _ProviderDialogState extends State<_ProviderDialog> {
 
   String? _required(String? value) =>
       value?.trim().isEmpty == false ? null : '不能为空';
+
+  void _applyPreset(_ProviderPreset preset) {
+    setState(() {
+      _preset = preset;
+      _discoveredModels = const [];
+      switch (preset) {
+        case _ProviderPreset.ollama:
+          _kind = AiProviderKind.ollama;
+          _name.text = 'Ollama';
+          _baseUrl.text = 'http://localhost:11434';
+          break;
+        case _ProviderPreset.openAI:
+          _kind = AiProviderKind.openaiCompatible;
+          _name.text = 'OpenAI';
+          _baseUrl.text = 'https://api.openai.com/v1';
+          break;
+        case _ProviderPreset.deepSeek:
+          _kind = AiProviderKind.openaiCompatible;
+          _name.text = 'DeepSeek';
+          _baseUrl.text = 'https://api.deepseek.com';
+          break;
+        case _ProviderPreset.custom:
+          break;
+      }
+    });
+  }
+
+  Future<void> _discoverModels() async {
+    AiProviderImport imported;
+    try {
+      if (_importMode) {
+        final value = _readConfiguration();
+        if (value == null) return;
+        imported = value;
+      } else {
+        final baseUrl = Uri.tryParse(_baseUrl.text.trim());
+        if (baseUrl == null ||
+            !baseUrl.hasAuthority ||
+            !{'http', 'https'}.contains(baseUrl.scheme)) {
+          throw const FormatException('请输入有效的 HTTP(S) 地址');
+        }
+        imported = AiProviderImport(
+          config: AiProviderConfig(
+            id:
+                widget.current?.id ??
+                'ai_${DateTime.now().microsecondsSinceEpoch}',
+            name: _name.text.trim().isEmpty ? 'Provider' : _name.text.trim(),
+            kind: _kind,
+            baseUrl: _baseUrl.text.trim(),
+            model: _model.text.trim().isEmpty
+                ? 'discovery'
+                : _model.text.trim(),
+            keyConfigured: widget.current?.keyConfigured ?? false,
+          ),
+          apiKey: _apiKey.text.trim().isEmpty ? null : _apiKey.text.trim(),
+        );
+      }
+    } catch (error) {
+      setState(() {
+        _testFailed = true;
+        _testStatus = '配置无效：$error';
+      });
+      return;
+    }
+    setState(() {
+      _discovering = true;
+      _testStatus = null;
+    });
+    try {
+      final models = await widget.controller.discoverAiModels(
+        imported.config,
+        pendingApiKey: imported.apiKey ?? '',
+      );
+      if (!mounted) return;
+      setState(() {
+        _discoveredModels = models;
+        _testFailed = false;
+        _testStatus = '已发现 ${models.length} 个模型';
+      });
+    } on AiProviderProbeException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _testFailed = true;
+        _testStatus = '${error.message} 仍可手动填写模型名称。';
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _testFailed = true;
+        _testStatus = '模型发现失败，仍可手动填写模型名称。';
+      });
+    } finally {
+      if (mounted) setState(() => _discovering = false);
+    }
+  }
 
   void _submit() {
     try {
