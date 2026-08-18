@@ -238,6 +238,10 @@ cd ..
 
 设置页为同步服务和功能服务分别提供“测试连接”。检测会依次验证健康状态、API 版本、服务能力和令牌，不会创建或修改日历数据；DNS、TLS、超时、鉴权和能力不兼容会显示不同错误。
 
+维护者推送与 `client/pubspec.yaml` 版本一致的 `vX.Y.Z` tag 后，Release 工作流会构建 Android APK/AAB、Windows 安装器与便携包、macOS DMG，并附带调试符号和 `SHA256SUMS.txt`。工作流要求预先配置 Android keystore、Windows 代码签名证书、Apple Developer ID 证书/Provisioning Profile 与公证账户 Secrets；任何签名材料缺失都会终止发布。
+
+Release 仓库 Secrets：`ANDROID_KEYSTORE_BASE64`、`ANDROID_STORE_PASSWORD`、`ANDROID_KEY_ALIAS`、`ANDROID_KEY_PASSWORD`、`WINDOWS_CERTIFICATE_PFX_BASE64`、`WINDOWS_CERTIFICATE_PASSWORD`、`MACOS_CERTIFICATE_P12_BASE64`、`MACOS_CERTIFICATE_PASSWORD`、`MACOS_SIGNING_IDENTITY`、`MACOS_APP_PROVISION_PROFILE_BASE64`、`MACOS_WIDGET_PROVISION_PROFILE_BASE64`、`APPLE_ID`、`APPLE_APP_PASSWORD`、`APPLE_TEAM_ID`。证书文件均以 base64 内容保存，不写入仓库。
+
 设备 ID 应长期保持稳定。高级设置中的“重建设备身份”不会破坏尚未上传的旧变更，客户端会按旧、新设备 ID 分批上传；只应在复制安装、身份冲突或排查同步问题时使用。修改默认 Collection ID 只影响之后新建的日程，会创建或选择新的 Collection，不会自动迁移旧 Collection 中已有数据。
 
 #### Cloudflare 与已有远程服务器如何分工
@@ -286,7 +290,7 @@ cd server && npm test      # Worker 测试
 |---|---|---|---|
 | P0.1 | **拆分服务配置并做能力发现（已完成）** | 同步与功能服务地址、令牌已分离；Core 支持可选鉴权 | 设置页检测健康、版本、能力和鉴权；订阅与远程 ICS 自动探测并按能力降级；本地 Core 可免 token |
 | P0.2 | **自动生成并持久化设备身份（已完成）** | 首次启动生成并保存唯一 ID，同时迁移旧固定默认值 | 设置页提供可读设备名称；技术 ID 仅在高级区域复制或经确认后重建；旧 outbox 保持原 ID 并可继续上传 |
-| P0.3 | **建立多平台 Release 流水线** | 当前只有测试工作流，没有客户端 Release 工作流；Android release 仍使用 debug 签名 | Git tag 自动产出 macOS 签名并公证的 DMG/PKG、Windows 签名安装包、Android release 签名 APK（AAB 可选），同时上传 SHA-256、版本说明和必要的调试符号；签名材料只存在 CI Secrets |
+| P0.3 | **建立多平台 Release 流水线** | tag 工作流已定义；待配置签名 Secrets 并完成三平台首次真实 Runner/安装验证 | Git tag 自动产出 macOS 签名并公证的 DMG/PKG、Windows 签名安装包、Android release 签名 APK（AAB 可选），同时上传 SHA-256、版本说明和必要的调试符号；签名材料只存在 CI Secrets |
 | P0.4 | **干净安装和覆盖升级验收** | 目前的运行说明面向开发环境，尚未证明安装包脱离源码配置可用 | 在全新 macOS、Windows、Android 环境验证：无需 `config/client.json`、Python、Flutter、Node 即可启动和本地使用；重启后设置仍在；覆盖升级不丢数据库、同步令牌和 AI Key；形成可重复的 smoke test 清单 |
 | P0.5 | **收敛 Python Core 与客户端的运行时边界** | README 宣传的规则解析、网址订阅等能力有一部分只在 Python Core；安装 Flutter 客户端不会自动获得这些能力 | 明确选择并完成一种交付方式：移植到 Flutter、本地打包并托管 Core sidecar，或连接独立功能服务；用户不需要手工启动后台进程；设置页可看到组件状态和错误；功能说明与安装包实际能力一致 |
 | P0.6 | **验证 Release 环境下的安全存储** | 代码已使用 `flutter_secure_storage`，但缺少签名安装包中的 Keychain/Credential Manager/Android Keystore 端到端验收 | AI Key 和同步令牌可新增、替换、清除并在重启/升级后读取；不会写入 SQLite、JSON 备份、日志或崩溃报告；macOS entitlements、Windows 包身份和 Android 备份策略均通过真机验证 |

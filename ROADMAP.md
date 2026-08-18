@@ -39,10 +39,10 @@ P0.2 先于 P0.1 实施，因为它可以独立消除多台默认安装使用相
 
 - 状态：进行中。
 - 依赖：P0.2。
-- 当前缺口：当前只有 Python/Worker 测试工作流；Android release 仍使用 debug 签名。
+- 当前缺口：三平台 tag 工作流已定义，但仓库签名 Secrets 尚未配置，也未完成首次真实 Runner 构建、公证和安装验证。
 - 内容：Git tag 自动构建 macOS、Windows、Android 安装产物；配置正式签名；生成版本说明、SHA-256 和必要的调试符号。
 - 验收：Release 包含 macOS 签名并公证的 DMG/PKG、Windows 签名安装包、Android release 签名 APK（AAB 可选）；签名材料只存在 CI Secrets；产物版本与 tag 一致。
-- 进度：Android Release 已移除 debug 签名回退；缺少独立 keystore 配置时构建会明确失败，签名文件和口令保持在 Git 之外。
+- 进度：Android Release 已移除 debug 签名回退；tag 工作流已定义签名 Android APK/AAB、签名 Windows 安装器/便携包、签名并公证 macOS DMG、调试符号和 SHA-256。待配置仓库 Secrets 并在三平台 Runner 实际验证后完成。
 
 ### P0.4 干净安装和覆盖升级验收
 
@@ -142,3 +142,4 @@ P0.2 先于 P0.1 实施，因为它可以独立消除多台默认安装使用相
 - 2026-08-18：完成 P0.1；订阅与远程 ICS 按已发现能力启用或降级，本地 JSON 备份不受功能服务影响。
 - 2026-08-18：开始 P0.3；Android Release 改为强制使用独立签名配置，禁止 debug key 产出正式包。
 - 2026-08-18：开始 P1.9；现有 Tests 工作流加入 Flutter analyze/test 门禁。
+- 2026-08-18：P0.3 增加 tag 驱动的三平台签名发布工作流；待注入证书并完成首次真实 Release 验证。

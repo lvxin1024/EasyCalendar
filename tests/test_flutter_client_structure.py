@@ -157,3 +157,22 @@ def test_ci_runs_flutter_analysis_and_tests_with_the_pinned_sdk():
     assert 'flutter-version: "3.44.9"' in workflow
     assert "flutter analyze" in workflow
     assert "flutter test" in workflow
+
+
+def test_tag_release_builds_signed_installers_and_checksums():
+    workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(
+        encoding="utf-8"
+    )
+    installer = (CLIENT / "windows" / "installer.iss").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'tags:' in workflow
+    assert "ANDROID_KEYSTORE_BASE64" in workflow
+    assert "WINDOWS_CERTIFICATE_PFX_BASE64" in workflow
+    assert "MACOS_CERTIFICATE_P12_BASE64" in workflow
+    assert "notarytool submit" in workflow
+    assert "sha256sum * > SHA256SUMS.txt" in workflow
+    assert "softprops/action-gh-release@v2" in workflow
+    assert "PrivilegesRequired=lowest" in installer
+    assert "UninstallDisplayIcon" in installer
