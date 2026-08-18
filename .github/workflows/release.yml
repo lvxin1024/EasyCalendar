@@ -346,8 +346,30 @@ jobs:
       - name: Generate SHA-256 checksums
         working-directory: release-assets
         run: sha256sum * > SHA256SUMS.txt
+      - name: Generate installation notice
+        shell: bash
+        run: |
+          set -euo pipefail
+          notice="$RUNNER_TEMP/release-installation-notice.md"
+          {
+            echo "## Installation notes"
+            echo
+            if compgen -G 'release-assets/*-unsigned-macos.dmg' > /dev/null; then
+              echo '> [!WARNING]'
+              echo '> The macOS DMG is ad-hoc signed and not notarized. After copying EasyCalendar to Applications, open it from Finder with **Right-click > Open**. The macOS Widget is not included in this build.'
+              echo
+            fi
+            if compgen -G 'release-assets/*-unsigned-windows-x64-setup.exe' > /dev/null; then
+              echo '> [!WARNING]'
+              echo '> The Windows installer is unsigned. Windows SmartScreen may require **More info > Run anyway**.'
+              echo
+            fi
+            echo 'Verify downloaded files against `SHA256SUMS.txt` before installation.'
+          } > "$notice"
+          echo "RELEASE_BODY_PATH=$notice" >> "$GITHUB_ENV"
       - uses: softprops/action-gh-release@v2
         with:
+          body_path: ${{ env.RELEASE_BODY_PATH }}
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: release-assets/*

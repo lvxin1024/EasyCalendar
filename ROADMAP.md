@@ -156,3 +156,4 @@ P0.2 先于 P0.1 实施，因为它可以独立消除多台默认安装使用相
 - 2026-08-19：完成 P1.9；push/PR 加入 Android、macOS、Windows 原生 Release 编译，并保留 Flutter、Python 和 Worker 的全量门禁。
 - 2026-08-19：重构 README 的交付说明；普通用户路径改为直接安装 App，云同步明确为可选服务，Python Core 定位为可选兼容 API。
 - 2026-08-19：macOS 和 Windows Release 增加无付费证书回退；未配置签名 Secrets 时产出明确标记的 ad-hoc/unsigned Release 产物，不使用 Debug 构建。
+- 2026-08-19：Release notes 会根据实际产物自动加入未签名警告、平台首次打开方法和 SHA-256 校验提示。
