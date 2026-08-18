@@ -19,6 +19,7 @@ import '../../utils/tag_colors.dart';
 import '../../widgets/tag_filter_bar.dart';
 import '../recycle_bin/recycle_bin_page.dart';
 import '../transfer/transfer_page.dart';
+import 'about_page.dart';
 
 const _localeOptions = <String, String>{
   'system': '跟随系统',
@@ -619,6 +620,17 @@ class _SettingsPageState extends State<SettingsPage> {
                       ),
                     ),
                   );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.info_outline),
+                title: const Text('关于与更新'),
+                subtitle: const Text('查看版本并检查 GitHub Release'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.of(
+                    context,
+                  ).push(MaterialPageRoute(builder: (_) => const AboutPage()));
                 },
               ),
               const SizedBox(height: 20),

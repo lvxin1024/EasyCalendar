@@ -305,7 +305,7 @@ cd server && npm test      # Worker 测试
 | P1.4 | **完善 AI Provider 配置向导（已完成）** | Ollama、OpenAI-compatible、DeepSeek 预设支持未保存 Key 测试和模型发现；超时、重试、温度、最大输出 Token、无凭据 HTTP 代理及 Key 替换/清除均可在设置中完成 | 提供常见 OpenAI-compatible/Ollama 预设；可从 `/models` 或 Ollama tags 获取模型列表；编辑时可用尚未保存的 Key 测试；支持代理、超时和常用请求参数；提供 Key 的替换/清除状态但永不回显完整值 |
 | P1.5 | **接入真实系统通知与权限设置（已完成）** | macOS、Windows、Android 已使用系统通知适配器；权限状态、主动申请、系统设置入口和测试通知都可在 App 设置中完成 | macOS、Windows、Android 接入真实通知实现；设置页展示权限状态、申请/跳转系统设置、发送测试通知；提醒创建、修改、删除、重启恢复和时区变化均有自动化与原生构建验证 |
 | P1.6 | **客户端备份、迁移和故障恢复（已完成）** | schema 升级前自动创建 SQLite 恢复点；设置内可创建、查看、恢复和删除，启动迁移失败也有恢复入口；非敏感设置支持独立迁移 | 数据库 schema 升级前创建可恢复备份；设置页支持查看备份、恢复和清理；启动迁移失败时保留原库并给出恢复入口；非敏感设置可单独导入导出，secret 和设备 ID 默认排除 |
-| P1.7 | **应用内版本与更新入口** | 用户只能自行查看 GitHub Release，不知道当前版本是否过期 | “关于”页显示版本、构建号、平台和数据 schema；可检查 GitHub Release、打开对应安装包并展示更新说明；后续可按平台增加签名校验后的自动更新，且不绕过系统安全机制 |
+| P1.7 | **应用内版本与更新入口（已完成）** | 设置内已可查看当前版本、构建号、平台和数据 schema，并比较 GitHub latest Release | 更新页展示说明并只打开官方仓库对应平台的 HTTPS 安装包；下载和安装交由系统处理，不绕过平台安全机制 |
 | P1.8 | **统一应用身份与安装元数据** | macOS/Windows/Android 仍有 `easy_calendar`、模板注释和不一致的产品元数据 | 固定应用名、bundle/application ID、发布者、图标、版本规则和安装路径；Windows 卸载项、macOS About/签名信息、Android 应用标签一致；升级不会因标识变化创建第二份数据目录 |
 | P1.9 | **补齐客户端 CI 质量门禁** | CI 未运行 Flutter analyze/test，也没有原生构建检查 | PR 必须通过 Flutter analyze/test、Python tests、Worker tests；至少编译 macOS、Windows、Android release；对首次启动、设置持久化、设备 ID 唯一性、能力发现和安全存储增加覆盖 |
 
