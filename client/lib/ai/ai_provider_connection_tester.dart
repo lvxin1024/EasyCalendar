@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
+import 'ai_http_client.dart';
 import 'ai_provider.dart';
 
 enum AiProviderProbeFailureKind {
@@ -28,10 +29,9 @@ class AiProviderProbeException implements Exception {
 }
 
 class AiProviderConnectionTester {
-  AiProviderConnectionTester({http.Client? client})
-    : _client = client ?? http.Client();
+  AiProviderConnectionTester({this.client});
 
-  final http.Client _client;
+  final http.Client? client;
 
   Future<void> test(AiProviderConfig config, {String? apiKey}) async {
     await _request(config, apiKey: apiKey);
@@ -91,10 +91,11 @@ class AiProviderConnectionTester {
       headers['Authorization'] = 'Bearer ${apiKey!.trim()}';
     }
     late http.Response response;
+    final requestClient = client ?? createAiHttpClient(config.proxyUrl);
     try {
-      response = await _client
+      response = await requestClient
           .get(endpoint, headers: headers)
-          .timeout(const Duration(seconds: 10));
+          .timeout(Duration(seconds: config.requestTimeoutSeconds));
     } on TimeoutException {
       throw const AiProviderProbeException(
         AiProviderProbeFailureKind.timeout,
@@ -132,6 +133,8 @@ class AiProviderConnectionTester {
             ? 'Provider TLS 证书或握手失败。'
             : '无法连接 Provider。',
       );
+    } finally {
+      if (client == null) requestClient.close();
     }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       if (response.statusCode == 401 || response.statusCode == 403) {
@@ -176,5 +179,5 @@ class AiProviderConnectionTester {
         lower.contains('nodename nor servname');
   }
 
-  void close() => _client.close();
+  void close() => client?.close();
 }

@@ -2,16 +2,16 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import 'ai_http_client.dart';
 import 'ai_key_store.dart';
 import 'ai_provider.dart';
 import 'assistant_models.dart';
 
 class AiAssistantClient {
-  AiAssistantClient({http.Client? client, AiApiKeyStore? keyStore})
-    : _client = client ?? http.Client(),
-      _keyStore = keyStore ?? SecureAiApiKeyStore();
+  AiAssistantClient({this.client, AiApiKeyStore? keyStore})
+    : _keyStore = keyStore ?? SecureAiApiKeyStore();
 
-  final http.Client _client;
+  final http.Client? client;
   final AiApiKeyStore _keyStore;
 
   Future<AiExtractionResult> extract({
@@ -40,18 +40,23 @@ class AiAssistantClient {
         : base.resolve('/chat/completions');
     final payload = provider.kind == AiProviderKind.ollama
         ? {
-            ...provider.nonSensitiveRequestParameters,
+            ...provider.payloadRequestParameters,
             'model': provider.model,
             'stream': false,
             'format': 'json',
+            'options': {
+              'temperature': provider.temperature,
+              if (provider.maxTokens != null) 'num_predict': provider.maxTokens,
+            },
             'messages': [
               {'role': 'user', 'content': prompt},
             ],
           }
         : {
-            ...provider.nonSensitiveRequestParameters,
+            ...provider.payloadRequestParameters,
             'model': provider.model,
-            'temperature': 0,
+            'temperature': provider.temperature,
+            if (provider.maxTokens != null) 'max_tokens': provider.maxTokens,
             'response_format': {'type': 'json_object'},
             'messages': [
               {'role': 'user', 'content': prompt},
@@ -63,6 +68,7 @@ class AiAssistantClient {
     };
     final response = await _postWithRetry(
       endpoint,
+      provider: provider,
       headers: headers,
       body: jsonEncode(payload),
     );
@@ -117,31 +123,39 @@ class AiAssistantClient {
 
   Future<http.Response> _postWithRetry(
     Uri endpoint, {
+    required AiProviderConfig provider,
     required Map<String, String> headers,
     required String body,
   }) async {
+    final requestClient = client ?? createAiHttpClient(provider.proxyUrl);
     Object? lastError;
-    for (var attempt = 0; attempt < 3; attempt++) {
-      try {
-        final response = await _client
-            .post(endpoint, headers: headers, body: body)
-            .timeout(const Duration(seconds: 45));
-        final retryable =
-            response.statusCode == 408 ||
-            response.statusCode == 429 ||
-            response.statusCode >= 500;
-        if (!retryable || attempt == 2) return response;
-      } catch (error) {
-        lastError = error;
-        if (attempt == 2) break;
+    try {
+      for (var attempt = 0; attempt <= provider.retryCount; attempt++) {
+        try {
+          final response = await requestClient
+              .post(endpoint, headers: headers, body: body)
+              .timeout(Duration(seconds: provider.requestTimeoutSeconds));
+          final retryable =
+              response.statusCode == 408 ||
+              response.statusCode == 429 ||
+              response.statusCode >= 500;
+          if (!retryable || attempt == provider.retryCount) return response;
+        } catch (error) {
+          lastError = error;
+          if (attempt == provider.retryCount) break;
+        }
+        await Future<void>.delayed(
+          Duration(milliseconds: 250 * (1 << attempt)),
+        );
       }
-      await Future<void>.delayed(Duration(milliseconds: 250 * (1 << attempt)));
+    } finally {
+      if (client == null) requestClient.close();
     }
     throw AiAssistantException('Provider 请求失败：$lastError');
   }
 
   void close() {
-    _client.close();
+    client?.close();
   }
 }
 

@@ -21,12 +21,44 @@ void main() {
       baseUrl: 'https://ai.example.com/v1',
       model: 'gpt-test',
       keyConfigured: true,
-      requestParameters: const {'temperature': 0.2, 'api_key': 'nested-secret'},
+      requestParameters: const {
+        'temperature': 0.2,
+        'request_timeout_seconds': 30,
+        'retry_count': 1,
+        'proxy_url': 'http://127.0.0.1:7890',
+        'api_key': 'nested-secret',
+      },
     );
 
     expect(config.toStorageJson(), isNot(contains('api_key')));
     expect(config.toStorageJson(), isNot(contains('secret')));
     expect(config.toStorageJson(), contains('temperature'));
+    expect(config.requestTimeoutSeconds, 30);
+    expect(config.retryCount, 1);
+    expect(config.temperature, 0.2);
+    expect(config.proxyUrl, 'http://127.0.0.1:7890');
+    expect(config.payloadRequestParameters, isNot(contains('proxy_url')));
+  });
+
+  test('provider request settings use bounded defaults for invalid values', () {
+    const config = AiProviderConfig(
+      id: 'bounded',
+      name: 'Bounded',
+      kind: AiProviderKind.ollama,
+      baseUrl: 'http://localhost:11434',
+      model: 'qwen',
+      requestParameters: {
+        'request_timeout_seconds': 1,
+        'retry_count': 99,
+        'temperature': 5,
+        'max_tokens': 0,
+      },
+    );
+
+    expect(config.requestTimeoutSeconds, 5);
+    expect(config.retryCount, 5);
+    expect(config.temperature, 2);
+    expect(config.maxTokens, 1);
   });
 
   test('local preferences persist non-sensitive provider fields', () async {

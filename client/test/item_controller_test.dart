@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:easy_calendar/ai/ai_key_store.dart';
+import 'package:easy_calendar/ai/ai_provider.dart';
 import 'package:easy_calendar/application/item_controller.dart';
 import 'package:easy_calendar/config/app_config.dart';
 import 'package:easy_calendar/data/item_repository.dart';
@@ -134,6 +136,37 @@ void main() {
     expect(controller.featureTokenConfigured, isFalse);
     expect(store.value, isNull);
   });
+
+  test(
+    'saving an AI provider can replace and explicitly clear its key',
+    () async {
+      final keyStore = _MemoryAiKeyStore();
+      final controller = ItemController(
+        repository: _MemoryRepository(),
+        config: config,
+        aiApiKeyStore: keyStore,
+      );
+      await controller.initialize();
+      const provider = AiProviderConfig(
+        id: 'cloud',
+        name: 'Cloud',
+        kind: AiProviderKind.openaiCompatible,
+        baseUrl: 'https://ai.example.com/v1',
+        model: 'model',
+      );
+
+      await controller.saveAiProvider(provider, apiKey: 'new-secret');
+      expect(await keyStore.read('cloud'), 'new-secret');
+      expect(controller.aiProviders.single.keyConfigured, isTrue);
+
+      await controller.saveAiProvider(
+        controller.aiProviders.single,
+        clearApiKey: true,
+      );
+      expect(await keyStore.read('cloud'), isNull);
+      expect(controller.aiProviders.single.keyConfigured, isFalse);
+    },
+  );
 
   test(
     'service probes use stored tokens and cache successful results',
@@ -285,6 +318,20 @@ class _MemoryTokenStore implements SyncTokenStore {
 
   @override
   Future<void> clear() async => value = null;
+}
+
+class _MemoryAiKeyStore implements AiApiKeyStore {
+  final values = <String, String>{};
+
+  @override
+  Future<String?> read(String providerId) async => values[providerId];
+
+  @override
+  Future<void> write(String providerId, String apiKey) async =>
+      values[providerId] = apiKey;
+
+  @override
+  Future<void> clear(String providerId) async => values.remove(providerId);
 }
 
 class _MemoryRepository implements ItemRepository {

@@ -86,6 +86,56 @@ void main() {
   );
 
   test(
+    'OpenAI client applies request parameters and configured retries',
+    () async {
+      var requests = 0;
+      late Map<String, dynamic> payload;
+      final client = AiAssistantClient(
+        keyStore: _MemoryKeyStore({'cloud': 'top-secret'}),
+        client: MockClient((request) async {
+          requests++;
+          payload = Map<String, dynamic>.from(jsonDecode(request.body) as Map);
+          if (requests == 1) return http.Response('{}', 503);
+          return http.Response(
+            jsonEncode({
+              'choices': [
+                {
+                  'message': {
+                    'content': jsonEncode({'candidates': <Object>[]}),
+                  },
+                },
+              ],
+            }),
+            200,
+          );
+        }),
+      );
+      addTearDown(client.close);
+
+      await client.extract(
+        provider: _provider.copyWith(
+          requestParameters: const {
+            'temperature': 0.4,
+            'max_tokens': 512,
+            'retry_count': 1,
+            'request_timeout_seconds': 10,
+            'proxy_url': 'http://127.0.0.1:7890',
+          },
+        ),
+        text: '安排事项',
+        timezone: 'Asia/Shanghai',
+      );
+
+      expect(requests, 2);
+      expect(payload['temperature'], 0.4);
+      expect(payload['max_tokens'], 512);
+      expect(payload, isNot(contains('retry_count')));
+      expect(payload, isNot(contains('request_timeout_seconds')));
+      expect(payload, isNot(contains('proxy_url')));
+    },
+  );
+
+  test(
     'invalid candidates are reported by index and never become drafts',
     () async {
       final client = AiAssistantClient(

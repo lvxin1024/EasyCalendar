@@ -811,6 +811,7 @@ class _SettingsPageState extends State<SettingsPage> {
       await widget.controller.saveAiProvider(
         imported.config,
         apiKey: imported.apiKey,
+        clearApiKey: imported.clearApiKey,
       );
       final providers = await widget.controller.refreshAiProviderKeyStatus();
       if (mounted) setState(() => _aiProviders = providers);
@@ -1584,12 +1585,18 @@ class _ProviderDialogState extends State<_ProviderDialog> {
   late final TextEditingController _baseUrl;
   late final TextEditingController _model;
   late final TextEditingController _apiKey;
+  late final TextEditingController _timeoutSeconds;
+  late final TextEditingController _retryCount;
+  late final TextEditingController _temperature;
+  late final TextEditingController _maxTokens;
+  late final TextEditingController _proxyUrl;
   late AiProviderKind _kind;
   late _ProviderPreset _preset;
   bool _importMode = false;
   bool _testing = false;
   bool _discovering = false;
   bool _testFailed = false;
+  bool _clearApiKey = false;
   String? _testStatus;
   List<String> _discoveredModels = const [];
   final _importController = TextEditingController();
@@ -1604,6 +1611,23 @@ class _ProviderDialogState extends State<_ProviderDialog> {
     );
     _model = TextEditingController(text: current?.model ?? '');
     _apiKey = TextEditingController();
+    _timeoutSeconds = TextEditingController(
+      text:
+          (current?.requestTimeoutSeconds ??
+                  AiProviderConfig.defaultRequestTimeoutSeconds)
+              .toString(),
+    );
+    _retryCount = TextEditingController(
+      text: (current?.retryCount ?? AiProviderConfig.defaultRetryCount)
+          .toString(),
+    );
+    _temperature = TextEditingController(
+      text: (current?.temperature ?? 0).toString(),
+    );
+    _maxTokens = TextEditingController(
+      text: current?.maxTokens?.toString() ?? '',
+    );
+    _proxyUrl = TextEditingController(text: current?.proxyUrl ?? '');
     _kind = current?.kind ?? AiProviderKind.ollama;
     _preset = switch (current?.baseUrl) {
       null || 'http://localhost:11434' => _ProviderPreset.ollama,
@@ -1619,6 +1643,11 @@ class _ProviderDialogState extends State<_ProviderDialog> {
     _baseUrl.dispose();
     _model.dispose();
     _apiKey.dispose();
+    _timeoutSeconds.dispose();
+    _retryCount.dispose();
+    _temperature.dispose();
+    _maxTokens.dispose();
+    _proxyUrl.dispose();
     _importController.dispose();
     super.dispose();
   }
@@ -1716,14 +1745,118 @@ class _ProviderDialogState extends State<_ProviderDialog> {
         ),
         if (_kind == AiProviderKind.openaiCompatible) ...[
           const SizedBox(height: 10),
+          Text(
+            widget.current?.keyConfigured == true && !_clearApiKey
+                ? 'API Key：已配置（不会回显）'
+                : _clearApiKey
+                ? 'API Key：保存后清除'
+                : 'API Key：未配置',
+          ),
+          if (widget.current?.keyConfigured == true)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => setState(() {
+                  _clearApiKey = !_clearApiKey;
+                  if (_clearApiKey) _apiKey.clear();
+                }),
+                icon: Icon(_clearApiKey ? Icons.undo : Icons.key_off_outlined),
+                label: Text(_clearApiKey ? '撤销清除' : '清除密钥'),
+              ),
+            ),
           TextFormField(
             controller: _apiKey,
             obscureText: true,
-            decoration: const InputDecoration(labelText: 'API key（留空保持原密钥）'),
-            onChanged: (_) => setState(() => _discoveredModels = const []),
+            enabled: !_clearApiKey,
+            decoration: InputDecoration(
+              labelText: widget.current?.keyConfigured == true
+                  ? '替换 API Key（留空则保留）'
+                  : 'API Key',
+            ),
+            onChanged: (_) => setState(() {
+              _clearApiKey = false;
+              _discoveredModels = const [];
+            }),
           ),
         ],
         const SizedBox(height: 10),
+        ExpansionTile(
+          tilePadding: EdgeInsets.zero,
+          title: const Text('请求参数'),
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _timeoutSeconds,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: '超时（秒）'),
+                    validator: (value) => _integerRange(
+                      value,
+                      minimum: 5,
+                      maximum: 300,
+                      required: true,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextFormField(
+                    controller: _retryCount,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: '失败重试次数'),
+                    validator: (value) => _integerRange(
+                      value,
+                      minimum: 0,
+                      maximum: 5,
+                      required: true,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _temperature,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(labelText: 'Temperature'),
+                    validator: _temperatureRange,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextFormField(
+                    controller: _maxTokens,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: '最大输出 Token（可选）',
+                    ),
+                    validator: (value) => _integerRange(
+                      value,
+                      minimum: 1,
+                      maximum: 1000000,
+                      required: false,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _proxyUrl,
+              decoration: const InputDecoration(
+                labelText: 'HTTP 代理（可选）',
+                hintText: 'http://127.0.0.1:7890',
+              ),
+              validator: _proxyValidator,
+            ),
+          ],
+        ),
         Align(
           alignment: Alignment.centerLeft,
           child: FilledButton.tonalIcon(
@@ -1817,6 +1950,41 @@ class _ProviderDialogState extends State<_ProviderDialog> {
   String? _required(String? value) =>
       value?.trim().isEmpty == false ? null : '不能为空';
 
+  String? _integerRange(
+    String? value, {
+    required int minimum,
+    required int maximum,
+    required bool required,
+  }) {
+    final text = value?.trim() ?? '';
+    if (text.isEmpty && !required) return null;
+    final parsed = int.tryParse(text);
+    if (parsed == null || parsed < minimum || parsed > maximum) {
+      return '请输入 $minimum-$maximum 的整数';
+    }
+    return null;
+  }
+
+  String? _temperatureRange(String? value) {
+    final parsed = double.tryParse(value?.trim() ?? '');
+    if (parsed == null || parsed < 0 || parsed > 2) return '请输入 0-2 的数字';
+    return null;
+  }
+
+  String? _proxyValidator(String? value) {
+    final text = value?.trim() ?? '';
+    if (text.isEmpty) return null;
+    final proxy = Uri.tryParse(text);
+    if (proxy == null ||
+        proxy.scheme != 'http' ||
+        !proxy.hasAuthority ||
+        proxy.host.isEmpty ||
+        proxy.userInfo.isNotEmpty) {
+      return '请输入无用户名密码的 HTTP 代理地址';
+    }
+    return null;
+  }
+
   void _applyPreset(_ProviderPreset preset) {
     setState(() {
       _preset = preset;
@@ -1868,6 +2036,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
             model: _model.text.trim().isEmpty
                 ? 'discovery'
                 : _model.text.trim(),
+            requestParameters: _readRequestParameters(),
             keyConfigured: widget.current?.keyConfigured ?? false,
           ),
           apiKey: _apiKey.text.trim().isEmpty ? null : _apiKey.text.trim(),
@@ -1945,11 +2114,35 @@ class _ProviderDialogState extends State<_ProviderDialog> {
         baseUrl: _baseUrl.text.trim(),
         model: _model.text.trim(),
         enabled: current?.enabled ?? true,
-        requestParameters: current?.requestParameters ?? const {},
+        requestParameters: _readRequestParameters(),
         keyConfigured: current?.keyConfigured ?? false,
       ),
       apiKey: _apiKey.text.trim().isEmpty ? null : _apiKey.text.trim(),
+      clearApiKey: _clearApiKey,
     );
+  }
+
+  Map<String, dynamic> _readRequestParameters() {
+    final parameters = <String, dynamic>{...?widget.current?.requestParameters}
+      ..removeWhere(
+        (key, _) => const {
+          'request_timeout_seconds',
+          'retry_count',
+          'temperature',
+          'max_tokens',
+          'proxy_url',
+        }.contains(key),
+      );
+    parameters['request_timeout_seconds'] = int.parse(
+      _timeoutSeconds.text.trim(),
+    );
+    parameters['retry_count'] = int.parse(_retryCount.text.trim());
+    parameters['temperature'] = double.parse(_temperature.text.trim());
+    final maxTokens = int.tryParse(_maxTokens.text.trim());
+    if (maxTokens != null) parameters['max_tokens'] = maxTokens;
+    final proxyUrl = _proxyUrl.text.trim();
+    if (proxyUrl.isNotEmpty) parameters['proxy_url'] = proxyUrl;
+    return parameters;
   }
 
   Future<void> _testConnection() async {

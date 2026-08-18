@@ -127,11 +127,17 @@ class ItemController extends ChangeNotifier {
   Future<void> saveAiProvider(
     AiProviderConfig provider, {
     String? apiKey,
+    bool clearApiKey = false,
   }) async {
+    if (clearApiKey && apiKey?.trim().isNotEmpty == true) {
+      throw ArgumentError('Cannot replace and clear an AI API key together.');
+    }
     final providers = [...preferences.aiProviders];
     final index = providers.indexWhere((value) => value.id == provider.id);
     final stored = provider.copyWith(
-      keyConfigured: apiKey?.trim().isNotEmpty == true
+      keyConfigured: clearApiKey
+          ? false
+          : apiKey?.trim().isNotEmpty == true
           ? true
           : provider.keyConfigured,
     );
@@ -140,7 +146,9 @@ class ItemController extends ChangeNotifier {
     } else {
       providers[index] = stored;
     }
-    if (apiKey?.trim().isNotEmpty == true) {
+    if (clearApiKey) {
+      await _aiApiKeyStore.clear(provider.id);
+    } else if (apiKey?.trim().isNotEmpty == true) {
       await _aiApiKeyStore.write(provider.id, apiKey!.trim());
     }
     await savePreferences(

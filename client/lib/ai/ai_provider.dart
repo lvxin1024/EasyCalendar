@@ -58,12 +58,63 @@ class AiProviderConfig {
   final bool enabled;
   final Map<String, dynamic> requestParameters;
 
+  static const int defaultRequestTimeoutSeconds = 45;
+  static const int defaultRetryCount = 2;
+
+  int get requestTimeoutSeconds => _integerParameter(
+    'request_timeout_seconds',
+    defaultValue: defaultRequestTimeoutSeconds,
+    minimum: 5,
+    maximum: 300,
+  );
+
+  int get retryCount => _integerParameter(
+    'retry_count',
+    defaultValue: defaultRetryCount,
+    minimum: 0,
+    maximum: 5,
+  );
+
+  double get temperature {
+    final value = requestParameters['temperature'];
+    return value is num ? value.toDouble().clamp(0, 2).toDouble() : 0;
+  }
+
+  int? get maxTokens {
+    final value = requestParameters['max_tokens'];
+    if (value is! num) return null;
+    return value.toInt().clamp(1, 1000000).toInt();
+  }
+
+  String? get proxyUrl {
+    final value = requestParameters['proxy_url'];
+    if (value is! String || value.trim().isEmpty) return null;
+    return value.trim();
+  }
+
   // This is derived from secure storage and is deliberately omitted from JSON.
   final bool keyConfigured;
 
   Map<String, dynamic> get nonSensitiveRequestParameters => {
     for (final entry in requestParameters.entries)
       if (!_sensitiveParameter(entry.key)) entry.key: entry.value,
+  };
+
+  Map<String, dynamic> get payloadRequestParameters => {
+    for (final entry in nonSensitiveRequestParameters.entries)
+      if (!const {
+        'request_timeout_seconds',
+        'retry_count',
+        'proxy_url',
+        'temperature',
+        'max_tokens',
+        'model',
+        'messages',
+        'stream',
+        'format',
+        'response_format',
+      }.contains(entry.key))
+        entry.key: entry.value,
   };
 
   Map<String, dynamic> toJson() => {
@@ -117,10 +168,25 @@ class AiProviderConfig {
       'clientsecret',
     }.contains(normalized);
   }
+
+  int _integerParameter(
+    String key, {
+    required int defaultValue,
+    required int minimum,
+    required int maximum,
+  }) {
+    final value = requestParameters[key];
+    if (value is! num) return defaultValue;
+    return value.toInt().clamp(minimum, maximum).toInt();
+  }
 }
 
 class AiProviderImport {
-  const AiProviderImport({required this.config, this.apiKey});
+  const AiProviderImport({
+    required this.config,
+    this.apiKey,
+    this.clearApiKey = false,
+  });
 
   factory AiProviderImport.fromJson(Map<String, dynamic> json) {
     final normalized = Map<String, dynamic>.from(json);
@@ -141,4 +207,5 @@ class AiProviderImport {
 
   final AiProviderConfig config;
   final String? apiKey;
+  final bool clearApiKey;
 }
