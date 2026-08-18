@@ -170,6 +170,7 @@ class CalendarCollection {
 class ClientPreferences {
   const ClientPreferences({
     required this.apiUrl,
+    this.featureApiUrl = 'http://localhost:8000',
     this.deviceId = 'my-easycalendar-client',
     this.deviceName = '',
     this.defaultCollectionId = 'collection_local',
@@ -184,6 +185,7 @@ class ClientPreferences {
   });
 
   final String apiUrl;
+  final String featureApiUrl;
   final String deviceId;
   final String deviceName;
   final String defaultCollectionId;
@@ -198,6 +200,7 @@ class ClientPreferences {
 
   ClientPreferences copyWith({
     String? apiUrl,
+    String? featureApiUrl,
     String? deviceId,
     String? deviceName,
     String? defaultCollectionId,
@@ -211,6 +214,7 @@ class ClientPreferences {
     Map<String, int>? tagColors,
   }) => ClientPreferences(
     apiUrl: apiUrl ?? this.apiUrl,
+    featureApiUrl: featureApiUrl ?? this.featureApiUrl,
     deviceId: deviceId ?? this.deviceId,
     deviceName: deviceName ?? this.deviceName,
     defaultCollectionId: defaultCollectionId ?? this.defaultCollectionId,

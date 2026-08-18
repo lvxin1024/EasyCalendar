@@ -98,7 +98,8 @@ class _SubscriptionsPageState extends State<SubscriptionsPage> {
     ],
   );
 
-  Uri? get _baseUrl => Uri.tryParse(widget.controller.preferences.apiUrl);
+  Uri? get _baseUrl =>
+      Uri.tryParse(widget.controller.preferences.featureApiUrl);
 
   Future<void> _reload() async {
     final base = _baseUrl;
@@ -106,7 +107,7 @@ class _SubscriptionsPageState extends State<SubscriptionsPage> {
       if (mounted) {
         setState(() {
           _loading = false;
-          _error = '同步服务地址无效。';
+          _error = '功能服务地址无效，请在设置中配置 Python Core。';
         });
       }
       return;

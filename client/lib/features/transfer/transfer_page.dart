@@ -220,7 +220,7 @@ class _TransferPageState extends State<TransferPage> {
         await widget.controller.commitLocalJsonImport(_previewContent!);
       } else if (_previewFormat == 'ics') {
         final prefs = widget.controller.preferences;
-        final serverUrl = Uri.parse(prefs.apiUrl);
+        final serverUrl = Uri.parse(prefs.featureApiUrl);
         final token = await _readSyncToken();
         if (token == null) {
           _showStatus('请先配置访问令牌', error: true);
@@ -257,13 +257,13 @@ class _TransferPageState extends State<TransferPage> {
 
   Future<void> _exportIcs() async {
     final prefs = widget.controller.preferences;
-    if (!prefs.syncEnabled || prefs.apiUrl.isEmpty) {
-      _showStatus('ICS 导出需要配置同步服务', error: true);
+    if (prefs.featureApiUrl.isEmpty) {
+      _showStatus('ICS 导出需要配置功能服务', error: true);
       return;
     }
     setState(() => _busy = true);
     try {
-      final serverUrl = Uri.parse(prefs.apiUrl);
+      final serverUrl = Uri.parse(prefs.featureApiUrl);
       final token = await _readSyncToken();
       if (token == null) {
         _showStatus('请先配置访问令牌', error: true);
@@ -294,8 +294,8 @@ class _TransferPageState extends State<TransferPage> {
 
   Future<void> _pickAndImportIcs() async {
     final prefs = widget.controller.preferences;
-    if (!prefs.syncEnabled || prefs.apiUrl.isEmpty) {
-      _showStatus('ICS 导入需要配置同步服务', error: true);
+    if (prefs.featureApiUrl.isEmpty) {
+      _showStatus('ICS 导入需要配置功能服务', error: true);
       return;
     }
     final picked = await FilePicker.platform.pickFiles(
@@ -312,7 +312,7 @@ class _TransferPageState extends State<TransferPage> {
     final content = utf8.decode(bytes);
     setState(() => _busy = true);
     try {
-      final serverUrl = Uri.parse(prefs.apiUrl);
+      final serverUrl = Uri.parse(prefs.featureApiUrl);
       final token = await _readSyncToken();
       if (token == null) {
         _showStatus('请先配置访问令牌', error: true);

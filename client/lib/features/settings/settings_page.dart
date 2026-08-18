@@ -32,6 +32,7 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _apiUrlController;
+  late final TextEditingController _featureApiUrlController;
   late final TextEditingController _deviceNameController;
   late final TextEditingController _deviceIdController;
   late final TextEditingController _collectionIdController;
@@ -51,6 +52,9 @@ class _SettingsPageState extends State<SettingsPage> {
     super.initState();
     final preferences = widget.controller.preferences;
     _apiUrlController = TextEditingController(text: preferences.apiUrl);
+    _featureApiUrlController = TextEditingController(
+      text: preferences.featureApiUrl,
+    );
     _deviceNameController = TextEditingController(text: preferences.deviceName);
     _deviceIdController = TextEditingController(text: preferences.deviceId);
     _collectionIdController = TextEditingController(
@@ -74,6 +78,7 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   void dispose() {
     _apiUrlController.dispose();
+    _featureApiUrlController.dispose();
     _deviceNameController.dispose();
     _deviceIdController.dispose();
     _collectionIdController.dispose();
@@ -102,9 +107,20 @@ class _SettingsPageState extends State<SettingsPage> {
                 controller: _apiUrlController,
                 keyboardType: TextInputType.url,
                 decoration: const InputDecoration(
-                  labelText: 'API 地址',
+                  labelText: '同步服务地址',
                   helperText: '多设备同步请填写 Cloudflare Worker 的 HTTPS 地址',
                   prefixIcon: Icon(Icons.link),
+                ),
+                validator: _validateUrl,
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _featureApiUrlController,
+                keyboardType: TextInputType.url,
+                decoration: const InputDecoration(
+                  labelText: '功能服务地址',
+                  helperText: '网址订阅和远程 ICS 操作请填写 Python Core 地址',
+                  prefixIcon: Icon(Icons.hub_outlined),
                 ),
                 validator: _validateUrl,
               ),
@@ -398,6 +414,7 @@ class _SettingsPageState extends State<SettingsPage> {
       await widget.controller.savePreferences(
         ClientPreferences(
           apiUrl: _apiUrlController.text.trim(),
+          featureApiUrl: _featureApiUrlController.text.trim(),
           deviceId: _deviceIdController.text.trim(),
           deviceName: _deviceNameController.text.trim(),
           defaultCollectionId: _collectionIdController.text.trim(),

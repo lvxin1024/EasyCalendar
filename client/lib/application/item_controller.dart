@@ -65,6 +65,7 @@ class ItemController extends ChangeNotifier {
 
   ClientPreferences get _defaultPreferences => ClientPreferences(
     apiUrl: config.apiUrl,
+    featureApiUrl: config.featureApiUrl,
     deviceId: config.deviceId,
     defaultCollectionId: config.defaultCollectionId,
     defaultCollectionName: config.defaultCollectionName,

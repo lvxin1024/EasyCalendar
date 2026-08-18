@@ -935,6 +935,8 @@ class LocalItemRepository
     };
     return ClientPreferences(
       apiUrl: values['api_url'] ?? defaults.apiUrl,
+      featureApiUrl:
+          values['feature_api_url'] ?? defaults.featureApiUrl,
       deviceId: values['device_id'] ?? defaults.deviceId,
       deviceName: values['device_name'] ?? defaults.deviceName,
       defaultCollectionId:
@@ -971,6 +973,7 @@ class LocalItemRepository
     await _db.transaction((transaction) async {
       for (final entry in {
         'api_url': preferences.apiUrl.trim(),
+        'feature_api_url': preferences.featureApiUrl.trim(),
         'device_id': preferences.deviceId.trim(),
         'device_name': preferences.deviceName.trim(),
         'default_collection_id': preferences.defaultCollectionId.trim(),

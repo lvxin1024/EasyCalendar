@@ -22,6 +22,11 @@ persists a unique ID before creating local sync changes. Users can edit the
 friendly device name in Settings; the technical ID is available only under
 advanced connection settings for copying or confirmed regeneration.
 
+The client stores separate runtime endpoints for sync and feature APIs.
+`EASYCALENDAR_API_URL` initializes the Cloudflare sync endpoint, while
+`EASYCALENDAR_FEATURE_API_URL` initializes the Python Core endpoint used by URL
+subscriptions and remote ICS transfer. Both can be changed in Settings.
+
 The generated platform runners and `pubspec.lock` are version controlled.
 Analyzer and unit tests run on any Flutter-capable development machine; native
 build acceptance additionally requires that platform's SDK and toolchain.

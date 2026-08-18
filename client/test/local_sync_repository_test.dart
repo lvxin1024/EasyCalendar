@@ -166,6 +166,7 @@ void main() {
   test('persists device name and tag color preferences locally', () async {
     final defaults = ClientPreferences(
       apiUrl: _config.apiUrl,
+      featureApiUrl: 'https://core.example.com',
       syncEnabled: _config.syncEnabled,
       notificationsEnabled: _config.notificationsEnabled,
     );
@@ -176,6 +177,7 @@ void main() {
     final loaded = await repository.loadPreferences(defaults);
 
     expect(loaded.deviceName, '工作电脑');
+    expect(loaded.featureApiUrl, 'https://core.example.com');
     expect(loaded.tagColors, {'工作': 0xFF2563EB});
   });
 

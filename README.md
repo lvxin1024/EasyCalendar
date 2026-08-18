@@ -97,7 +97,7 @@ cp config/secrets.example.env config/secrets.env  # 设置 token、AI key
 
 不复制配置文件也可以以安全默认值启动。Core 不强制依赖 Sync Server，可以独立运行。
 
-部署到远程服务器时，建议用 systemd 等进程管理器运行，并在前面配置 Caddy 或 Nginx HTTPS 反向代理；不要把 `config/secrets.env` 提交到 Git。当前 Flutter 客户端设置页中的“API 地址”用于同步协议，必须填写下文的 Cloudflare Worker 地址，不能填写 Python Core 地址。
+部署到远程服务器时，建议用 systemd 等进程管理器运行，并在前面配置 Caddy 或 Nginx HTTPS 反向代理；不要把 `config/secrets.env` 提交到 Git。Flutter 设置页中的“功能服务地址”填写 Python Core 地址；“同步服务地址”填写下文的 Cloudflare Worker 地址，两者不能混用。
 
 ### 2. Flutter 客户端
 
@@ -222,7 +222,8 @@ cd ..
 
 | 设置项 | 如何填写 | 示例 |
 |---|---|---|
-| **API 地址** | 所有设备填写同一个 Cloudflare Worker HTTPS 地址 | `https://calendar.example.com` |
+| **同步服务地址** | 所有设备填写同一个 Cloudflare Worker HTTPS 地址 | `https://calendar.example.com` |
+| **功能服务地址** | 网址订阅和远程 ICS 功能使用的 Python Core 地址 | `https://core.example.com` |
 | **访问令牌** | 所有设备填写 `config/secrets.env` 中同一个 `ADMIN_TOKEN` | 上面生成的 64 位字符串 |
 | **设备名称** | 用于区分设备，可按习惯修改 | `工作电脑`、`手机` |
 | **设备 ID** | 首次启动自动生成并长期保存；通常无需修改，可在高级连接设置中复制或重建 | `device-<UUID>` |

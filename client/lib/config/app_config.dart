@@ -13,6 +13,7 @@ class AppConfig {
     required this.databaseName,
     required this.deviceId,
     required this.apiUrl,
+    this.featureApiUrl = 'http://localhost:8000',
     required this.syncEnabled,
     required this.syncRetryLimit,
     required this.notificationsEnabled,
@@ -60,6 +61,10 @@ class AppConfig {
         'EASYCALENDAR_API_URL',
         defaultValue: 'http://localhost:8000',
       ),
+      featureApiUrl: const String.fromEnvironment(
+        'EASYCALENDAR_FEATURE_API_URL',
+        defaultValue: 'http://localhost:8000',
+      ),
       syncEnabled: _parseBool(
         const String.fromEnvironment(
           'EASYCALENDAR_SYNC_ENABLED',
@@ -88,6 +93,7 @@ class AppConfig {
   final String databaseName;
   final String deviceId;
   final String apiUrl;
+  final String featureApiUrl;
   final bool syncEnabled;
   final int syncRetryLimit;
   final bool notificationsEnabled;
