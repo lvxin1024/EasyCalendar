@@ -18,3 +18,9 @@ async def health_check(request: Request):
 async def capabilities(request: Request):
     """Return available and configured features without exposing secrets."""
     return build_capabilities_payload(request.app.state.settings)
+
+
+@router.get("/auth-check")
+async def auth_check():
+    """Confirm that optional API authentication has succeeded."""
+    return {"status": "ok"}

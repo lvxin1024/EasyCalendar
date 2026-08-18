@@ -173,6 +173,7 @@ def test_versioned_system_endpoints_start_with_core_dependencies():
     assert capabilities_response.status_code == 200
     assert capabilities_response.json()["features"]["parser"] is True
     assert "calendar" not in capabilities_response.json()["providers"]
+    assert client.get("/v1/auth-check").json() == {"status": "ok"}
     assert client.get("/api/v1/health").status_code == 404
 
 
@@ -193,6 +194,13 @@ def test_configured_admin_token_protects_core_business_routes(tmp_path):
         rejected = client.get("/v1/items")
         assert rejected.status_code == 401
         assert rejected.json()["error"]["code"] == "authentication_required"
+
+        auth_check = client.get(
+            "/v1/auth-check",
+            headers={"Authorization": "Bearer core-private-token"},
+        )
+        assert auth_check.status_code == 200
+        assert auth_check.json() == {"status": "ok"}
 
         accepted = client.get(
             "/v1/items",

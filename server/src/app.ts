@@ -69,6 +69,10 @@ app.get("/v1/capabilities", (c) =>
       local_reminders: false,
       widget_snapshot: false,
     },
+    authentication: {
+      required: true,
+      scheme: "bearer",
+    },
     providers: {
       parser: [],
       ai: [],
@@ -83,6 +87,7 @@ app.get("/v1/capabilities", (c) =>
 
 app.use("/v1/*", requireAdminToken);
 
+app.get("/v1/auth-check", (c) => c.json({ status: "ok" }));
 app.post("/v1/sync/push", pushChanges);
 app.get("/v1/sync/pull", pullChanges);
 app.get("/v1/sync/conflicts", listConflicts);

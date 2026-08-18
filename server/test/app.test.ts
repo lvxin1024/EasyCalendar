@@ -37,6 +37,7 @@ describe("Worker system endpoints", () => {
       api_version: "v1",
       features: { sync: true },
       configured: { sync: true },
+      authentication: { required: true, scheme: "bearer" },
     });
   });
 });
@@ -71,6 +72,17 @@ describe("Worker request boundary", () => {
     expect(await response.json()).toMatchObject({
       error: { code: "unauthorized" },
     });
+  });
+
+  it("checks a valid bearer token without accessing sync data", async () => {
+    const response = await app.request(
+      "/v1/auth-check",
+      { headers: { Authorization: `Bearer ${env.ADMIN_TOKEN}` } },
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: "ok" });
   });
 
   it("allows a valid bearer token to reach routing", async () => {
