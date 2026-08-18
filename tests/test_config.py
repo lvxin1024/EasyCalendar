@@ -174,3 +174,28 @@ def test_versioned_system_endpoints_start_with_core_dependencies():
     assert capabilities_response.json()["features"]["parser"] is True
     assert "calendar" not in capabilities_response.json()["providers"]
     assert client.get("/api/v1/health").status_code == 404
+
+
+def test_configured_admin_token_protects_core_business_routes(tmp_path):
+    from fastapi.testclient import TestClient
+
+    from src.main import create_app
+    from src.storage import SQLiteRepository
+
+    settings = Settings(secrets={"admin_token": "core-private-token"})
+    repository = SQLiteRepository(tmp_path / "authenticated-core.sqlite3")
+    with TestClient(create_app(settings, repository=repository)) as client:
+        assert client.get("/v1/health").status_code == 200
+        capabilities = client.get("/v1/capabilities")
+        assert capabilities.status_code == 200
+        assert capabilities.json()["authentication"]["required"] is True
+
+        rejected = client.get("/v1/items")
+        assert rejected.status_code == 401
+        assert rejected.json()["error"]["code"] == "authentication_required"
+
+        accepted = client.get(
+            "/v1/items",
+            headers={"Authorization": "Bearer core-private-token"},
+        )
+        assert accepted.status_code == 200

@@ -80,12 +80,27 @@ void main() {
       ),
     );
   });
+
+  test('omits authorization when the feature service has no token', () async {
+    late http.Request request;
+    final api = SubscriptionApiClient(
+      tokenStore: const _MemoryTokenStore(null),
+      client: MockClient((value) async {
+        request = value;
+        return http.Response('{"data":[]}', 200);
+      }),
+    );
+
+    await api.list(Uri.parse('http://localhost:8000'));
+
+    expect(request.headers, isNot(contains('Authorization')));
+  });
 }
 
 class _MemoryTokenStore implements SyncTokenStore {
   const _MemoryTokenStore(this.value);
 
-  final String value;
+  final String? value;
 
   @override
   Future<String?> read() async => value;

@@ -6,7 +6,6 @@ import 'package:intl/intl.dart';
 import '../../application/item_controller.dart';
 import '../../data/subscription_api_client.dart';
 import '../../domain/subscription.dart';
-import '../../sync/token_store.dart';
 
 class SubscriptionsPage extends StatefulWidget {
   const SubscriptionsPage({super.key, required this.controller});
@@ -27,9 +26,7 @@ class _SubscriptionsPageState extends State<SubscriptionsPage> {
   void initState() {
     super.initState();
     _client = SubscriptionApiClient(
-      tokenStore:
-          widget.controller.syncCoordinator?.tokenStore ??
-          SecureSyncTokenStore(),
+      tokenStore: widget.controller.featureTokenStore,
     );
     unawaited(_reload());
   }

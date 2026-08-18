@@ -221,11 +221,7 @@ class _TransferPageState extends State<TransferPage> {
       } else if (_previewFormat == 'ics') {
         final prefs = widget.controller.preferences;
         final serverUrl = Uri.parse(prefs.featureApiUrl);
-        final token = await _readSyncToken();
-        if (token == null) {
-          _showStatus('请先配置访问令牌', error: true);
-          return;
-        }
+        final token = await _readFeatureToken();
         await _client.importContent(
           serverUrl: serverUrl,
           token: token,
@@ -249,11 +245,8 @@ class _TransferPageState extends State<TransferPage> {
     }
   }
 
-  Future<String?> _readSyncToken() async {
-    final tokenStore = widget.controller.syncCoordinator?.tokenStore;
-    if (tokenStore == null) return null;
-    return tokenStore.read();
-  }
+  Future<String> _readFeatureToken() async =>
+      (await widget.controller.featureTokenStore.read()) ?? '';
 
   Future<void> _exportIcs() async {
     final prefs = widget.controller.preferences;
@@ -264,11 +257,7 @@ class _TransferPageState extends State<TransferPage> {
     setState(() => _busy = true);
     try {
       final serverUrl = Uri.parse(prefs.featureApiUrl);
-      final token = await _readSyncToken();
-      if (token == null) {
-        _showStatus('请先配置访问令牌', error: true);
-        return;
-      }
+      final token = await _readFeatureToken();
       final ics = await _client.exportIcs(
         serverUrl: serverUrl,
         token: token,
@@ -313,11 +302,7 @@ class _TransferPageState extends State<TransferPage> {
     setState(() => _busy = true);
     try {
       final serverUrl = Uri.parse(prefs.featureApiUrl);
-      final token = await _readSyncToken();
-      if (token == null) {
-        _showStatus('请先配置访问令牌', error: true);
-        return;
-      }
+      final token = await _readFeatureToken();
       final preview = await _client.importContent(
         serverUrl: serverUrl,
         token: token,

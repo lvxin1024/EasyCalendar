@@ -224,7 +224,8 @@ cd ..
 |---|---|---|
 | **同步服务地址** | 所有设备填写同一个 Cloudflare Worker HTTPS 地址 | `https://calendar.example.com` |
 | **功能服务地址** | 网址订阅和远程 ICS 功能使用的 Python Core 地址 | `https://core.example.com` |
-| **访问令牌** | 所有设备填写 `config/secrets.env` 中同一个 `ADMIN_TOKEN` | 上面生成的 64 位字符串 |
+| **同步服务令牌** | Cloudflare Worker 的 `ADMIN_TOKEN`；需要同步的设备填写同一个值 | 上面生成的 64 位字符串 |
+| **功能服务令牌** | Python Core 配置了 `ADMIN_TOKEN` 时填写；未配置鉴权时留空 | Core 实例自己的 token |
 | **设备名称** | 用于区分设备，可按习惯修改 | `工作电脑`、`手机` |
 | **设备 ID** | 首次启动自动生成并长期保存；通常无需修改，可在高级连接设置中复制或重建 | `device-<UUID>` |
 | **默认 Collection ID** | 需要共享默认日历的设备填写相同值 | `collection_local` |
@@ -232,6 +233,8 @@ cd ..
 | **同步** | 打开开关，保存后点击“立即同步” | 开启 |
 
 这些设置会持久化在当前安装中，并覆盖构建时的 API 地址、默认 Collection 等初始值，因此普通用户不需要编辑环境变量或重新构建应用。`EASYCALENDAR_DEVICE_ID` 默认留空；仅定制部署需要预设 ID，普通 Release 安装会自动生成。
+
+同步服务令牌与功能服务令牌使用不同的系统安全存储项，互不覆盖。Python Core 未配置 `ADMIN_TOKEN` 时允许无 token 访问，适合仅监听本机地址的场景；一旦配置 `ADMIN_TOKEN`，除 health/capabilities 外的 `/v1` API 都要求对应 Bearer token。把 Core 暴露到局域网或公网时必须配置 token 和 HTTPS。
 
 设备 ID 应长期保持稳定。高级设置中的“重建设备身份”不会破坏尚未上传的旧变更，客户端会按旧、新设备 ID 分批上传；只应在复制安装、身份冲突或排查同步问题时使用。修改默认 Collection ID 只影响之后新建的日程，会创建或选择新的 Collection，不会自动迁移旧 Collection 中已有数据。
 

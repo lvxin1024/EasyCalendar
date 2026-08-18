@@ -13,6 +13,7 @@ import '../domain/item.dart';
 import '../notification/notification_service.dart';
 import '../sync/sync_coordinator.dart';
 import '../sync/sync_models.dart';
+import '../sync/token_store.dart';
 import '../utils/configured_time.dart';
 import '../widget/widget_snapshot_writer.dart';
 import '../window/desktop_window_controller.dart';
@@ -28,12 +29,14 @@ class ItemController extends ChangeNotifier {
     AiApiKeyStore? aiApiKeyStore,
     AiProviderConnectionTester? aiProviderConnectionTester,
     DeviceIdentity? deviceIdentity,
+    SyncTokenStore? featureTokenStore,
   }) {
     syncCoordinator?.addListener(_syncChanged);
     _aiApiKeyStore = aiApiKeyStore ?? SecureAiApiKeyStore();
     _aiProviderConnectionTester =
         aiProviderConnectionTester ?? AiProviderConnectionTester();
     _deviceIdentity = deviceIdentity ?? DeviceIdentity();
+    this.featureTokenStore = featureTokenStore ?? SecureFeatureTokenStore();
   }
 
   final ItemRepository repository;
@@ -45,6 +48,7 @@ class ItemController extends ChangeNotifier {
   late final AiApiKeyStore _aiApiKeyStore;
   late final AiProviderConnectionTester _aiProviderConnectionTester;
   late final DeviceIdentity _deviceIdentity;
+  late final SyncTokenStore featureTokenStore;
 
   List<CalendarItem> _items = const [];
   List<CalendarCollection> _collections = const [];
@@ -53,6 +57,7 @@ class ItemController extends ChangeNotifier {
   bool _initialized = false;
   bool _mutating = false;
   Object? _error;
+  bool _featureTokenConfigured = false;
 
   List<CalendarItem> get items => List.unmodifiable(_items);
   List<CalendarCollection> get collections => List.unmodifiable(_collections);
@@ -62,6 +67,7 @@ class ItemController extends ChangeNotifier {
   bool get mutating => _mutating;
   Object? get error => _error;
   String? get databasePath => repository.databasePath;
+  bool get featureTokenConfigured => _featureTokenConfigured;
 
   ClientPreferences get _defaultPreferences => ClientPreferences(
     apiUrl: config.apiUrl,
@@ -182,6 +188,12 @@ class ItemController extends ChangeNotifier {
     try {
       await repository.initialize();
       _initialized = true;
+      try {
+        _featureTokenConfigured =
+            (await featureTokenStore.read())?.isNotEmpty == true;
+      } catch (_) {
+        _featureTokenConfigured = false;
+      }
       final loadedPreferences = await repository.loadPreferences(
         _defaultPreferences,
       );
@@ -398,6 +410,20 @@ class ItemController extends ChangeNotifier {
 
   Future<void> clearSyncToken() async {
     await syncCoordinator?.clearToken();
+  }
+
+  Future<void> saveFeatureToken(String token) async {
+    final normalized = token.trim();
+    if (normalized.isEmpty) return;
+    await featureTokenStore.write(normalized);
+    _featureTokenConfigured = true;
+    notifyListeners();
+  }
+
+  Future<void> clearFeatureToken() async {
+    await featureTokenStore.clear();
+    _featureTokenConfigured = false;
+    notifyListeners();
   }
 
   Future<void> synchronizeNow() async {

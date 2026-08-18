@@ -117,6 +117,7 @@ def test_t23_sync_state_and_credentials_have_explicit_storage_boundaries():
     assert "permanent_failure" in repository
     assert "applyRemoteBatch" in repository
     assert "FlutterSecureStorage" in token_store
+    assert "easycalendar_feature_api_token" in token_store
     assert "easycalendar_admin_token" not in repository
 
 

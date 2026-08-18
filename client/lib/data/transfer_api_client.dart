@@ -128,8 +128,8 @@ class TransferApiClient {
     String? idempotencyKey,
   }) {
     final headers = {
-      'Authorization': 'Bearer $token',
       'Content-Type': 'application/json',
+      if (token.isNotEmpty) 'Authorization': 'Bearer $token',
     };
     if (idempotencyKey != null) {
       headers['Idempotency-Key'] = idempotencyKey;

@@ -55,6 +55,10 @@ def build_capabilities_payload(
             "local_reminders": active_settings.notifications.enabled,
             "widget_snapshot": active_settings.widget.enabled,
         },
+        "authentication": {
+            "required": active_settings.secrets.admin_token is not None,
+            "scheme": "bearer",
+        },
         "providers": {
             "parser": ["rules.zh_cn"],
             "ai": ai_providers,

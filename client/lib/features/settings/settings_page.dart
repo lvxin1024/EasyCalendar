@@ -33,6 +33,7 @@ class _SettingsPageState extends State<SettingsPage> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _apiUrlController;
   late final TextEditingController _featureApiUrlController;
+  late final TextEditingController _featureTokenController;
   late final TextEditingController _deviceNameController;
   late final TextEditingController _deviceIdController;
   late final TextEditingController _collectionIdController;
@@ -46,6 +47,7 @@ class _SettingsPageState extends State<SettingsPage> {
   late List<AiProviderConfig> _aiProviders;
   late Map<String, int> _tagColors;
   bool _obscureToken = true;
+  bool _obscureFeatureToken = true;
 
   @override
   void initState() {
@@ -55,6 +57,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _featureApiUrlController = TextEditingController(
       text: preferences.featureApiUrl,
     );
+    _featureTokenController = TextEditingController();
     _deviceNameController = TextEditingController(text: preferences.deviceName);
     _deviceIdController = TextEditingController(text: preferences.deviceId);
     _collectionIdController = TextEditingController(
@@ -79,6 +82,7 @@ class _SettingsPageState extends State<SettingsPage> {
   void dispose() {
     _apiUrlController.dispose();
     _featureApiUrlController.dispose();
+    _featureTokenController.dispose();
     _deviceNameController.dispose();
     _deviceIdController.dispose();
     _collectionIdController.dispose();
@@ -123,6 +127,40 @@ class _SettingsPageState extends State<SettingsPage> {
                   prefixIcon: Icon(Icons.hub_outlined),
                 ),
                 validator: _validateUrl,
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _featureTokenController,
+                obscureText: _obscureFeatureToken,
+                decoration: InputDecoration(
+                  labelText: widget.controller.featureTokenConfigured
+                      ? '功能服务令牌（已保存，可选）'
+                      : '功能服务令牌（可选）',
+                  helperText: 'Python Core 未启用鉴权时留空',
+                  prefixIcon: const Icon(Icons.vpn_key_outlined),
+                  suffixIcon: Wrap(
+                    spacing: 0,
+                    children: [
+                      if (widget.controller.featureTokenConfigured)
+                        IconButton(
+                          tooltip: '清除功能服务令牌',
+                          onPressed: _clearFeatureToken,
+                          icon: const Icon(Icons.key_off_outlined),
+                        ),
+                      IconButton(
+                        tooltip: _obscureFeatureToken ? '显示令牌' : '隐藏令牌',
+                        onPressed: () => setState(
+                          () => _obscureFeatureToken = !_obscureFeatureToken,
+                        ),
+                        icon: Icon(
+                          _obscureFeatureToken
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
               const SizedBox(height: 10),
               TextFormField(
@@ -196,8 +234,8 @@ class _SettingsPageState extends State<SettingsPage> {
                 decoration: InputDecoration(
                   labelText:
                       widget.controller.syncCoordinator?.tokenConfigured == true
-                      ? '访问令牌（已保存）'
-                      : '访问令牌',
+                      ? '同步服务令牌（已保存）'
+                      : '同步服务令牌',
                   prefixIcon: const Icon(Icons.key_outlined),
                   suffixIcon: IconButton(
                     tooltip: _obscureToken ? '显示令牌' : '隐藏令牌',
@@ -432,6 +470,10 @@ class _SettingsPageState extends State<SettingsPage> {
         await widget.controller.saveSyncToken(_tokenController.text);
         _tokenController.clear();
       }
+      if (_featureTokenController.text.trim().isNotEmpty) {
+        await widget.controller.saveFeatureToken(_featureTokenController.text);
+        _featureTokenController.clear();
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
@@ -662,6 +704,11 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _clearToken() async {
     await widget.controller.clearSyncToken();
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _clearFeatureToken() async {
+    await widget.controller.clearFeatureToken();
     if (mounted) setState(() {});
   }
 

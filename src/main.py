@@ -1,10 +1,12 @@
 """Main application entry point."""
 
 from contextlib import asynccontextmanager
+from hmac import compare_digest
 from typing import Optional
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from .api.errors import register_error_handlers
 from .api.assistant_routes import router as assistant_router
@@ -51,6 +53,40 @@ def create_app(
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.middleware("http")
+    async def optional_bearer_auth(request, call_next):
+        configured_token = active_settings.secrets.admin_token
+        public_paths = {
+            "/",
+            "/docs",
+            "/openapi.json",
+            "/v1/health",
+            "/v1/capabilities",
+        }
+        if (
+            configured_token is None
+            or request.method == "OPTIONS"
+            or request.url.path in public_paths
+        ):
+            return await call_next(request)
+        if not request.url.path.startswith("/v1/"):
+            return await call_next(request)
+        authorization = request.headers.get("Authorization", "")
+        scheme, _, supplied = authorization.partition(" ")
+        expected = configured_token.get_secret_value()
+        if scheme.lower() != "bearer" or not supplied or not compare_digest(supplied, expected):
+            return JSONResponse(
+                status_code=401,
+                content={
+                    "error": {
+                        "code": "authentication_required",
+                        "message": "A valid Bearer token is required",
+                        "details": {},
+                    }
+                },
+            )
+        return await call_next(request)
 
     app.include_router(system_router)
     app.include_router(item_router)

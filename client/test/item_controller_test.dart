@@ -4,6 +4,7 @@ import 'package:easy_calendar/data/item_repository.dart';
 import 'package:easy_calendar/data/transfer_models.dart';
 import 'package:easy_calendar/device/device_identity.dart';
 import 'package:easy_calendar/domain/item.dart';
+import 'package:easy_calendar/sync/token_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:timezone/data/latest.dart' as tz_data;
@@ -106,6 +107,39 @@ void main() {
     expect(regenerated.deviceName, 'Test-device');
     expect(repository.storedPreferences?.deviceId, regenerated.deviceId);
   });
+
+  test('feature token has an independent configured state', () async {
+    final store = _MemoryTokenStore();
+    final controller = ItemController(
+      repository: _MemoryRepository(),
+      config: config,
+      featureTokenStore: store,
+    );
+
+    await controller.initialize();
+    expect(controller.featureTokenConfigured, isFalse);
+
+    await controller.saveFeatureToken('core-token');
+    expect(controller.featureTokenConfigured, isTrue);
+    expect(store.value, 'core-token');
+
+    await controller.clearFeatureToken();
+    expect(controller.featureTokenConfigured, isFalse);
+    expect(store.value, isNull);
+  });
+}
+
+class _MemoryTokenStore implements SyncTokenStore {
+  String? value;
+
+  @override
+  Future<String?> read() async => value;
+
+  @override
+  Future<void> write(String token) async => value = token;
+
+  @override
+  Future<void> clear() async => value = null;
 }
 
 class _MemoryRepository implements ItemRepository {

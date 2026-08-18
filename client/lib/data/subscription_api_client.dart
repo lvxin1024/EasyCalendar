@@ -109,9 +109,6 @@ class SubscriptionApiClient {
     String? idempotencyKey,
   }) async {
     final token = await tokenStore.read();
-    if (token == null || token.isEmpty) {
-      throw const SubscriptionApiException('请先在设置中配置访问令牌。');
-    }
     late http.Response response;
     try {
       response = await request(
@@ -128,12 +125,14 @@ class SubscriptionApiClient {
     );
   }
 
-  static Map<String, String> _headers(String token, {String? idempotencyKey}) =>
-      {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-        ...?idempotencyKey == null ? null : {'Idempotency-Key': idempotencyKey},
-      };
+  static Map<String, String> _headers(
+    String? token, {
+    String? idempotencyKey,
+  }) => {
+    if (token?.isNotEmpty == true) 'Authorization': 'Bearer $token',
+    'Content-Type': 'application/json',
+    ...?idempotencyKey == null ? null : {'Idempotency-Key': idempotencyKey},
+  };
 
   Uri _endpoint(Uri base, String path) => base.resolve(path);
 
