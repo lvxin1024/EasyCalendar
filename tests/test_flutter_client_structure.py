@@ -127,7 +127,7 @@ def test_t24_conflict_heads_and_recovery_history_are_persisted():
         encoding="utf-8"
     )
 
-    assert "version: 3" in repository
+    assert "version: 4" in repository
     assert "CREATE TABLE sync_entity_heads" in repository
     assert "CREATE TABLE sync_conflicts" in repository
     assert "listSyncConflicts" in repository
