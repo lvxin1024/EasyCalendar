@@ -360,8 +360,9 @@ def test_runtime_restores_schedules_from_config_after_restart(tmp_path):
         settings,
         notification_scheduler=first_scheduler,
     )
+    future_due = datetime(2099, 8, 12, 18, 0, tzinfo=timezone.utc)
     created = first_runtime.item_service().create_item(
-        task_command(), idempotency_key="runtime-create"
+        task_command(due_at=future_due), idempotency_key="runtime-create"
     )
     assert len(first_scheduler.active) == 1
     first_runtime.close()
@@ -376,6 +377,6 @@ def test_runtime_restores_schedules_from_config_after_restart(tmp_path):
     restored = next(iter(restarted_scheduler.active.values()))
     assert restored.reminder_id == "reminder_due"
     assert restored.fire_at == datetime(
-        2026, 8, 12, 17, 30, tzinfo=timezone.utc
+        2099, 8, 12, 17, 30, tzinfo=timezone.utc
     )
     restarted_runtime.close()
