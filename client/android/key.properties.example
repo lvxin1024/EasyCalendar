@@ -1,0 +1,5 @@
+# Copy to key.properties. Never commit key.properties or the keystore.
+storeFile=/absolute/path/to/easycalendar-release.jks
+storePassword=replace-with-keystore-password
+keyAlias=easycalendar
+keyPassword=replace-with-key-password

@@ -134,3 +134,16 @@ def test_t24_conflict_heads_and_recovery_history_are_persisted():
     assert "CREATE TABLE sync_conflicts" in repository
     assert "listSyncConflicts" in repository
     assert "compareSyncChanges" in models
+
+
+def test_android_release_build_never_falls_back_to_debug_signing():
+    build_gradle = (CLIENT / "android" / "app" / "build.gradle.kts").read_text(
+        encoding="utf-8"
+    )
+    key_template = CLIENT / "android" / "key.properties.example"
+
+    assert 'signingConfigs.getByName("debug")' not in build_gradle
+    assert 'signingConfigs.getByName("release")' in build_gradle
+    assert "releaseBuildRequested" in build_gradle
+    assert "Release signing is not configured" in build_gradle
+    assert key_template.is_file()
