@@ -278,13 +278,13 @@ cd server && npm test      # Worker 测试
 
 完整实施顺序、任务状态和验收标准见 **[ROADMAP.md](ROADMAP.md)**。本节保留优先级摘要，具体状态以 Roadmap 为准。
 
-当前已经具备的基础能力：同步地址、同步令牌、设备 ID、默认 Collection、AI Provider/API Key、通知开关和桌面窗口参数可以在设置页维护；同步令牌和 AI Key 使用系统安全存储。下面只列尚未闭环的工作。
+当前已经具备的基础能力：同步与功能服务地址、各自令牌、设备 ID、默认 Collection、AI Provider/API Key、通知开关和桌面窗口参数可以在设置页维护；服务令牌和 AI Key 使用系统安全存储。下面只列尚未闭环的工作。
 
 ### P0：Release / 开箱即用阻塞项
 
 | ID | 任务 | 当前缺口 | 完成标准 |
 |---|---|---|---|
-| P0.1 | **拆分服务配置并做能力发现** | 同一个“API 地址”同时被同步、网址订阅和远程导入导出使用；Cloudflare Worker 只实现同步接口，Python Core 又不实现同步，按现有文档配置必有页面请求 404 | 设置中明确区分“同步服务”和“功能服务”，或提供统一网关；保存前请求 `/v1/health`、`/v1/capabilities` 和鉴权接口；只展示服务实际支持的功能；本地模式不要求 token |
+| P0.1 | **拆分服务配置并做能力发现（已完成）** | 同步与功能服务地址、令牌已分离；Core 支持可选鉴权 | 设置页检测健康、版本、能力和鉴权；订阅与远程 ICS 自动探测并按能力降级；本地 Core 可免 token |
 | P0.2 | **自动生成并持久化设备身份（已完成）** | 首次启动生成并保存唯一 ID，同时迁移旧固定默认值 | 设置页提供可读设备名称；技术 ID 仅在高级区域复制或经确认后重建；旧 outbox 保持原 ID 并可继续上传 |
 | P0.3 | **建立多平台 Release 流水线** | 当前只有测试工作流，没有客户端 Release 工作流；Android release 仍使用 debug 签名 | Git tag 自动产出 macOS 签名并公证的 DMG/PKG、Windows 签名安装包、Android release 签名 APK（AAB 可选），同时上传 SHA-256、版本说明和必要的调试符号；签名材料只存在 CI Secrets |
 | P0.4 | **干净安装和覆盖升级验收** | 目前的运行说明面向开发环境，尚未证明安装包脱离源码配置可用 | 在全新 macOS、Windows、Android 环境验证：无需 `config/client.json`、Python、Flutter、Node 即可启动和本地使用；重启后设置仍在；覆盖升级不丢数据库、同步令牌和 AI Key；形成可重复的 smoke test 清单 |

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -7,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../application/item_controller.dart';
+import '../../data/service_probe_client.dart';
 import '../../data/transfer_api_client.dart';
 
 class TransferPage extends StatefulWidget {
@@ -29,8 +31,17 @@ class _TransferPageState extends State<TransferPage> {
   String? _previewCollectionId;
   TransferResult? _previewResult;
   bool _busy = false;
+  bool _checkingIcsCapability = true;
+  bool _icsTransferAvailable = false;
+  String? _icsCapabilityMessage;
   String? _statusMessage;
   bool _statusError = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_checkIcsCapability());
+  }
 
   @override
   void dispose() {
@@ -80,22 +91,34 @@ class _TransferPageState extends State<TransferPage> {
             const SizedBox(height: 8),
             Text(
               '导入外部日历应用的 .ics 文件，或导出 Event 为 ICS 格式。'
-              '需要连接到同步服务。',
+              '需要连接到功能服务。',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 12),
+            if (_checkingIcsCapability)
+              const LinearProgressIndicator()
+            else if (!_icsTransferAvailable)
+              _CapabilityNotice(
+                message: _icsCapabilityMessage ?? '远程 ICS 功能不可用',
+                onRetry: _checkIcsCapability,
+              ),
+            const SizedBox(height: 12),
             Wrap(
               spacing: 8,
               children: [
                 OutlinedButton.icon(
-                  onPressed: _busy ? null : _exportIcs,
+                  onPressed: _busy || !_icsTransferAvailable
+                      ? null
+                      : _exportIcs,
                   icon: const Icon(Icons.calendar_month_outlined),
                   label: const Text('导出 ICS'),
                 ),
                 FilledButton.tonalIcon(
-                  onPressed: _busy ? null : _pickAndImportIcs,
+                  onPressed: _busy || !_icsTransferAvailable
+                      ? null
+                      : _pickAndImportIcs,
                   icon: const Icon(Icons.calendar_view_week_outlined),
                   label: const Text('导入 ICS 文件'),
                 ),
@@ -248,6 +271,46 @@ class _TransferPageState extends State<TransferPage> {
   Future<String> _readFeatureToken() async =>
       (await widget.controller.featureTokenStore.read()) ?? '';
 
+  Future<void> _checkIcsCapability() async {
+    if (mounted) {
+      setState(() {
+        _checkingIcsCapability = true;
+        _icsCapabilityMessage = null;
+      });
+    }
+    try {
+      final result =
+          widget.controller.featureServiceProbe ??
+          await widget.controller.testServiceConnection(
+            kind: ServiceKind.feature,
+            serverUrl: widget.controller.preferences.featureApiUrl,
+          );
+      final available = result.capabilities.supports('ics_transfer');
+      if (!mounted) return;
+      setState(() {
+        _checkingIcsCapability = false;
+        _icsTransferAvailable = available;
+        _icsCapabilityMessage = available
+            ? null
+            : '当前功能服务不支持远程 ICS，请在设置中检查服务地址。';
+      });
+    } on ServiceProbeException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _checkingIcsCapability = false;
+        _icsTransferAvailable = false;
+        _icsCapabilityMessage = error.message;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _checkingIcsCapability = false;
+        _icsTransferAvailable = false;
+        _icsCapabilityMessage = '功能服务连接检测失败：$error';
+      });
+    }
+  }
+
   Future<void> _exportIcs() async {
     final prefs = widget.controller.preferences;
     if (prefs.featureApiUrl.isEmpty) {
@@ -344,6 +407,29 @@ class _SectionLabel extends StatelessWidget {
   Widget build(BuildContext context) => Text(
     label,
     style: Theme.of(context).textTheme.titleSmall,
+  );
+}
+
+class _CapabilityNotice extends StatelessWidget {
+  const _CapabilityNotice({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      Icon(Icons.info_outline, color: Theme.of(context).colorScheme.error),
+      const SizedBox(width: 10),
+      Expanded(
+        child: Text(message, maxLines: 3, overflow: TextOverflow.ellipsis),
+      ),
+      IconButton(
+        tooltip: '重新检测功能服务',
+        onPressed: onRetry,
+        icon: const Icon(Icons.refresh),
+      ),
+    ],
   );
 }
 

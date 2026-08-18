@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../application/item_controller.dart';
+import '../../data/service_probe_client.dart';
 import '../../data/subscription_api_client.dart';
 import '../../domain/subscription.dart';
 
@@ -20,6 +21,7 @@ class _SubscriptionsPageState extends State<SubscriptionsPage> {
   late final SubscriptionApiClient _client;
   List<CalendarSubscription> _subscriptions = const [];
   bool _loading = true;
+  bool _capabilityAvailable = false;
   String? _error;
 
   @override
@@ -28,7 +30,7 @@ class _SubscriptionsPageState extends State<SubscriptionsPage> {
     _client = SubscriptionApiClient(
       tokenStore: widget.controller.featureTokenStore,
     );
-    unawaited(_reload());
+    unawaited(_initialize());
   }
 
   @override
@@ -53,11 +55,11 @@ class _SubscriptionsPageState extends State<SubscriptionsPage> {
             ),
             IconButton(
               tooltip: '刷新订阅列表',
-              onPressed: _loading ? null : _reload,
+              onPressed: _loading || !_capabilityAvailable ? null : _reload,
               icon: const Icon(Icons.refresh),
             ),
             FilledButton.tonalIcon(
-              onPressed: _showCreateDialog,
+              onPressed: _capabilityAvailable ? _showCreateDialog : null,
               icon: const Icon(Icons.add_link),
               label: const Text('添加订阅'),
             ),
@@ -98,7 +100,45 @@ class _SubscriptionsPageState extends State<SubscriptionsPage> {
   Uri? get _baseUrl =>
       Uri.tryParse(widget.controller.preferences.featureApiUrl);
 
+  Future<void> _initialize() async {
+    try {
+      final result =
+          widget.controller.featureServiceProbe ??
+          await widget.controller.testServiceConnection(
+            kind: ServiceKind.feature,
+            serverUrl: widget.controller.preferences.featureApiUrl,
+          );
+      if (!result.capabilities.supports('ics_subscriptions')) {
+        if (mounted) {
+          setState(() {
+            _loading = false;
+            _error = '当前功能服务不支持网址订阅，请在设置中检查服务地址。';
+          });
+        }
+        return;
+      }
+      if (!mounted) return;
+      setState(() => _capabilityAvailable = true);
+      await _reload();
+    } on ServiceProbeException catch (error) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = '网址订阅不可用：${error.message}';
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = '网址订阅连接检测失败：$error';
+        });
+      }
+    }
+  }
+
   Future<void> _reload() async {
+    if (!_capabilityAvailable) return;
     final base = _baseUrl;
     if (base == null || !base.hasAuthority) {
       if (mounted) {

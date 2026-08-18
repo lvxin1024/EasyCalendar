@@ -7,6 +7,8 @@ import 'package:easy_calendar/data/service_probe_client.dart';
 import 'package:easy_calendar/data/transfer_models.dart';
 import 'package:easy_calendar/device/device_identity.dart';
 import 'package:easy_calendar/domain/item.dart';
+import 'package:easy_calendar/features/subscriptions/subscriptions_page.dart';
+import 'package:easy_calendar/features/transfer/transfer_page.dart';
 import 'package:easy_calendar/sync/token_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -138,34 +140,11 @@ void main() {
     () async {
       final store = _MemoryTokenStore()..value = 'stored-core-token';
       late http.Request authRequest;
-      final probeClient = ServiceProbeClient(
-        client: MockClient((request) async {
-          return switch (request.url.path) {
-            '/v1/health' => http.Response(
-              jsonEncode({
-                'status': 'ok',
-                'service': 'easycalendar',
-                'version': '0.1.0',
-                'schema_version': 1,
-              }),
-              200,
-            ),
-            '/v1/capabilities' => http.Response(
-              jsonEncode({
-                'api_version': 'v1',
-                'features': {'ics_subscriptions': true, 'ics_transfer': true},
-                'configured': <String, bool>{},
-                'authentication': {'required': true, 'scheme': 'bearer'},
-              }),
-              200,
-            ),
-            '/v1/auth-check' => (() {
-              authRequest = request;
-              return http.Response('{}', 200);
-            })(),
-            _ => http.Response('{}', 404),
-          };
-        }),
+      final probeClient = _featureProbeClient(
+        icsSubscriptions: true,
+        icsTransfer: true,
+        authRequired: true,
+        onAuthCheck: (request) => authRequest = request,
       );
       final controller = ItemController(
         repository: _MemoryRepository(),
@@ -191,7 +170,109 @@ void main() {
       expect(controller.featureServiceProbe, isNull);
     },
   );
+
+  testWidgets('subscriptions stop before API calls when capability is absent', (
+    tester,
+  ) async {
+    final controller = ItemController(
+      repository: _MemoryRepository(),
+      config: config,
+      featureTokenStore: _MemoryTokenStore(),
+      serviceProbeClient: _featureProbeClient(icsTransfer: true),
+    );
+    await controller.initialize();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: SubscriptionsPage(controller: controller)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('不支持网址订阅'), findsOneWidget);
+    final addButton = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, '添加订阅'),
+    );
+    expect(addButton.onPressed, isNull);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+  });
+
+  testWidgets('remote ICS is disabled without affecting local JSON backup', (
+    tester,
+  ) async {
+    final controller = ItemController(
+      repository: _MemoryRepository(),
+      config: config,
+      featureTokenStore: _MemoryTokenStore(),
+      serviceProbeClient: _featureProbeClient(icsSubscriptions: true),
+    );
+    await controller.initialize();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: TransferPage(controller: controller)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('不支持远程 ICS'), findsOneWidget);
+    final exportIcs = tester.widget<OutlinedButton>(
+      find.widgetWithText(OutlinedButton, '导出 ICS'),
+    );
+    final importIcs = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, '导入 ICS 文件'),
+    );
+    final exportJson = tester.widget<OutlinedButton>(
+      find.widgetWithText(OutlinedButton, '导出 JSON 备份'),
+    );
+    expect(exportIcs.onPressed, isNull);
+    expect(importIcs.onPressed, isNull);
+    expect(exportJson.onPressed, isNotNull);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+  });
 }
+
+ServiceProbeClient _featureProbeClient({
+  bool icsSubscriptions = false,
+  bool icsTransfer = false,
+  bool authRequired = false,
+  void Function(http.Request request)? onAuthCheck,
+}) => ServiceProbeClient(
+  client: MockClient((request) async {
+    return switch (request.url.path) {
+      '/v1/health' => http.Response(
+        jsonEncode({
+          'status': 'ok',
+          'service': 'easycalendar',
+          'version': '0.1.0',
+          'schema_version': 1,
+        }),
+        200,
+      ),
+      '/v1/capabilities' => http.Response(
+        jsonEncode({
+          'api_version': 'v1',
+          'features': {
+            'ics_subscriptions': icsSubscriptions,
+            'ics_transfer': icsTransfer,
+          },
+          'configured': <String, bool>{},
+          'authentication': {'required': authRequired, 'scheme': 'bearer'},
+        }),
+        200,
+      ),
+      '/v1/auth-check' => (() {
+        onAuthCheck?.call(request);
+        return http.Response('{}', 200);
+      })(),
+      _ => http.Response('{}', 404),
+    };
+  }),
+);
 
 class _MemoryTokenStore implements SyncTokenStore {
   String? value;
