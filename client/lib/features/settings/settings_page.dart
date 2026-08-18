@@ -13,6 +13,7 @@ import '../../data/calendar_connection_code.dart';
 import '../../data/service_probe_client.dart';
 import '../../device/device_identity.dart';
 import '../../domain/item.dart';
+import '../../notification/notification_adapter.dart';
 import '../../sync/sync_models.dart';
 import '../../utils/tag_colors.dart';
 import '../../widgets/tag_filter_bar.dart';
@@ -407,10 +408,64 @@ class _SettingsPageState extends State<SettingsPage> {
                     await widget.controller.notificationService?.reconcileAll(
                       widget.controller.items,
                     );
-                    setState(() {});
+                  } else {
+                    await widget.controller.notificationService?.cancelAll();
                   }
+                  if (mounted) setState(() {});
                 },
               ),
+              if (widget.controller.notificationService != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.shield_outlined, size: 20),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              '系统权限：${widget.controller.notificationService!.statusText}',
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: '刷新权限状态',
+                            onPressed: _refreshNotificationPermission,
+                            icon: const Icon(Icons.refresh),
+                          ),
+                        ],
+                      ),
+                      Wrap(
+                        alignment: WrapAlignment.end,
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: _requestNotificationPermission,
+                            icon: const Icon(
+                              Icons.notifications_active_outlined,
+                            ),
+                            label: const Text('申请权限'),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: _openNotificationSettings,
+                            icon: const Icon(Icons.settings_outlined),
+                            label: const Text('系统设置'),
+                          ),
+                          FilledButton.tonalIcon(
+                            onPressed:
+                                widget.controller.notificationService!.available
+                                ? _showTestNotification
+                                : null,
+                            icon: const Icon(Icons.send_outlined),
+                            label: const Text('测试通知'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
               _AiProviderSection(
                 enabled: _assistantEnabled,
                 providers: _aiProviders,
@@ -985,6 +1040,57 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _clearFeatureToken() async {
     await widget.controller.clearFeatureToken();
     if (mounted) setState(() {});
+  }
+
+  Future<void> _requestNotificationPermission() async {
+    final service = widget.controller.notificationService;
+    if (service == null) return;
+    final status = await service.requestPermission();
+    if (status == NotificationPermissionStatus.granted &&
+        _notificationsEnabled) {
+      await service.reconcileAll(widget.controller.items);
+    }
+    if (!mounted) return;
+    setState(() {});
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          status == NotificationPermissionStatus.granted
+              ? '通知权限已授予'
+              : '通知权限未授予，本地事项仍会正常保存',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _refreshNotificationPermission() async {
+    await widget.controller.notificationService?.refreshPermission();
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _openNotificationSettings() async {
+    final opened =
+        await widget.controller.notificationService?.openSystemSettings() ??
+        false;
+    if (!mounted || opened) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('无法打开系统通知设置')));
+  }
+
+  Future<void> _showTestNotification() async {
+    try {
+      await widget.controller.notificationService?.showTestNotification();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('测试通知已发送')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('测试通知失败：$error')));
+    }
   }
 
   Future<void> _testService(ServiceKind kind) async {

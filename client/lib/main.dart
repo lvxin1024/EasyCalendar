@@ -10,7 +10,7 @@ import 'app.dart';
 import 'application/item_controller.dart';
 import 'config/app_config.dart';
 import 'data/local_item_repository.dart';
-import 'notification/notification_adapter.dart';
+import 'notification/platform_notification_adapter.dart';
 import 'notification/notification_service.dart';
 import 'sync/connectivity_monitor.dart';
 import 'sync/http_sync_transport.dart';
@@ -39,7 +39,7 @@ Future<void> main() async {
   await initializeDateFormatting('zh_CN');
   final repository = LocalItemRepository(config);
   final desktopWindowController = DesktopWindowController();
-  final notificationAdapter = InMemoryNotificationAdapter();
+  final notificationAdapter = PlatformNotificationAdapter();
   final notificationService = NotificationService(adapter: notificationAdapter);
   final syncCoordinator = SyncCoordinator(
     repository: repository,
@@ -59,7 +59,7 @@ Future<void> main() async {
   );
   await controller.initialize();
   await notificationService.initialize();
-  if (config.notificationsEnabled) {
+  if (controller.preferences.notificationsEnabled) {
     unawaited(notificationService.reconcileAll(controller.items));
   }
   final widgetDeepLinks = WidgetDeepLinkController();

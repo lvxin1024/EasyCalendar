@@ -527,6 +527,7 @@ class ItemController extends ChangeNotifier {
     } catch (_) {
       throw FormatException('无法识别时区：${value.timezone}');
     }
+    final notificationsWereEnabled = preferences.notificationsEnabled;
     await _mutate(() async {
       await repository.savePreferences(value);
       if (preferences.apiUrl != value.apiUrl) _syncServiceProbe = null;
@@ -545,6 +546,14 @@ class ItemController extends ChangeNotifier {
         enabled: value.syncEnabled,
         serverUrl: value.apiUrl,
       );
+      if (notificationsWereEnabled != value.notificationsEnabled) {
+        if (value.notificationsEnabled) {
+          await notificationService?.initialize();
+          await notificationService?.reconcileAll(_items);
+        } else {
+          await notificationService?.cancelAll();
+        }
+      }
       if (value.syncEnabled) unawaited(syncCoordinator?.synchronize());
     }, reloadItems: false);
   }

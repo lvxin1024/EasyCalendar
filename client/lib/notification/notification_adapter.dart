@@ -18,7 +18,12 @@ class NotificationRequest {
   final String? timezoneName;
 }
 
-enum NotificationPermissionStatus { granted, denied, notDetermined, unavailable }
+enum NotificationPermissionStatus {
+  granted,
+  denied,
+  notDetermined,
+  unavailable,
+}
 
 abstract interface class NotificationAdapter {
   String get platformName;
@@ -29,14 +34,19 @@ abstract interface class NotificationAdapter {
 
   Future<String> schedule(NotificationRequest request);
 
+  Future<void> show(NotificationRequest request);
+
   Future<void> cancel(String platformScheduleId);
 
   Future<void> cancelAll();
 
   Future<List<String>> pendingIds();
+
+  Future<bool> openSettings();
 }
 
-class InMemoryNotificationAdapter extends ChangeNotifier implements NotificationAdapter {
+class InMemoryNotificationAdapter extends ChangeNotifier
+    implements NotificationAdapter {
   final _scheduled = <String, NotificationRequest>{};
 
   @override
@@ -59,6 +69,9 @@ class InMemoryNotificationAdapter extends ChangeNotifier implements Notification
   }
 
   @override
+  Future<void> show(NotificationRequest request) async {}
+
+  @override
   Future<void> cancel(String platformScheduleId) async {
     _scheduled.remove(platformScheduleId);
     notifyListeners();
@@ -72,6 +85,9 @@ class InMemoryNotificationAdapter extends ChangeNotifier implements Notification
 
   @override
   Future<List<String>> pendingIds() async => _scheduled.keys.toList();
+
+  @override
+  Future<bool> openSettings() async => true;
 
   List<NotificationRequest> get pendingRequests =>
       List.unmodifiable(_scheduled.values);
