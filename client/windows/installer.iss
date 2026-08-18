@@ -9,7 +9,7 @@
 AppId={{6A85E13C-36C8-49CE-A95D-ECA4A07C8D55}
 AppName=EasyCalendar
 AppVersion={#AppVersion}
-AppPublisher=EasyCalendar
+AppPublisher=lvxin1024
 AppPublisherURL=https://github.com/lvxin1024/text2calendar
 DefaultDirName={localappdata}\Programs\EasyCalendar
 DefaultGroupName=EasyCalendar
@@ -24,17 +24,20 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 CloseApplications=yes
-UninstallDisplayIcon={app}\easy_calendar.exe
+UninstallDisplayIcon={app}\EasyCalendar.exe
 
 [Files]
 Source: "{#BuildDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{autoprograms}\EasyCalendar"; Filename: "{app}\easy_calendar.exe"
-Name: "{autodesktop}\EasyCalendar"; Filename: "{app}\easy_calendar.exe"; Tasks: desktopicon
+Name: "{autoprograms}\EasyCalendar"; Filename: "{app}\EasyCalendar.exe"
+Name: "{autodesktop}\EasyCalendar"; Filename: "{app}\EasyCalendar.exe"; Tasks: desktopicon
+
+[InstallDelete]
+Type: files; Name: "{app}\easy_calendar.exe"
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"
 
 [Run]
-Filename: "{app}\easy_calendar.exe"; Description: "Launch EasyCalendar"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\EasyCalendar.exe"; Description: "Launch EasyCalendar"; Flags: nowait postinstall skipifsilent

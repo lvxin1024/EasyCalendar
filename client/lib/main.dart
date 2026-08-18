@@ -12,6 +12,7 @@ import 'config/app_config.dart';
 import 'data/local_item_repository.dart';
 import 'notification/platform_notification_adapter.dart';
 import 'notification/notification_service.dart';
+import 'platform/application_identity.dart';
 import 'sync/connectivity_monitor.dart';
 import 'sync/http_sync_transport.dart';
 import 'sync/sync_coordinator.dart';
@@ -22,6 +23,7 @@ import 'window/desktop_window_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await migrateLegacyWindowsApplicationSupportDirectory();
   tz_data.initializeTimeZones();
   String? systemTimezone;
   try {

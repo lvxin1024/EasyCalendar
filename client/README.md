@@ -33,3 +33,5 @@ not require either service.
 The generated platform runners and `pubspec.lock` are version controlled.
 Analyzer and unit tests run on any Flutter-capable development machine; native
 build acceptance additionally requires that platform's SDK and toolchain.
+Release identifiers and the compatibility rules for changing native metadata
+are documented in [`APP_IDENTITY.md`](APP_IDENTITY.md).

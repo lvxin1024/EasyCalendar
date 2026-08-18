@@ -130,7 +130,7 @@ jobs:
         shell: pwsh
         run: |
           $signTool = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter signtool.exe -Recurse | Sort-Object FullName -Descending | Select-Object -First 1).FullName
-          & $signTool sign /sha1 $env:WINDOWS_CERT_THUMBPRINT /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 client\build\windows\x64\runner\Release\easy_calendar.exe
+          & $signTool sign /sha1 $env:WINDOWS_CERT_THUMBPRINT /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 client\build\windows\x64\runner\Release\EasyCalendar.exe
           if ($LASTEXITCODE -ne 0) { throw "Application signing failed" }
       - name: Build and sign installer
         shell: pwsh
@@ -210,7 +210,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          app="client/build/macos/Build/Products/Release/easy_calendar.app"
+          app="client/build/macos/Build/Products/Release/EasyCalendar.app"
           widget="$app/Contents/PlugIns/EasyCalendarWidget.appex"
           printf '%s' "$MACOS_APP_PROVISION_PROFILE_BASE64" | base64 -D > "$app/Contents/embedded.provisionprofile"
           printf '%s' "$MACOS_WIDGET_PROVISION_PROFILE_BASE64" | base64 -D > "$widget/Contents/embedded.provisionprofile"
