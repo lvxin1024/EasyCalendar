@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 
 import '../../application/item_controller.dart';
 import '../../domain/subscription.dart';
+import '../../utils/configured_time.dart';
+import '../../utils/date_formatters.dart';
 
 class SubscriptionsPage extends StatefulWidget {
   const SubscriptionsPage({super.key, required this.controller});
@@ -201,7 +203,7 @@ class _SubscriptionsPageState extends State<SubscriptionsPage> {
                         ),
                         title: Text(log.status),
                         subtitle: Text(
-                          '${_time(log.fetchedAt)}'
+                          '${_time(context, log.fetchedAt)}'
                           '${log.httpStatus == null ? '' : ' · HTTP ${log.httpStatus}'}'
                           '\n新增 ${log.createdCount} · 更新 ${log.updatedCount} · 删除 ${log.deletedCount} · 未变 ${log.unchangedCount}'
                           '${log.etag == null ? '' : '\nETag ${_short(log.etag!)}'}'
@@ -225,9 +227,11 @@ class _SubscriptionsPageState extends State<SubscriptionsPage> {
     }
   }
 
-  static String _time(DateTime? value) => value == null
-      ? '未知时间'
-      : DateFormat('yyyy-MM-dd HH:mm', 'zh_CN').format(value.toLocal());
+  static String _time(BuildContext context, DateTime? value) {
+    if (value == null) return '未知时间';
+    final local = inConfiguredTimezone(value);
+    return '${DateFormat('yyyy-MM-dd', 'zh_CN').format(local)} ${formatTime(context, local)}';
+  }
 
   static String _short(String value) =>
       value.length <= 18 ? value : '${value.substring(0, 18)}…';
@@ -255,7 +259,7 @@ class _SubscriptionTile extends StatelessWidget {
     final hasError = subscription.lastError?.isNotEmpty == true;
     final status = hasError
         ? '最近错误：${subscription.lastError}'
-        : '最近成功：${_SubscriptionsPageState._time(subscription.lastSuccessAt)}';
+        : '最近成功：${_SubscriptionsPageState._time(context, subscription.lastSuccessAt)}';
     final etag = subscription.etag;
     final sourceHash = subscription.sourceHash;
     return Card(

@@ -79,7 +79,7 @@ class ItemTile extends StatelessWidget {
                 ),
               Expanded(
                 child: Text.rich(
-                  _subtitle(item, tagColors),
+                  _subtitle(context, item, tagColors),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -130,8 +130,12 @@ class ItemTile extends StatelessWidget {
     ItemType.note => Icons.notes_outlined,
   };
 
-  static TextSpan _subtitle(CalendarItem item, Map<String, int> tagColors) {
-    final spans = <InlineSpan>[TextSpan(text: formatSchedule(item))];
+  static TextSpan _subtitle(
+    BuildContext context,
+    CalendarItem item,
+    Map<String, int> tagColors,
+  ) {
+    final spans = <InlineSpan>[TextSpan(text: formatSchedule(context, item))];
     if (item.location != null) {
       spans.add(TextSpan(text: '  ·  ${item.location}'));
     }

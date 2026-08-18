@@ -615,7 +615,7 @@ class _DateTimeField extends StatelessWidget {
 
   Widget _timeButton(BuildContext context) => OutlinedButton.icon(
     icon: const Icon(Icons.schedule),
-    label: Text(value == null ? '--:--' : formatTime(value!)),
+    label: Text(value == null ? '--:--' : formatTime(context, value!)),
     onPressed: value == null ? null : () => _pickTime(context),
   );
 
@@ -648,6 +648,12 @@ class _DateTimeField extends StatelessWidget {
     final selected = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(current),
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(
+          context,
+        ).copyWith(alwaysUse24HourFormat: uses24HourClock(context)),
+        child: child ?? const SizedBox.shrink(),
+      ),
     );
     if (selected == null) return;
     onChanged(

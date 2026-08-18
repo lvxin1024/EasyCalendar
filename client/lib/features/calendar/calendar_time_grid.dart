@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 
 import '../../domain/item.dart';
 import '../../utils/configured_time.dart';
+import '../../utils/date_formatters.dart';
 import '../../utils/tag_colors.dart';
 import 'calendar_navigation_controller.dart';
 
@@ -462,7 +463,7 @@ class _TimeGutter extends StatelessWidget {
             top: hour * hourHeight - 7,
             right: 8,
             child: Text(
-              '${hour.toString().padLeft(2, '0')}:00',
+              formatHourLabel(context, hour),
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
@@ -578,7 +579,7 @@ class _PositionedEvent extends StatelessWidget {
                 ),
                 if (rawHeight >= 38)
                   Text(
-                    _eventTime(placement.item),
+                    _eventTime(context, placement.item),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.labelSmall,
@@ -620,14 +621,13 @@ Iterable<CalendarItem> _allDayItems(List<CalendarItem> items, DateTime date) {
   return result;
 }
 
-String _eventTime(CalendarItem item) {
+String _eventTime(BuildContext context, CalendarItem item) {
   if (item.type == ItemType.task) {
-    return '截止 ${DateFormat('HH:mm').format(inConfiguredTimezone(item.dueAt!))}';
+    return '截止 ${formatTime(context, item.dueAt!)}';
   }
-  final start = inConfiguredTimezone(item.startAt!);
-  final end = item.endAt == null ? null : inConfiguredTimezone(item.endAt!);
-  if (end == null) return DateFormat('HH:mm').format(start);
-  return '${DateFormat('HH:mm').format(start)}–${DateFormat('HH:mm').format(end)}';
+  final end = item.endAt;
+  if (end == null) return formatTime(context, item.startAt!);
+  return '${formatTime(context, item.startAt!)}–${formatTime(context, end)}';
 }
 
 bool _isSameDate(DateTime left, DateTime right) =>

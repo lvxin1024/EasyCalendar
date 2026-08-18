@@ -4,6 +4,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'application/item_controller.dart';
 import 'config/app_config.dart';
 import 'features/shell/home_shell.dart';
+import 'utils/date_formatters.dart';
 import 'widget/widget_deep_link_controller.dart';
 
 class EasyCalendarApp extends StatelessWidget {
@@ -42,6 +43,10 @@ class EasyCalendarApp extends StatelessWidget {
           GlobalWidgetsLocalizations.delegate,
           GlobalCupertinoLocalizations.delegate,
         ],
+        builder: (context, child) => DateFormattingScope(
+          clockFormat: controller.preferences.clockFormat,
+          child: child ?? const SizedBox.shrink(),
+        ),
         theme: ThemeData(
           useMaterial3: true,
           colorScheme: scheme,

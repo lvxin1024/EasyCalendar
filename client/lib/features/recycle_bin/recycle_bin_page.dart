@@ -2,13 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../../application/item_controller.dart';
 import '../../domain/item.dart';
+import '../../utils/configured_time.dart';
+import '../../utils/date_formatters.dart';
 import '../../widgets/empty_state.dart';
 
 class RecycleBinPage extends StatefulWidget {
-  const RecycleBinPage({
-    super.key,
-    required this.controller,
-  });
+  const RecycleBinPage({super.key, required this.controller});
 
   final ItemController controller;
 
@@ -114,8 +113,12 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
                         ),
                       ),
                       subtitle: Text(
-                        '删除于 ${_formatDeletedAt(item.deletedAt)}'
-                        ' · ${item.type == ItemType.event ? '日程' : item.type == ItemType.task ? 'Due' : '笔记'}',
+                        '删除于 ${_formatDeletedAt(context, item.deletedAt)}'
+                        ' · ${item.type == ItemType.event
+                            ? '日程'
+                            : item.type == ItemType.task
+                            ? 'Due'
+                            : '笔记'}',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                       trailing: Wrap(
@@ -126,7 +129,9 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
                             icon: const Icon(Icons.restore_outlined, size: 18),
                             label: const Text('恢复'),
                             style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                              ),
                               minimumSize: Size.zero,
                               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
@@ -159,13 +164,11 @@ class _RecycleBinPageState extends State<RecycleBinPage> {
     }
   }
 
-  String _formatDeletedAt(DateTime? value) {
+  String _formatDeletedAt(BuildContext context, DateTime? value) {
     if (value == null) return '未知时间';
-    final local = value.toLocal();
+    final local = inConfiguredTimezone(value);
     final month = local.month.toString().padLeft(2, '0');
     final day = local.day.toString().padLeft(2, '0');
-    final hour = local.hour.toString().padLeft(2, '0');
-    final minute = local.minute.toString().padLeft(2, '0');
-    return '$month-$day $hour:$minute';
+    return '$month-$day ${formatTime(context, local)}';
   }
 }

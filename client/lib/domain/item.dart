@@ -5,6 +5,8 @@ enum ItemType { event, task, note }
 
 enum ItemStatus { todo, done, cancelled }
 
+enum ClockFormat { system, hour12, hour24 }
+
 class ItemDraft {
   const ItemDraft({
     this.collectionId,
@@ -174,6 +176,7 @@ class ClientPreferences {
     this.timezone = 'Asia/Shanghai',
     this.localeName = 'zh-CN',
     this.firstDayOfWeek = 0,
+    this.clockFormat = ClockFormat.system,
     this.deviceId = 'my-easycalendar-client',
     this.deviceName = '',
     this.defaultCollectionId = 'collection_local',
@@ -194,6 +197,7 @@ class ClientPreferences {
 
   /// 0 follows the active locale; 1..7 map to Monday..Sunday.
   final int firstDayOfWeek;
+  final ClockFormat clockFormat;
   final String deviceId;
   final String deviceName;
   final String defaultCollectionId;
@@ -212,6 +216,7 @@ class ClientPreferences {
     String? timezone,
     String? localeName,
     int? firstDayOfWeek,
+    ClockFormat? clockFormat,
     String? deviceId,
     String? deviceName,
     String? defaultCollectionId,
@@ -229,6 +234,7 @@ class ClientPreferences {
     timezone: timezone ?? this.timezone,
     localeName: localeName ?? this.localeName,
     firstDayOfWeek: firstDayOfWeek ?? this.firstDayOfWeek,
+    clockFormat: clockFormat ?? this.clockFormat,
     deviceId: deviceId ?? this.deviceId,
     deviceName: deviceName ?? this.deviceName,
     defaultCollectionId: defaultCollectionId ?? this.defaultCollectionId,

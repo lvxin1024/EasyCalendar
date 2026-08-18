@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../application/item_controller.dart';
 import '../../domain/item.dart';
 import '../../utils/configured_time.dart';
+import '../../utils/date_formatters.dart';
 import 'calendar_navigation_controller.dart';
 import 'calendar_month_grid.dart';
 import 'calendar_time_grid.dart';
@@ -133,7 +134,7 @@ class _PinnedDueStrip extends StatelessWidget {
                     child: ActionChip(
                       avatar: const Icon(Icons.check_circle_outline, size: 16),
                       label: Text(
-                        '${item.title} · ${_dueLabel(item.dueAt!)}',
+                        '${item.title} · ${_dueLabel(context, item.dueAt!)}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -148,8 +149,10 @@ class _PinnedDueStrip extends StatelessWidget {
     ),
   );
 
-  static String _dueLabel(DateTime value) =>
-      DateFormat('M/d HH:mm', 'zh_CN').format(inConfiguredTimezone(value));
+  static String _dueLabel(BuildContext context, DateTime value) {
+    final local = inConfiguredTimezone(value);
+    return '${DateFormat('M/d', 'zh_CN').format(local)} ${formatTime(context, local)}';
+  }
 }
 
 class _CalendarToolbar extends StatelessWidget {

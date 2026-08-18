@@ -1554,6 +1554,10 @@ class LocalItemRepository
         values['first_day_of_week'],
         defaults.firstDayOfWeek,
       ),
+      clockFormat: _storedClockFormat(
+        values['clock_format'],
+        defaults.clockFormat,
+      ),
       deviceId: values['device_id'] ?? defaults.deviceId,
       deviceName: values['device_name'] ?? defaults.deviceName,
       defaultCollectionId:
@@ -1594,6 +1598,7 @@ class LocalItemRepository
         'timezone': preferences.timezone.trim(),
         'locale_name': preferences.localeName.trim(),
         'first_day_of_week': preferences.firstDayOfWeek.toString(),
+        'clock_format': preferences.clockFormat.name,
         'device_id': preferences.deviceId.trim(),
         'device_name': preferences.deviceName.trim(),
         'default_collection_id': preferences.defaultCollectionId.trim(),
@@ -1628,6 +1633,13 @@ class LocalItemRepository
   static int _storedFirstDayOfWeek(String? value, int fallback) {
     final parsed = int.tryParse(value ?? '');
     return parsed != null && parsed >= 0 && parsed <= 7 ? parsed : fallback;
+  }
+
+  static ClockFormat _storedClockFormat(String? value, ClockFormat fallback) {
+    for (final format in ClockFormat.values) {
+      if (format.name == value) return format;
+    }
+    return fallback;
   }
 
   static List<AiProviderConfig> _storedProviders(

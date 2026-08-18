@@ -34,6 +34,11 @@ const _firstDayOfWeekOptions = <int, String>{
   6: '周六',
   7: '周日',
 };
+const _clockFormatOptions = <ClockFormat, String>{
+  ClockFormat.system: '跟随系统',
+  ClockFormat.hour12: '12 小时制',
+  ClockFormat.hour24: '24 小时制',
+};
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
@@ -67,6 +72,7 @@ class _SettingsPageState extends State<SettingsPage> {
   late String _timezone;
   late String _localeName;
   late int _firstDayOfWeek;
+  late ClockFormat _clockFormat;
   late List<AiProviderConfig> _aiProviders;
   late Map<String, int> _tagColors;
   bool _obscureToken = true;
@@ -104,6 +110,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _timezone = preferences.timezone;
     _localeName = preferences.localeName;
     _firstDayOfWeek = preferences.firstDayOfWeek;
+    _clockFormat = preferences.clockFormat;
     _aiProviders = [...preferences.aiProviders];
     _tagColors = {...preferences.tagColors};
     widget.controller.desktopWindowController?.addListener(_windowChanged);
@@ -462,6 +469,25 @@ class _SettingsPageState extends State<SettingsPage> {
                   if (value != null) setState(() => _firstDayOfWeek = value);
                 },
               ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<ClockFormat>(
+                initialValue: _clockFormat,
+                decoration: const InputDecoration(
+                  labelText: '时间显示',
+                  prefixIcon: Icon(Icons.access_time_outlined),
+                ),
+                items: _clockFormatOptions.entries
+                    .map(
+                      (entry) => DropdownMenuItem(
+                        value: entry.key,
+                        child: Text(entry.value),
+                      ),
+                    )
+                    .toList(growable: false),
+                onChanged: (value) {
+                  if (value != null) setState(() => _clockFormat = value);
+                },
+              ),
               _InfoRow(
                 icon: Icons.folder_outlined,
                 label: '默认 Collection',
@@ -554,6 +580,7 @@ class _SettingsPageState extends State<SettingsPage> {
           timezone: _timezone,
           localeName: _localeName,
           firstDayOfWeek: _firstDayOfWeek,
+          clockFormat: _clockFormat,
           deviceId: _deviceIdController.text.trim(),
           deviceName: _deviceNameController.text.trim(),
           defaultCollectionId: _collectionIdController.text.trim(),
