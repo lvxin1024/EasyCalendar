@@ -1,21 +1,15 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:uuid/uuid.dart';
 
 import '../../application/item_controller.dart';
-import '../../data/service_probe_client.dart';
-import '../../data/transfer_api_client.dart';
+import '../../data/transfer_models.dart';
 
 class TransferPage extends StatefulWidget {
-  const TransferPage({
-    super.key,
-    required this.controller,
-  });
+  const TransferPage({super.key, required this.controller});
 
   final ItemController controller;
 
@@ -24,30 +18,12 @@ class TransferPage extends StatefulWidget {
 }
 
 class _TransferPageState extends State<TransferPage> {
-  final _client = TransferApiClient();
-  final _uuid = const Uuid();
   String? _previewContent;
   String? _previewFormat; // 'json' or 'ics'
-  String? _previewCollectionId;
   TransferResult? _previewResult;
   bool _busy = false;
-  bool _checkingIcsCapability = true;
-  bool _icsTransferAvailable = false;
-  String? _icsCapabilityMessage;
   String? _statusMessage;
   bool _statusError = false;
-
-  @override
-  void initState() {
-    super.initState();
-    unawaited(_checkIcsCapability());
-  }
-
-  @override
-  void dispose() {
-    _client.close();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) => Column(
@@ -91,34 +67,22 @@ class _TransferPageState extends State<TransferPage> {
             const SizedBox(height: 8),
             Text(
               '导入外部日历应用的 .ics 文件，或导出 Event 为 ICS 格式。'
-              '需要连接到功能服务。',
+              '所有处理均在本机完成。',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 12),
-            if (_checkingIcsCapability)
-              const LinearProgressIndicator()
-            else if (!_icsTransferAvailable)
-              _CapabilityNotice(
-                message: _icsCapabilityMessage ?? '远程 ICS 功能不可用',
-                onRetry: _checkIcsCapability,
-              ),
-            const SizedBox(height: 12),
             Wrap(
               spacing: 8,
               children: [
                 OutlinedButton.icon(
-                  onPressed: _busy || !_icsTransferAvailable
-                      ? null
-                      : _exportIcs,
+                  onPressed: _busy ? null : _exportIcs,
                   icon: const Icon(Icons.calendar_month_outlined),
                   label: const Text('导出 ICS'),
                 ),
                 FilledButton.tonalIcon(
-                  onPressed: _busy || !_icsTransferAvailable
-                      ? null
-                      : _pickAndImportIcs,
+                  onPressed: _busy ? null : _pickAndImportIcs,
                   icon: const Icon(Icons.calendar_view_week_outlined),
                   label: const Text('导入 ICS 文件'),
                 ),
@@ -141,7 +105,9 @@ class _TransferPageState extends State<TransferPage> {
                 spacing: 8,
                 children: [
                   FilledButton.icon(
-                    onPressed: _busy ? null : _commitImport,
+                    onPressed: _busy || !_previewResult!.accepted
+                        ? null
+                        : _commitImport,
                     icon: const Icon(Icons.check),
                     label: const Text('确认导入'),
                   ),
@@ -170,7 +136,6 @@ class _TransferPageState extends State<TransferPage> {
       _previewResult = null;
       _previewContent = null;
       _previewFormat = null;
-      _previewCollectionId = null;
     });
   }
 
@@ -220,10 +185,7 @@ class _TransferPageState extends State<TransferPage> {
         _previewResult = result;
       });
       if (result.issues.isNotEmpty) {
-        _showStatus(
-          '预览完成，发现 ${result.issues.length} 个问题',
-          error: true,
-        );
+        _showStatus('预览完成，发现 ${result.issues.length} 个问题', error: true);
       } else {
         _showStatus('预览完成，可以确认导入');
       }
@@ -242,19 +204,7 @@ class _TransferPageState extends State<TransferPage> {
       if (_previewFormat == 'json') {
         await widget.controller.commitLocalJsonImport(_previewContent!);
       } else if (_previewFormat == 'ics') {
-        final prefs = widget.controller.preferences;
-        final serverUrl = Uri.parse(prefs.featureApiUrl);
-        final token = await _readFeatureToken();
-        await _client.importContent(
-          serverUrl: serverUrl,
-          token: token,
-          idempotencyKey: 'ics_commit_${_uuid.v4()}',
-          format: 'ics',
-          mode: 'commit',
-          strategy: 'merge',
-          content: _previewContent!,
-          collectionId: _previewCollectionId,
-        );
+        await widget.controller.commitLocalIcsImport(_previewContent!);
       }
       if (!mounted) return;
       _showStatus('导入完成');
@@ -268,63 +218,10 @@ class _TransferPageState extends State<TransferPage> {
     }
   }
 
-  Future<String> _readFeatureToken() async =>
-      (await widget.controller.featureTokenStore.read()) ?? '';
-
-  Future<void> _checkIcsCapability() async {
-    if (mounted) {
-      setState(() {
-        _checkingIcsCapability = true;
-        _icsCapabilityMessage = null;
-      });
-    }
-    try {
-      final result =
-          widget.controller.featureServiceProbe ??
-          await widget.controller.testServiceConnection(
-            kind: ServiceKind.feature,
-            serverUrl: widget.controller.preferences.featureApiUrl,
-          );
-      final available = result.capabilities.supports('ics_transfer');
-      if (!mounted) return;
-      setState(() {
-        _checkingIcsCapability = false;
-        _icsTransferAvailable = available;
-        _icsCapabilityMessage = available
-            ? null
-            : '当前功能服务不支持远程 ICS，请在设置中检查服务地址。';
-      });
-    } on ServiceProbeException catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _checkingIcsCapability = false;
-        _icsTransferAvailable = false;
-        _icsCapabilityMessage = error.message;
-      });
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _checkingIcsCapability = false;
-        _icsTransferAvailable = false;
-        _icsCapabilityMessage = '功能服务连接检测失败：$error';
-      });
-    }
-  }
-
   Future<void> _exportIcs() async {
-    final prefs = widget.controller.preferences;
-    if (prefs.featureApiUrl.isEmpty) {
-      _showStatus('ICS 导出需要配置功能服务', error: true);
-      return;
-    }
     setState(() => _busy = true);
     try {
-      final serverUrl = Uri.parse(prefs.featureApiUrl);
-      final token = await _readFeatureToken();
-      final ics = await _client.exportIcs(
-        serverUrl: serverUrl,
-        token: token,
-      );
+      final ics = await widget.controller.exportLocalIcs();
       final directory = await getApplicationSupportDirectory();
       final timestamp = DateTime.now()
           .toUtc()
@@ -345,11 +242,6 @@ class _TransferPageState extends State<TransferPage> {
   }
 
   Future<void> _pickAndImportIcs() async {
-    final prefs = widget.controller.preferences;
-    if (prefs.featureApiUrl.isEmpty) {
-      _showStatus('ICS 导入需要配置功能服务', error: true);
-      return;
-    }
     final picked = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['ics'],
@@ -364,17 +256,7 @@ class _TransferPageState extends State<TransferPage> {
     final content = utf8.decode(bytes);
     setState(() => _busy = true);
     try {
-      final serverUrl = Uri.parse(prefs.featureApiUrl);
-      final token = await _readFeatureToken();
-      final preview = await _client.importContent(
-        serverUrl: serverUrl,
-        token: token,
-        idempotencyKey: 'ics_preview_${_uuid.v4()}',
-        format: 'ics',
-        mode: 'preview',
-        strategy: 'merge',
-        content: content,
-      );
+      final preview = await widget.controller.previewLocalIcsImport(content);
       if (!mounted) return;
       setState(() {
         _previewContent = content;
@@ -382,10 +264,7 @@ class _TransferPageState extends State<TransferPage> {
         _previewResult = preview;
       });
       if (preview.issues.isNotEmpty) {
-        _showStatus(
-          '预览完成，发现 ${preview.issues.length} 个问题',
-          error: true,
-        );
+        _showStatus('预览完成，发现 ${preview.issues.length} 个问题', error: true);
       } else {
         _showStatus('预览完成，可以确认导入');
       }
@@ -404,33 +283,8 @@ class _SectionLabel extends StatelessWidget {
   final String label;
 
   @override
-  Widget build(BuildContext context) => Text(
-    label,
-    style: Theme.of(context).textTheme.titleSmall,
-  );
-}
-
-class _CapabilityNotice extends StatelessWidget {
-  const _CapabilityNotice({required this.message, required this.onRetry});
-
-  final String message;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) => Row(
-    children: [
-      Icon(Icons.info_outline, color: Theme.of(context).colorScheme.error),
-      const SizedBox(width: 10),
-      Expanded(
-        child: Text(message, maxLines: 3, overflow: TextOverflow.ellipsis),
-      ),
-      IconButton(
-        tooltip: '重新检测功能服务',
-        onPressed: onRetry,
-        icon: const Icon(Icons.refresh),
-      ),
-    ],
-  );
+  Widget build(BuildContext context) =>
+      Text(label, style: Theme.of(context).textTheme.titleSmall);
 }
 
 class _StatusBanner extends StatelessWidget {
@@ -492,7 +346,10 @@ class _PreviewCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('格式：${result.format.toUpperCase()}', style: Theme.of(context).textTheme.titleSmall),
+          Text(
+            '格式：${result.format.toUpperCase()}',
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
           const SizedBox(height: 10),
           _CountRow(label: '将创建', counts: result.created),
           _CountRow(label: '将跳过（重复）', counts: result.skipped),

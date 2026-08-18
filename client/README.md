@@ -25,7 +25,9 @@ advanced connection settings for copying or confirmed regeneration.
 The client stores separate runtime endpoints for sync and feature APIs.
 `EASYCALENDAR_API_URL` initializes the Cloudflare sync endpoint, while
 `EASYCALENDAR_FEATURE_API_URL` initializes the Python Core endpoint used by URL
-subscriptions and remote ICS transfer. Both can be changed in Settings.
+subscriptions and other optional remote features. Both endpoints can be changed
+in Settings. ICS file import and export run entirely in the Flutter client and
+do not require either service.
 
 The generated platform runners and `pubspec.lock` are version controlled.
 Analyzer and unit tests run on any Flutter-capable development machine; native

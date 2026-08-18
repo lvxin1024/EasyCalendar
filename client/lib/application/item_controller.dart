@@ -7,6 +7,7 @@ import '../ai/ai_provider.dart';
 import '../ai/ai_provider_connection_tester.dart';
 import '../config/app_config.dart';
 import '../data/item_repository.dart';
+import '../data/local_ics_service.dart';
 import '../data/service_probe_client.dart';
 import '../data/transfer_models.dart';
 import '../device/device_identity.dart';
@@ -53,6 +54,7 @@ class ItemController extends ChangeNotifier {
   late final DeviceIdentity _deviceIdentity;
   late final SyncTokenStore featureTokenStore;
   late final ServiceProbeClient _serviceProbeClient;
+  final LocalIcsService _localIcsService = const LocalIcsService();
 
   List<CalendarItem> _items = const [];
   List<CalendarCollection> _collections = const [];
@@ -317,14 +319,42 @@ class ItemController extends ChangeNotifier {
   Future<List<CalendarItem>> listDeletedItems() =>
       repository.listDeletedItems();
 
-  Future<String> exportLocalJsonBackup() =>
-      repository.exportLocalJsonBackup();
+  Future<String> exportLocalJsonBackup() => repository.exportLocalJsonBackup();
 
   Future<TransferResult> previewLocalJsonImport(String content) =>
       repository.previewLocalJsonImport(content);
 
   Future<void> commitLocalJsonImport(String content) async {
     await _mutate(() => repository.commitLocalJsonImport(content));
+  }
+
+  Future<String> exportLocalIcs() async => _localIcsService.export(_items);
+
+  Future<TransferResult> previewLocalIcsImport(String content) async =>
+      _localIcsService
+          .planImport(
+            content,
+            defaultTimezone: config.timezone,
+            existingItems: _items,
+          )
+          .result;
+
+  Future<void> commitLocalIcsImport(String content) async {
+    await _mutate(() async {
+      final plan = _localIcsService.planImport(
+        content,
+        defaultTimezone: config.timezone,
+        existingItems: _items,
+      );
+      if (!plan.result.accepted) {
+        throw FormatException(
+          'ICS 文件包含 ${plan.result.issues.length} 个问题，请修正后重试。',
+        );
+      }
+      for (final draft in plan.drafts) {
+        await repository.createItem(draft);
+      }
+    });
   }
 
   Future<void> setTaskCompleted(CalendarItem item, {required bool completed}) =>

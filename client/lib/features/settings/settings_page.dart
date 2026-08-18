@@ -130,7 +130,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 keyboardType: TextInputType.url,
                 decoration: const InputDecoration(
                   labelText: '功能服务地址',
-                  helperText: '网址订阅和远程 ICS 操作请填写 Python Core 地址',
+                  helperText: '网址订阅等可选远程功能请填写 Python Core 地址',
                   prefixIcon: Icon(Icons.hub_outlined),
                 ),
                 validator: _validateUrl,
@@ -782,7 +782,7 @@ class _SettingsPageState extends State<SettingsPage> {
       } else {
         final features = <String>[
           if (result.capabilities.supports('ics_subscriptions')) '网址订阅',
-          if (result.capabilities.supports('ics_transfer')) '远程 ICS',
+          if (result.capabilities.supports('ics_transfer')) 'ICS 兼容 API',
         ].join('、');
         status = '连接成功 · $features · $authentication';
       }

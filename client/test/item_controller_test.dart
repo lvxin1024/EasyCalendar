@@ -90,9 +90,7 @@ void main() {
         notificationsEnabled: false,
       ),
     );
-    final generated = <String>[
-      'device-11111111-1111-4111-8111-111111111111',
-    ];
+    final generated = <String>['device-11111111-1111-4111-8111-111111111111'];
     final controller = ItemController(
       repository: repository,
       config: config,
@@ -199,7 +197,7 @@ void main() {
     controller.dispose();
   });
 
-  testWidgets('remote ICS is disabled without affecting local JSON backup', (
+  testWidgets('local ICS and JSON backup work without feature capability', (
     tester,
   ) async {
     final controller = ItemController(
@@ -217,7 +215,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('不支持远程 ICS'), findsOneWidget);
+    expect(find.textContaining('所有处理均在本机完成'), findsOneWidget);
     final exportIcs = tester.widget<OutlinedButton>(
       find.widgetWithText(OutlinedButton, '导出 ICS'),
     );
@@ -227,8 +225,8 @@ void main() {
     final exportJson = tester.widget<OutlinedButton>(
       find.widgetWithText(OutlinedButton, '导出 JSON 备份'),
     );
-    expect(exportIcs.onPressed, isNull);
-    expect(importIcs.onPressed, isNull);
+    expect(exportIcs.onPressed, isNotNull);
+    expect(importIcs.onPressed, isNotNull);
     expect(exportJson.onPressed, isNotNull);
 
     await tester.pumpWidget(const SizedBox.shrink());

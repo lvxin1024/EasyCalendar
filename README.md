@@ -69,7 +69,7 @@ EasyCalendar 由三个独立组件组成，可以根据需要分别部署。
 
 | 组件 | 技术栈 | 说明 |
 |---|---|---|
-| **Python Core** | Python 3.11+ / FastAPI / SQLite | 规则解析、ICS 抓取、AI 助手、导入导出 API |
+| **Python Core** | Python 3.11+ / FastAPI / SQLite | 规则解析、网址订阅、AI 助手和兼容 API |
 | **Flutter Client** | Flutter 3.44.9 / Dart / SQLite | macOS / Windows 桌面端和 Android 移动端，离线可用 |
 | **Sync Server** | TypeScript / Cloudflare Workers / D1 | 多设备同步（可选，离线使用不需要） |
 
@@ -223,7 +223,7 @@ cd ..
 | 设置项 | 如何填写 | 示例 |
 |---|---|---|
 | **同步服务地址** | 所有设备填写同一个 Cloudflare Worker HTTPS 地址 | `https://calendar.example.com` |
-| **功能服务地址** | 网址订阅和远程 ICS 功能使用的 Python Core 地址 | `https://core.example.com` |
+| **功能服务地址** | 网址订阅等可选远程功能使用的 Python Core 地址；ICS 文件导入导出不需要 | `https://core.example.com` |
 | **同步服务令牌** | Cloudflare Worker 的 `ADMIN_TOKEN`；需要同步的设备填写同一个值 | 上面生成的 64 位字符串 |
 | **功能服务令牌** | Python Core 配置了 `ADMIN_TOKEN` 时填写；未配置鉴权时留空 | Core 实例自己的 token |
 | **设备名称** | 用于区分设备，可按习惯修改 | `工作电脑`、`手机` |
@@ -292,7 +292,7 @@ cd server && npm test      # Worker 测试
 | P0.2 | **自动生成并持久化设备身份（已完成）** | 首次启动生成并保存唯一 ID，同时迁移旧固定默认值 | 设置页提供可读设备名称；技术 ID 仅在高级区域复制或经确认后重建；旧 outbox 保持原 ID 并可继续上传 |
 | P0.3 | **建立多平台 Release 流水线** | tag 工作流已定义；待配置签名 Secrets 并完成三平台首次真实 Runner/安装验证 | Git tag 自动产出 macOS 签名并公证的 DMG/PKG、Windows 签名安装包、Android release 签名 APK（AAB 可选），同时上传 SHA-256、版本说明和必要的调试符号；签名材料只存在 CI Secrets |
 | P0.4 | **干净安装和覆盖升级验收** | 目前的运行说明面向开发环境，尚未证明安装包脱离源码配置可用 | 在全新 macOS、Windows、Android 环境验证：无需 `config/client.json`、Python、Flutter、Node 即可启动和本地使用；重启后设置仍在；覆盖升级不丢数据库、同步令牌和 AI Key；形成可重复的 smoke test 清单 |
-| P0.5 | **收敛 Python Core 与客户端的运行时边界** | README 宣传的规则解析、网址订阅等能力有一部分只在 Python Core；安装 Flutter 客户端不会自动获得这些能力 | 明确选择并完成一种交付方式：移植到 Flutter、本地打包并托管 Core sidecar，或连接独立功能服务；用户不需要手工启动后台进程；设置页可看到组件状态和错误；功能说明与安装包实际能力一致 |
+| P0.5 | **收敛 Python Core 与客户端的运行时边界（进行中）** | ICS 文件导入导出已在 Flutter 本地完成；网址订阅和部分规则解析仍依赖 Python Core | 继续把安装包承诺的本地能力移植到 Flutter；用户不需要手工启动后台进程；功能说明与安装包实际能力一致 |
 | P0.6 | **验证 Release 环境下的安全存储** | 代码已使用 `flutter_secure_storage`，但缺少签名安装包中的 Keychain/Credential Manager/Android Keystore 端到端验收 | AI Key 和同步令牌可新增、替换、清除并在重启/升级后读取；不会写入 SQLite、JSON 备份、日志或崩溃报告；macOS entitlements、Windows 包身份和 Android 备份策略均通过真机验证 |
 
 ### P1：设置闭环与产品化

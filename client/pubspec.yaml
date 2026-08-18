@@ -22,6 +22,7 @@ dependencies:
   timezone: 0.11.1
   uuid: 4.6.0
   file_picker: ^3.0.4
+  icalendar_parser: ^2.1.0
 
 dev_dependencies:
   flutter_test:

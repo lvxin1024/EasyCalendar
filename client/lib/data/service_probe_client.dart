@@ -240,7 +240,7 @@ class ServiceProbeClient {
         !capabilities.supports('ics_transfer')) {
       throw const ServiceProbeException(
         ServiceProbeFailureKind.missingCapability,
-        '该地址不是功能服务：未提供订阅或远程 ICS 能力。',
+        '该地址不是功能服务：未提供网址订阅等远程能力。',
       );
     }
   }
