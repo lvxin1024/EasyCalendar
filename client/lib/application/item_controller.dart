@@ -172,12 +172,17 @@ class ItemController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> testAiProvider(AiProviderConfig provider) async {
-    String? key;
-    try {
-      key = await _aiApiKeyStore.read(provider.id);
-    } catch (_) {
-      // Connection testing can still validate local Ollama endpoints without a key.
+  Future<void> testAiProvider(
+    AiProviderConfig provider, {
+    String pendingApiKey = '',
+  }) async {
+    String? key = pendingApiKey.trim();
+    if (key.isEmpty) {
+      try {
+        key = await _aiApiKeyStore.read(provider.id);
+      } catch (_) {
+        // Connection testing can still validate local Ollama endpoints without a key.
+      }
     }
     await _aiProviderConnectionTester.test(provider, apiKey: key);
   }

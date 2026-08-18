@@ -1,10 +1,13 @@
 import 'package:easy_calendar/ai/ai_key_store.dart';
 import 'package:easy_calendar/ai/ai_provider.dart';
+import 'package:easy_calendar/ai/ai_provider_connection_tester.dart';
 import 'package:easy_calendar/config/app_config.dart';
 import 'package:easy_calendar/data/local_item_repository.dart';
 import 'package:easy_calendar/domain/item.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
@@ -58,6 +61,58 @@ void main() {
     expect(await store.read('other'), isNull);
     await store.clear('cloud-main');
     expect(await store.read('cloud-main'), isNull);
+  });
+
+  test(
+    'provider connection test uses the pending key without storing it',
+    () async {
+      late String? authorization;
+      final tester = AiProviderConnectionTester(
+        client: MockClient((request) async {
+          authorization = request.headers['authorization'];
+          return http.Response('{"data":[]}', 200);
+        }),
+      );
+
+      await tester.test(
+        const AiProviderConfig(
+          id: 'pending',
+          name: 'Pending provider',
+          kind: AiProviderKind.openaiCompatible,
+          baseUrl: 'https://ai.example.com/v1',
+          model: 'test-model',
+        ),
+        apiKey: 'unsaved-secret',
+      );
+
+      expect(authorization, 'Bearer unsaved-secret');
+    },
+  );
+
+  test('provider connection test classifies authentication failures', () async {
+    final tester = AiProviderConnectionTester(
+      client: MockClient((_) async => http.Response('{}', 401)),
+    );
+
+    expect(
+      () => tester.test(
+        const AiProviderConfig(
+          id: 'rejected',
+          name: 'Rejected provider',
+          kind: AiProviderKind.openaiCompatible,
+          baseUrl: 'https://ai.example.com/v1',
+          model: 'test-model',
+        ),
+        apiKey: 'wrong-secret',
+      ),
+      throwsA(
+        isA<AiProviderProbeException>().having(
+          (error) => error.kind,
+          'kind',
+          AiProviderProbeFailureKind.unauthorized,
+        ),
+      ),
+    );
   });
 }
 

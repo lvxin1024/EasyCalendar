@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 import '../../ai/ai_provider.dart';
+import '../../ai/ai_provider_connection_tester.dart';
 import '../../application/item_controller.dart';
 import '../../config/app_config.dart';
 import '../../data/service_probe_client.dart';
@@ -754,7 +755,8 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _showProviderEditor([AiProviderConfig? current]) async {
     final imported = await showDialog<AiProviderImport>(
       context: context,
-      builder: (_) => _ProviderDialog(current: current),
+      builder: (_) =>
+          _ProviderDialog(controller: widget.controller, current: current),
     );
     if (imported == null) return;
     try {
@@ -1517,8 +1519,9 @@ class _AiProviderSection extends StatelessWidget {
 }
 
 class _ProviderDialog extends StatefulWidget {
-  const _ProviderDialog({this.current});
+  const _ProviderDialog({required this.controller, this.current});
 
+  final ItemController controller;
   final AiProviderConfig? current;
 
   @override
@@ -1533,6 +1536,9 @@ class _ProviderDialogState extends State<_ProviderDialog> {
   late final TextEditingController _apiKey;
   late AiProviderKind _kind;
   bool _importMode = false;
+  bool _testing = false;
+  bool _testFailed = false;
+  String? _testStatus;
   final _importController = TextEditingController();
 
   @override
@@ -1624,18 +1630,63 @@ class _ProviderDialogState extends State<_ProviderDialog> {
             decoration: const InputDecoration(labelText: 'API key（留空保持原密钥）'),
           ),
         ],
+        _testControls(),
       ],
     ),
   );
 
-  Widget _buildImport() => TextField(
-    controller: _importController,
-    minLines: 6,
-    maxLines: 10,
-    decoration: const InputDecoration(
-      labelText: 'Provider JSON',
-      hintText:
-          '{"kind":"ollama","name":"本地","base_url":"http://localhost:11434","model":"qwen"}',
+  Widget _buildImport() => ListView(
+    shrinkWrap: true,
+    children: [
+      TextField(
+        controller: _importController,
+        minLines: 6,
+        maxLines: 10,
+        decoration: const InputDecoration(
+          labelText: 'Provider JSON',
+          hintText:
+              '{"kind":"ollama","name":"本地","base_url":"http://localhost:11434","model":"qwen"}',
+        ),
+      ),
+      _testControls(),
+    ],
+  );
+
+  Widget _testControls() => Padding(
+    padding: const EdgeInsets.only(top: 12),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            OutlinedButton.icon(
+              onPressed: _testing ? null : _testConnection,
+              icon: _testing
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.network_check),
+              label: const Text('测试连接'),
+            ),
+            if (_testStatus != null)
+              IconButton(
+                tooltip: '复制诊断结果',
+                onPressed: _copyTestStatus,
+                icon: const Icon(Icons.copy_outlined),
+              ),
+          ],
+        ),
+        if (_testStatus != null)
+          Text(
+            _testStatus!,
+            style: TextStyle(
+              color: _testFailed
+                  ? Theme.of(context).colorScheme.error
+                  : Theme.of(context).colorScheme.primary,
+            ),
+          ),
+      ],
     ),
   );
 
@@ -1644,44 +1695,95 @@ class _ProviderDialogState extends State<_ProviderDialog> {
 
   void _submit() {
     try {
-      if (_importMode) {
-        final decoded = jsonDecode(_importController.text);
-        if (decoded is! Map) throw const FormatException('JSON 根节点必须是对象');
-        final imported = AiProviderImport.fromJson(
-          Map<String, dynamic>.from(decoded),
-        );
-        Navigator.pop(context, imported);
-        return;
-      }
-      if (!(_formKey.currentState?.validate() ?? false)) return;
-      final baseUrl = Uri.tryParse(_baseUrl.text.trim());
-      if (baseUrl == null ||
-          !baseUrl.hasAuthority ||
-          !{'http', 'https'}.contains(baseUrl.scheme)) {
-        throw const FormatException('请输入有效的 HTTP(S) 地址');
-      }
-      final current = widget.current;
-      Navigator.pop(
-        context,
-        AiProviderImport(
-          config: AiProviderConfig(
-            id: current?.id ?? 'ai_${DateTime.now().microsecondsSinceEpoch}',
-            name: _name.text.trim(),
-            kind: _kind,
-            baseUrl: _baseUrl.text.trim(),
-            model: _model.text.trim(),
-            enabled: current?.enabled ?? true,
-            requestParameters: current?.requestParameters ?? const {},
-            keyConfigured: current?.keyConfigured ?? false,
-          ),
-          apiKey: _apiKey.text.trim().isEmpty ? null : _apiKey.text.trim(),
-        ),
-      );
+      final imported = _readConfiguration();
+      if (imported != null) Navigator.pop(context, imported);
     } catch (error) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('配置无效：$error')));
     }
+  }
+
+  AiProviderImport? _readConfiguration() {
+    if (_importMode) {
+      final decoded = jsonDecode(_importController.text);
+      if (decoded is! Map) throw const FormatException('JSON 根节点必须是对象');
+      return AiProviderImport.fromJson(Map<String, dynamic>.from(decoded));
+    }
+    if (!(_formKey.currentState?.validate() ?? false)) return null;
+    final baseUrl = Uri.tryParse(_baseUrl.text.trim());
+    if (baseUrl == null ||
+        !baseUrl.hasAuthority ||
+        !{'http', 'https'}.contains(baseUrl.scheme)) {
+      throw const FormatException('请输入有效的 HTTP(S) 地址');
+    }
+    final current = widget.current;
+    return AiProviderImport(
+      config: AiProviderConfig(
+        id: current?.id ?? 'ai_${DateTime.now().microsecondsSinceEpoch}',
+        name: _name.text.trim(),
+        kind: _kind,
+        baseUrl: _baseUrl.text.trim(),
+        model: _model.text.trim(),
+        enabled: current?.enabled ?? true,
+        requestParameters: current?.requestParameters ?? const {},
+        keyConfigured: current?.keyConfigured ?? false,
+      ),
+      apiKey: _apiKey.text.trim().isEmpty ? null : _apiKey.text.trim(),
+    );
+  }
+
+  Future<void> _testConnection() async {
+    AiProviderImport? imported;
+    try {
+      imported = _readConfiguration();
+    } catch (error) {
+      setState(() {
+        _testFailed = true;
+        _testStatus = '配置无效：$error';
+      });
+      return;
+    }
+    if (imported == null) return;
+    setState(() {
+      _testing = true;
+      _testStatus = null;
+    });
+    try {
+      await widget.controller.testAiProvider(
+        imported.config,
+        pendingApiKey: imported.apiKey ?? '',
+      );
+      if (!mounted) return;
+      setState(() {
+        _testFailed = false;
+        _testStatus = 'Provider 连接成功';
+      });
+    } on AiProviderProbeException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _testFailed = true;
+        _testStatus = error.message;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _testFailed = true;
+        _testStatus = 'Provider 连接失败，请检查地址和网络。';
+      });
+    } finally {
+      if (mounted) setState(() => _testing = false);
+    }
+  }
+
+  Future<void> _copyTestStatus() async {
+    final status = _testStatus;
+    if (status == null) return;
+    await Clipboard.setData(ClipboardData(text: status));
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('诊断结果已复制')));
   }
 }
 
