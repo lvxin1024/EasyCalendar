@@ -219,7 +219,15 @@ python3 -m venv .venv
 
 ### 发布维护
 
-维护者推送与 `client/pubspec.yaml` 版本一致的 `vX.Y.Z` tag 后，Release 工作流会构建 Android APK/AAB、Windows 安装器与便携包、macOS DMG，并附带调试符号和 `SHA256SUMS.txt`。正式发布前需要在仓库 Secrets 中配置对应平台的签名、Apple 公证和 Android keystore 材料；签名文件不写入仓库。
+维护者推送与 `client/pubspec.yaml` 版本一致的 `vX.Y.Z` tag 后，Release 工作流会构建 Android APK/AAB、Windows 安装器与便携包、macOS DMG，并附带调试符号和 `SHA256SUMS.txt`。Android release keystore 始终必需；Windows 和 macOS 的正式签名材料可选。签名文件和密码只存入仓库 Actions Secrets，不写入仓库。
+
+#### 无付费证书的桌面端发布
+
+- macOS 的 8 个 Apple 签名 Secrets 全部留空时，CI 会移除无法授权 App Group 的 Widget，对主 App 执行 ad-hoc Release 签名，并产出 `EasyCalendar-<version>-unsigned-macos.dmg`。此产物不会公证，首次打开需在 Finder 中右键 App 选择“打开”，或在“系统设置 > 隐私与安全性”中选择“仍要打开”。
+- Windows 的 `WINDOWS_CERTIFICATE_PFX_BASE64` 和 `WINDOWS_CERTIFICATE_PASSWORD` 都留空时，CI 会产出 `EasyCalendar-<version>-unsigned-windows-x64-setup.exe` 和对应便携包。SmartScreen 可能需要用户选择“更多信息 > 仍要运行”。
+- 任一平台的签名 Secrets 不允许只配置一部分。CI 会在检测到不完整配置时失败，避免误发布看似已签名的产物。
+
+unsigned/ad-hoc 产物仍然是优化后的 Release 构建，不是 Debug 构建。它们可以用于测试和自主分发，但不满足 P0 中的正式签名、公证和安全存储升级验收。
 
 ### 运行测试
 

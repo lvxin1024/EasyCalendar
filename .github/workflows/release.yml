@@ -106,6 +106,20 @@ jobs:
           flutter-version: "3.44.9"
           channel: stable
           cache: true
+      - name: Detect Windows signing configuration
+        id: signing
+        shell: pwsh
+        run: |
+          $hasCertificate = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PFX_BASE64)
+          $hasPassword = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PASSWORD)
+          if ($hasCertificate -and $hasPassword) {
+            "enabled=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          } elseif (-not $hasCertificate -and -not $hasPassword) {
+            "enabled=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            Write-Host "Windows signing secrets are absent; unsigned release assets will be built."
+          } else {
+            throw "Configure both Windows signing secrets or remove both of them."
+          }
       - run: flutter pub get
         working-directory: client
       - name: Build Windows application
@@ -116,10 +130,9 @@ jobs:
           --build-number "${{ needs.version.outputs.number }}"
           --obfuscate --split-debug-info=build/symbols/windows
       - name: Import code signing certificate
+        if: steps.signing.outputs.enabled == 'true'
         shell: pwsh
         run: |
-          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PFX_BASE64)) { throw "WINDOWS_CERTIFICATE_PFX_BASE64 is required" }
-          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PASSWORD)) { throw "WINDOWS_CERTIFICATE_PASSWORD is required" }
           $pfxPath = Join-Path $env:RUNNER_TEMP "easycalendar-release.pfx"
           [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_PFX_BASE64))
           $password = ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
@@ -127,26 +140,36 @@ jobs:
           if ($null -eq $certificate) { throw "The PFX does not contain a code-signing private key" }
           "WINDOWS_CERT_THUMBPRINT=$($certificate.Thumbprint)" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Sign application executable
+        if: steps.signing.outputs.enabled == 'true'
         shell: pwsh
         run: |
           $signTool = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter signtool.exe -Recurse | Sort-Object FullName -Descending | Select-Object -First 1).FullName
           & $signTool sign /sha1 $env:WINDOWS_CERT_THUMBPRINT /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 client\build\windows\x64\runner\Release\EasyCalendar.exe
           if ($LASTEXITCODE -ne 0) { throw "Application signing failed" }
-      - name: Build and sign installer
+      - name: Build and package Windows release
         shell: pwsh
         run: |
+          $signingEnabled = "${{ steps.signing.outputs.enabled }}" -eq "true"
           $buildDir = (Resolve-Path "client\build\windows\x64\runner\Release").Path
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           $outputDir = Join-Path $PWD "client\windows\build\release"
           New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
           & $iscc "/O$outputDir" "/DAppVersion=${{ needs.version.outputs.name }}" "/DBuildDir=$buildDir" client\windows\installer.iss
           if ($LASTEXITCODE -ne 0) { throw "Installer build failed" }
-          $signTool = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter signtool.exe -Recurse | Sort-Object FullName -Descending | Select-Object -First 1).FullName
           $installer = "client\windows\build\release\EasyCalendar-${{ needs.version.outputs.name }}-windows-x64-setup.exe"
-          & $signTool sign /sha1 $env:WINDOWS_CERT_THUMBPRINT /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $installer
-          if ($LASTEXITCODE -ne 0) { throw "Installer signing failed" }
-          & $signTool verify /pa $installer
-          Compress-Archive -Path "$buildDir\*" -DestinationPath "client\windows\build\release\EasyCalendar-${{ needs.version.outputs.name }}-windows-x64-portable.zip"
+          if ($signingEnabled) {
+            $signTool = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter signtool.exe -Recurse | Sort-Object FullName -Descending | Select-Object -First 1).FullName
+            & $signTool sign /sha1 $env:WINDOWS_CERT_THUMBPRINT /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $installer
+            if ($LASTEXITCODE -ne 0) { throw "Installer signing failed" }
+            & $signTool verify /pa $installer
+            if ($LASTEXITCODE -ne 0) { throw "Installer signature verification failed" }
+            $portable = "client\windows\build\release\EasyCalendar-${{ needs.version.outputs.name }}-windows-x64-portable.zip"
+          } else {
+            $unsignedInstaller = "client\windows\build\release\EasyCalendar-${{ needs.version.outputs.name }}-unsigned-windows-x64-setup.exe"
+            Move-Item -Path $installer -Destination $unsignedInstaller
+            $portable = "client\windows\build\release\EasyCalendar-${{ needs.version.outputs.name }}-unsigned-windows-x64-portable.zip"
+          }
+          Compress-Archive -Path "$buildDir\*" -DestinationPath $portable
           Compress-Archive -Path "client\build\symbols\windows\*" -DestinationPath "client\windows\build\release\EasyCalendar-${{ needs.version.outputs.name }}-windows-symbols.zip"
       - uses: actions/upload-artifact@v4
         with:
@@ -291,7 +314,7 @@ jobs:
           mkdir -p client/build/release/dmg
           cp -R "$app" client/build/release/dmg/EasyCalendar.app
           ln -s /Applications client/build/release/dmg/Applications
-          dmg="client/build/release/EasyCalendar-${{ needs.version.outputs.name }}-macos-unsigned.dmg"
+          dmg="client/build/release/EasyCalendar-${{ needs.version.outputs.name }}-unsigned-macos.dmg"
           hdiutil create -volname EasyCalendar -srcfolder client/build/release/dmg -ov -format UDZO "$dmg"
       - name: Package macOS debug symbols
         shell: bash

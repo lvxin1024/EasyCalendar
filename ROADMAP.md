@@ -42,7 +42,7 @@ P0.2 先于 P0.1 实施，因为它可以独立消除多台默认安装使用相
 - 当前缺口：三平台 tag 工作流已定义，但仓库签名 Secrets 尚未配置，也未完成首次真实 Runner 构建、公证和安装验证。
 - 内容：Git tag 自动构建 macOS、Windows、Android 安装产物；配置正式签名；生成版本说明、SHA-256 和必要的调试符号。
 - 验收：Release 包含 macOS 签名并公证的 DMG/PKG、Windows 签名安装包、Android release 签名 APK（AAB 可选）；签名材料只存在 CI Secrets；产物版本与 tag 一致。
-- 进度：Android Release 已移除 debug 签名回退；tag 工作流已定义签名 Android APK/AAB、签名 Windows 安装器/便携包、签名并公证 macOS DMG、调试符号和 SHA-256。待配置仓库 Secrets 并在三平台 Runner 实际验证后完成。
+- 进度：Android Release 已移除 debug 签名回退；Windows 和 macOS 支持在签名 Secrets 齐全时产出正式签名产物，未配置时分别产出明确标记的 unsigned 安装器和移除 Widget 的 ad-hoc DMG。macOS ad-hoc DMG 已在本机验证；Windows 待 hosted Runner 首次验证。正式签名与公证验收仍受外部证书条件阻塞。
 
 ### P0.4 干净安装和覆盖升级验收
 
@@ -155,3 +155,4 @@ P0.2 先于 P0.1 实施，因为它可以独立消除多台默认安装使用相
 - 2026-08-19：完成 P1.8；统一三平台应用名、图标和安装元数据，固定平台身份并增加 Windows 旧数据目录迁移。
 - 2026-08-19：完成 P1.9；push/PR 加入 Android、macOS、Windows 原生 Release 编译，并保留 Flutter、Python 和 Worker 的全量门禁。
 - 2026-08-19：重构 README 的交付说明；普通用户路径改为直接安装 App，云同步明确为可选服务，Python Core 定位为可选兼容 API。
+- 2026-08-19：macOS 和 Windows Release 增加无付费证书回退；未配置签名 Secrets 时产出明确标记的 ad-hoc/unsigned Release 产物，不使用 Debug 构建。

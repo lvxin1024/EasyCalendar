@@ -56,6 +56,32 @@ void main() {
     });
   }
 
+  for (final platformAsset in <String, String>{
+    'macos': 'EasyCalendar-1.2.0-unsigned-macos.dmg',
+    'windows': 'EasyCalendar-1.2.0-unsigned-windows-x64-setup.exe',
+  }.entries) {
+    test('selects the unsigned ${platformAsset.key} release asset', () async {
+      final service = AppUpdateService(
+        platform: platformAsset.key,
+        client: MockClient(
+          (_) async => http.Response(
+            jsonEncode(_releaseJson(assets: [platformAsset.value])),
+            200,
+          ),
+        ),
+      );
+
+      final update = await service.checkForUpdate('1.1.0');
+
+      expect(update.assetName, platformAsset.value);
+      expect(
+        update.assetUri.toString(),
+        'https://github.com/lvxin1024/text2calendar/releases/download/v1.2.0/${platformAsset.value}',
+      );
+      service.close();
+    });
+  }
+
   test('ignores assets for other platforms', () async {
     final service = AppUpdateService(
       platform: 'macos',
