@@ -7,6 +7,7 @@ import '../ai/ai_provider.dart';
 import '../ai/ai_provider_connection_tester.dart';
 import '../config/app_config.dart';
 import '../data/item_repository.dart';
+import '../data/service_probe_client.dart';
 import '../data/transfer_models.dart';
 import '../device/device_identity.dart';
 import '../domain/item.dart';
@@ -30,6 +31,7 @@ class ItemController extends ChangeNotifier {
     AiProviderConnectionTester? aiProviderConnectionTester,
     DeviceIdentity? deviceIdentity,
     SyncTokenStore? featureTokenStore,
+    ServiceProbeClient? serviceProbeClient,
   }) {
     syncCoordinator?.addListener(_syncChanged);
     _aiApiKeyStore = aiApiKeyStore ?? SecureAiApiKeyStore();
@@ -37,6 +39,7 @@ class ItemController extends ChangeNotifier {
         aiProviderConnectionTester ?? AiProviderConnectionTester();
     _deviceIdentity = deviceIdentity ?? DeviceIdentity();
     this.featureTokenStore = featureTokenStore ?? SecureFeatureTokenStore();
+    _serviceProbeClient = serviceProbeClient ?? ServiceProbeClient();
   }
 
   final ItemRepository repository;
@@ -49,6 +52,7 @@ class ItemController extends ChangeNotifier {
   late final AiProviderConnectionTester _aiProviderConnectionTester;
   late final DeviceIdentity _deviceIdentity;
   late final SyncTokenStore featureTokenStore;
+  late final ServiceProbeClient _serviceProbeClient;
 
   List<CalendarItem> _items = const [];
   List<CalendarCollection> _collections = const [];
@@ -58,6 +62,8 @@ class ItemController extends ChangeNotifier {
   bool _mutating = false;
   Object? _error;
   bool _featureTokenConfigured = false;
+  ServiceProbeResult? _syncServiceProbe;
+  ServiceProbeResult? _featureServiceProbe;
 
   List<CalendarItem> get items => List.unmodifiable(_items);
   List<CalendarCollection> get collections => List.unmodifiable(_collections);
@@ -68,6 +74,8 @@ class ItemController extends ChangeNotifier {
   Object? get error => _error;
   String? get databasePath => repository.databasePath;
   bool get featureTokenConfigured => _featureTokenConfigured;
+  ServiceProbeResult? get syncServiceProbe => _syncServiceProbe;
+  ServiceProbeResult? get featureServiceProbe => _featureServiceProbe;
 
   ClientPreferences get _defaultPreferences => ClientPreferences(
     apiUrl: config.apiUrl,
@@ -327,6 +335,10 @@ class ItemController extends ChangeNotifier {
   Future<void> savePreferences(ClientPreferences value) async {
     await _mutate(() async {
       await repository.savePreferences(value);
+      if (preferences.apiUrl != value.apiUrl) _syncServiceProbe = null;
+      if (preferences.featureApiUrl != value.featureApiUrl) {
+        _featureServiceProbe = null;
+      }
       _preferences = value;
       await _applyRuntimeSettings(value);
       try {
@@ -406,10 +418,14 @@ class ItemController extends ChangeNotifier {
 
   Future<void> saveSyncToken(String token) async {
     await syncCoordinator?.saveToken(token);
+    _syncServiceProbe = null;
+    notifyListeners();
   }
 
   Future<void> clearSyncToken() async {
     await syncCoordinator?.clearToken();
+    _syncServiceProbe = null;
+    notifyListeners();
   }
 
   Future<void> saveFeatureToken(String token) async {
@@ -417,13 +433,45 @@ class ItemController extends ChangeNotifier {
     if (normalized.isEmpty) return;
     await featureTokenStore.write(normalized);
     _featureTokenConfigured = true;
+    _featureServiceProbe = null;
     notifyListeners();
   }
 
   Future<void> clearFeatureToken() async {
     await featureTokenStore.clear();
     _featureTokenConfigured = false;
+    _featureServiceProbe = null;
     notifyListeners();
+  }
+
+  Future<ServiceProbeResult> testServiceConnection({
+    required ServiceKind kind,
+    required String serverUrl,
+    String pendingToken = '',
+  }) async {
+    var token = pendingToken.trim();
+    if (token.isEmpty) {
+      final store = kind == ServiceKind.sync
+          ? syncCoordinator?.tokenStore
+          : featureTokenStore;
+      try {
+        token = (await store?.read())?.trim() ?? '';
+      } catch (_) {
+        token = '';
+      }
+    }
+    final result = await _serviceProbeClient.probe(
+      serverUrl: Uri.parse(serverUrl.trim()),
+      kind: kind,
+      token: token,
+    );
+    if (kind == ServiceKind.sync) {
+      _syncServiceProbe = result;
+    } else {
+      _featureServiceProbe = result;
+    }
+    notifyListeners();
+    return result;
   }
 
   Future<void> synchronizeNow() async {
@@ -450,6 +498,7 @@ class ItemController extends ChangeNotifier {
     syncCoordinator?.dispose();
     unawaited(repository.close());
     _aiProviderConnectionTester.close();
+    _serviceProbeClient.close();
     super.dispose();
   }
 

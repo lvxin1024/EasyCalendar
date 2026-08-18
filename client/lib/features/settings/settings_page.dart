@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import '../../ai/ai_provider.dart';
 import '../../application/item_controller.dart';
 import '../../config/app_config.dart';
+import '../../data/service_probe_client.dart';
 import '../../device/device_identity.dart';
 import '../../domain/item.dart';
 import '../../sync/sync_models.dart';
@@ -48,6 +49,12 @@ class _SettingsPageState extends State<SettingsPage> {
   late Map<String, int> _tagColors;
   bool _obscureToken = true;
   bool _obscureFeatureToken = true;
+  bool _testingSyncService = false;
+  bool _testingFeatureService = false;
+  String? _syncProbeStatus;
+  String? _featureProbeStatus;
+  bool _syncProbeFailed = false;
+  bool _featureProbeFailed = false;
 
   @override
   void initState() {
@@ -255,6 +262,23 @@ class _SettingsPageState extends State<SettingsPage> {
                   }
                   return null;
                 },
+              ),
+              const SizedBox(height: 10),
+              _ServiceProbeRow(
+                icon: Icons.cloud_sync_outlined,
+                label: '同步服务',
+                status: _syncProbeStatus,
+                failed: _syncProbeFailed,
+                testing: _testingSyncService,
+                onPressed: () => _testService(ServiceKind.sync),
+              ),
+              _ServiceProbeRow(
+                icon: Icons.hub_outlined,
+                label: '功能服务',
+                status: _featureProbeStatus,
+                failed: _featureProbeFailed,
+                testing: _testingFeatureService,
+                onPressed: () => _testService(ServiceKind.feature),
               ),
               const SizedBox(height: 10),
               _SettingSwitch(
@@ -712,6 +736,77 @@ class _SettingsPageState extends State<SettingsPage> {
     if (mounted) setState(() {});
   }
 
+  Future<void> _testService(ServiceKind kind) async {
+    final isSync = kind == ServiceKind.sync;
+    final url = isSync
+        ? _apiUrlController.text.trim()
+        : _featureApiUrlController.text.trim();
+    final validationError = _validateUrl(url);
+    if (validationError != null) {
+      setState(() {
+        if (isSync) {
+          _syncProbeStatus = validationError;
+          _syncProbeFailed = true;
+        } else {
+          _featureProbeStatus = validationError;
+          _featureProbeFailed = true;
+        }
+      });
+      return;
+    }
+    setState(() {
+      if (isSync) {
+        _testingSyncService = true;
+        _syncProbeStatus = null;
+      } else {
+        _testingFeatureService = true;
+        _featureProbeStatus = null;
+      }
+    });
+
+    var failed = false;
+    late String status;
+    try {
+      final result = await widget.controller.testServiceConnection(
+        kind: kind,
+        serverUrl: url,
+        pendingToken: isSync
+            ? _tokenController.text
+            : _featureTokenController.text,
+      );
+      final authentication = result.capabilities.authenticationRequired
+          ? '鉴权通过'
+          : '无需鉴权';
+      if (isSync) {
+        status = '连接成功 · v${result.serviceVersion} · $authentication';
+      } else {
+        final features = <String>[
+          if (result.capabilities.supports('ics_subscriptions')) '网址订阅',
+          if (result.capabilities.supports('ics_transfer')) '远程 ICS',
+        ].join('、');
+        status = '连接成功 · $features · $authentication';
+      }
+    } on ServiceProbeException catch (error) {
+      failed = true;
+      status = error.message;
+    } catch (error) {
+      failed = true;
+      status = '连接检测失败：$error';
+    }
+    if (!mounted) return;
+    setState(() {
+      if (isSync) {
+        _testingSyncService = false;
+        _syncProbeStatus = status;
+        _syncProbeFailed = failed;
+      } else {
+        _testingFeatureService = false;
+        _featureProbeStatus = status;
+        _featureProbeFailed = failed;
+      }
+    });
+  }
+
   void _windowChanged() {
     if (mounted) setState(() {});
   }
@@ -827,6 +922,64 @@ class _SectionLabel extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(bottom: 10),
     child: Text(label, style: Theme.of(context).textTheme.titleSmall),
+  );
+}
+
+class _ServiceProbeRow extends StatelessWidget {
+  const _ServiceProbeRow({
+    required this.icon,
+    required this.label,
+    required this.status,
+    required this.failed,
+    required this.testing,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String label;
+  final String? status;
+  final bool failed;
+  final bool testing;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Row(
+      children: [
+        Icon(
+          status == null
+              ? icon
+              : failed
+              ? Icons.error_outline
+              : Icons.check_circle_outline,
+          color: status == null
+              ? null
+              : failed
+              ? Theme.of(context).colorScheme.error
+              : Colors.green.shade700,
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            status ?? '$label尚未检测',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        const SizedBox(width: 8),
+        OutlinedButton.icon(
+          onPressed: testing ? null : onPressed,
+          icon: testing
+              ? const SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.network_check, size: 18),
+          label: Text(testing ? '检测中' : '测试连接'),
+        ),
+      ],
+    ),
   );
 }
 

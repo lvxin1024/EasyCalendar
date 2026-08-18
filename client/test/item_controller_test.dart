@@ -1,12 +1,17 @@
+import 'dart:convert';
+
 import 'package:easy_calendar/application/item_controller.dart';
 import 'package:easy_calendar/config/app_config.dart';
 import 'package:easy_calendar/data/item_repository.dart';
+import 'package:easy_calendar/data/service_probe_client.dart';
 import 'package:easy_calendar/data/transfer_models.dart';
 import 'package:easy_calendar/device/device_identity.dart';
 import 'package:easy_calendar/domain/item.dart';
 import 'package:easy_calendar/sync/token_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -127,6 +132,65 @@ void main() {
     expect(controller.featureTokenConfigured, isFalse);
     expect(store.value, isNull);
   });
+
+  test(
+    'service probes use stored tokens and cache successful results',
+    () async {
+      final store = _MemoryTokenStore()..value = 'stored-core-token';
+      late http.Request authRequest;
+      final probeClient = ServiceProbeClient(
+        client: MockClient((request) async {
+          return switch (request.url.path) {
+            '/v1/health' => http.Response(
+              jsonEncode({
+                'status': 'ok',
+                'service': 'easycalendar',
+                'version': '0.1.0',
+                'schema_version': 1,
+              }),
+              200,
+            ),
+            '/v1/capabilities' => http.Response(
+              jsonEncode({
+                'api_version': 'v1',
+                'features': {'ics_subscriptions': true, 'ics_transfer': true},
+                'configured': <String, bool>{},
+                'authentication': {'required': true, 'scheme': 'bearer'},
+              }),
+              200,
+            ),
+            '/v1/auth-check' => (() {
+              authRequest = request;
+              return http.Response('{}', 200);
+            })(),
+            _ => http.Response('{}', 404),
+          };
+        }),
+      );
+      final controller = ItemController(
+        repository: _MemoryRepository(),
+        config: config,
+        featureTokenStore: store,
+        serviceProbeClient: probeClient,
+      );
+      await controller.initialize();
+
+      final result = await controller.testServiceConnection(
+        kind: ServiceKind.feature,
+        serverUrl: 'https://core.example.com',
+      );
+
+      expect(authRequest.headers['Authorization'], 'Bearer stored-core-token');
+      expect(controller.featureServiceProbe, same(result));
+
+      await controller.savePreferences(
+        controller.preferences.copyWith(
+          featureApiUrl: 'https://other-core.example.com',
+        ),
+      );
+      expect(controller.featureServiceProbe, isNull);
+    },
+  );
 }
 
 class _MemoryTokenStore implements SyncTokenStore {
