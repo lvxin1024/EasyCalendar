@@ -172,8 +172,16 @@ void main() {
       syncEnabled: _config.syncEnabled,
       notificationsEnabled: _config.notificationsEnabled,
     );
+    expect(
+      (await repository.loadPreferences(defaults)).onboardingCompleted,
+      isFalse,
+    );
     await repository.savePreferences(
-      defaults.copyWith(deviceName: '工作电脑', tagColors: {'工作': 0xFF2563EB}),
+      defaults.copyWith(
+        deviceName: '工作电脑',
+        tagColors: {'工作': 0xFF2563EB},
+        onboardingCompleted: true,
+      ),
     );
 
     final loaded = await repository.loadPreferences(defaults);
@@ -181,6 +189,7 @@ void main() {
     expect(loaded.deviceName, '工作电脑');
     expect(loaded.featureApiUrl, 'https://core.example.com');
     expect(loaded.tagColors, {'工作': 0xFF2563EB});
+    expect(loaded.onboardingCompleted, isTrue);
 
     await repository.savePreferences(
       defaults.copyWith(

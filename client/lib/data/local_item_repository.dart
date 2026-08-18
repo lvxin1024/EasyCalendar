@@ -1558,6 +1558,9 @@ class LocalItemRepository
         values['clock_format'],
         defaults.clockFormat,
       ),
+      onboardingCompleted: values.containsKey('onboarding_completed')
+          ? _storedBool(values['onboarding_completed'], false)
+          : values.isNotEmpty,
       deviceId: values['device_id'] ?? defaults.deviceId,
       deviceName: values['device_name'] ?? defaults.deviceName,
       defaultCollectionId:
@@ -1599,6 +1602,9 @@ class LocalItemRepository
         'locale_name': preferences.localeName.trim(),
         'first_day_of_week': preferences.firstDayOfWeek.toString(),
         'clock_format': preferences.clockFormat.name,
+        'onboarding_completed': preferences.onboardingCompleted
+            ? 'true'
+            : 'false',
         'device_id': preferences.deviceId.trim(),
         'device_name': preferences.deviceName.trim(),
         'default_collection_id': preferences.defaultCollectionId.trim(),

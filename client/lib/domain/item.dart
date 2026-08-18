@@ -177,6 +177,7 @@ class ClientPreferences {
     this.localeName = 'system',
     this.firstDayOfWeek = 0,
     this.clockFormat = ClockFormat.system,
+    this.onboardingCompleted = false,
     this.deviceId = 'my-easycalendar-client',
     this.deviceName = '',
     this.defaultCollectionId = 'collection_local',
@@ -198,6 +199,7 @@ class ClientPreferences {
   /// 0 follows the active locale; 1..7 map to Monday..Sunday.
   final int firstDayOfWeek;
   final ClockFormat clockFormat;
+  final bool onboardingCompleted;
   final String deviceId;
   final String deviceName;
   final String defaultCollectionId;
@@ -217,6 +219,7 @@ class ClientPreferences {
     String? localeName,
     int? firstDayOfWeek,
     ClockFormat? clockFormat,
+    bool? onboardingCompleted,
     String? deviceId,
     String? deviceName,
     String? defaultCollectionId,
@@ -235,6 +238,7 @@ class ClientPreferences {
     localeName: localeName ?? this.localeName,
     firstDayOfWeek: firstDayOfWeek ?? this.firstDayOfWeek,
     clockFormat: clockFormat ?? this.clockFormat,
+    onboardingCompleted: onboardingCompleted ?? this.onboardingCompleted,
     deviceId: deviceId ?? this.deviceId,
     deviceName: deviceName ?? this.deviceName,
     defaultCollectionId: defaultCollectionId ?? this.defaultCollectionId,

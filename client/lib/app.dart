@@ -4,6 +4,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'application/item_controller.dart';
 import 'config/app_config.dart';
 import 'features/shell/home_shell.dart';
+import 'features/onboarding/first_run_page.dart';
 import 'utils/date_formatters.dart';
 import 'widget/widget_deep_link_controller.dart';
 
@@ -82,11 +83,13 @@ class EasyCalendarApp extends StatelessWidget {
             ),
           ),
         ),
-        home: HomeShell(
-          config: config,
-          controller: controller,
-          widgetDeepLinks: widgetDeepLinks,
-        ),
+        home: controller.preferences.onboardingCompleted
+            ? HomeShell(
+                config: config,
+                controller: controller,
+                widgetDeepLinks: widgetDeepLinks,
+              )
+            : FirstRunPage(config: config, controller: controller),
       ),
     );
   }

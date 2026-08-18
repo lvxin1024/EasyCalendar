@@ -584,6 +584,8 @@ class _SettingsPageState extends State<SettingsPage> {
           localeName: _localeName,
           firstDayOfWeek: _firstDayOfWeek,
           clockFormat: _clockFormat,
+          onboardingCompleted:
+              widget.controller.preferences.onboardingCompleted,
           deviceId: _deviceIdController.text.trim(),
           deviceName: _deviceNameController.text.trim(),
           defaultCollectionId: _collectionIdController.text.trim(),
