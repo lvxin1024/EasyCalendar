@@ -17,6 +17,11 @@ resolving packages. `run-client.sh` passes the selected config file through
 `EASYCALENDAR_CLIENT_DEVICE` to an Android device ID when needed. Web is not a
 supported target because the local SQLite/path-provider stack is native-only.
 
+`EASYCALENDAR_DEVICE_ID` is blank by default. Each installation generates and
+persists a unique ID before creating local sync changes. Users can edit the
+friendly device name in Settings; the technical ID is available only under
+advanced connection settings for copying or confirmed regeneration.
+
 The generated platform runners and `pubspec.lock` are version controlled.
 Analyzer and unit tests run on any Flutter-capable development machine; native
 build acceptance additionally requires that platform's SDK and toolchain.

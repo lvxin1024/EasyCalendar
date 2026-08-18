@@ -2,6 +2,7 @@ import 'package:easy_calendar/application/item_controller.dart';
 import 'package:easy_calendar/config/app_config.dart';
 import 'package:easy_calendar/data/item_repository.dart';
 import 'package:easy_calendar/data/transfer_models.dart';
+import 'package:easy_calendar/device/device_identity.dart';
 import 'package:easy_calendar/domain/item.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -71,9 +72,46 @@ void main() {
     expect(controller.items.single.status, ItemStatus.done);
     expect(controller.items.single.version, 2);
   });
+
+  test('controller migrates and persists the legacy device identity', () async {
+    final repository = _MemoryRepository(
+      storedPreferences: const ClientPreferences(
+        apiUrl: 'http://localhost:8000',
+        deviceId: DeviceIdentity.legacyDefaultId,
+        syncEnabled: false,
+        notificationsEnabled: false,
+      ),
+    );
+    final generated = <String>[
+      'device-11111111-1111-4111-8111-111111111111',
+    ];
+    final controller = ItemController(
+      repository: repository,
+      config: config,
+      deviceIdentity: DeviceIdentity(
+        idGenerator: () => generated.removeAt(0),
+        platformLabel: 'Test',
+      ),
+    );
+
+    await controller.initialize();
+
+    expect(controller.preferences.deviceId, config.deviceId);
+    expect(controller.preferences.deviceName, 'Test-device');
+    expect(repository.storedPreferences?.deviceId, config.deviceId);
+
+    final regenerated = await controller.regenerateDeviceIdentity();
+
+    expect(regenerated.deviceId, 'device-11111111-1111-4111-8111-111111111111');
+    expect(regenerated.deviceName, 'Test-device');
+    expect(repository.storedPreferences?.deviceId, regenerated.deviceId);
+  });
 }
 
 class _MemoryRepository implements ItemRepository {
+  _MemoryRepository({this.storedPreferences});
+
+  ClientPreferences? storedPreferences;
   final List<CalendarItem> _items = [];
   final List<CalendarCollection> _collections = [
     CalendarCollection(
@@ -203,10 +241,12 @@ class _MemoryRepository implements ItemRepository {
 
   @override
   Future<ClientPreferences> loadPreferences(ClientPreferences defaults) async =>
-      defaults;
+      storedPreferences ?? defaults;
 
   @override
-  Future<void> savePreferences(ClientPreferences preferences) async {}
+  Future<void> savePreferences(ClientPreferences preferences) async {
+    storedPreferences = preferences;
+  }
 
   @override
   Future<void> close() async {}

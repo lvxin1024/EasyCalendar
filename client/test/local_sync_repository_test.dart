@@ -163,18 +163,19 @@ void main() {
     },
   );
 
-  test('persists tag color preferences locally', () async {
+  test('persists device name and tag color preferences locally', () async {
     final defaults = ClientPreferences(
       apiUrl: _config.apiUrl,
       syncEnabled: _config.syncEnabled,
       notificationsEnabled: _config.notificationsEnabled,
     );
     await repository.savePreferences(
-      defaults.copyWith(tagColors: {'工作': 0xFF2563EB}),
+      defaults.copyWith(deviceName: '工作电脑', tagColors: {'工作': 0xFF2563EB}),
     );
 
     final loaded = await repository.loadPreferences(defaults);
 
+    expect(loaded.deviceName, '工作电脑');
     expect(loaded.tagColors, {'工作': 0xFF2563EB});
   });
 

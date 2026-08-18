@@ -26,6 +26,7 @@ def test_client_config_matches_all_dart_environment_keys():
 
     assert referenced == expected
     assert config["EASYCALENDAR_APP_NAME"] == "EasyCalendar"
+    assert config["EASYCALENDAR_DEVICE_ID"] == ""
     assert config["EASYCALENDAR_SYNC_ENABLED"] == "false"
 
 

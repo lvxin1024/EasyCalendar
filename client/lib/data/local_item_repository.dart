@@ -936,6 +936,7 @@ class LocalItemRepository
     return ClientPreferences(
       apiUrl: values['api_url'] ?? defaults.apiUrl,
       deviceId: values['device_id'] ?? defaults.deviceId,
+      deviceName: values['device_name'] ?? defaults.deviceName,
       defaultCollectionId:
           values['default_collection_id'] ?? defaults.defaultCollectionId,
       defaultCollectionName:
@@ -971,6 +972,7 @@ class LocalItemRepository
       for (final entry in {
         'api_url': preferences.apiUrl.trim(),
         'device_id': preferences.deviceId.trim(),
+        'device_name': preferences.deviceName.trim(),
         'default_collection_id': preferences.defaultCollectionId.trim(),
         'default_collection_name': preferences.defaultCollectionName.trim(),
         'sync_enabled': preferences.syncEnabled ? 'true' : 'false',

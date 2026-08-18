@@ -8,6 +8,7 @@ import '../ai/ai_provider_connection_tester.dart';
 import '../config/app_config.dart';
 import '../data/item_repository.dart';
 import '../data/transfer_models.dart';
+import '../device/device_identity.dart';
 import '../domain/item.dart';
 import '../notification/notification_service.dart';
 import '../sync/sync_coordinator.dart';
@@ -26,11 +27,13 @@ class ItemController extends ChangeNotifier {
     this.notificationService,
     AiApiKeyStore? aiApiKeyStore,
     AiProviderConnectionTester? aiProviderConnectionTester,
+    DeviceIdentity? deviceIdentity,
   }) {
     syncCoordinator?.addListener(_syncChanged);
     _aiApiKeyStore = aiApiKeyStore ?? SecureAiApiKeyStore();
     _aiProviderConnectionTester =
         aiProviderConnectionTester ?? AiProviderConnectionTester();
+    _deviceIdentity = deviceIdentity ?? DeviceIdentity();
   }
 
   final ItemRepository repository;
@@ -41,6 +44,7 @@ class ItemController extends ChangeNotifier {
   final NotificationService? notificationService;
   late final AiApiKeyStore _aiApiKeyStore;
   late final AiProviderConnectionTester _aiProviderConnectionTester;
+  late final DeviceIdentity _deviceIdentity;
 
   List<CalendarItem> _items = const [];
   List<CalendarCollection> _collections = const [];
@@ -177,7 +181,25 @@ class ItemController extends ChangeNotifier {
     try {
       await repository.initialize();
       _initialized = true;
-      _preferences = await repository.loadPreferences(_defaultPreferences);
+      final loadedPreferences = await repository.loadPreferences(
+        _defaultPreferences,
+      );
+      final deviceId = _deviceIdentity.ensurePersistedId(
+        loadedPreferences.deviceId,
+        fallbackId: config.deviceId,
+      );
+      final deviceName = _deviceIdentity.ensureDeviceName(
+        loadedPreferences.deviceName,
+        deviceId: deviceId,
+      );
+      _preferences = loadedPreferences.copyWith(
+        deviceId: deviceId,
+        deviceName: deviceName,
+      );
+      if (deviceId != loadedPreferences.deviceId ||
+          deviceName != loadedPreferences.deviceName) {
+        await repository.savePreferences(_preferences!);
+      }
       await _applyRuntimeSettings(_preferences!);
       try {
         await desktopWindowController?.initialize(
@@ -306,6 +328,14 @@ class ItemController extends ChangeNotifier {
       );
       if (value.syncEnabled) unawaited(syncCoordinator?.synchronize());
     }, reloadItems: false);
+  }
+
+  Future<ClientPreferences> regenerateDeviceIdentity() async {
+    final updated = preferences.copyWith(
+      deviceId: _deviceIdentity.generateDistinctId(preferences.deviceId),
+    );
+    await savePreferences(updated);
+    return updated;
   }
 
   Future<void> _applyRuntimeSettings(ClientPreferences value) async {

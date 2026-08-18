@@ -130,7 +130,7 @@ flutter run -d <device-id>
 ./scripts/run-client.sh     # 启动（自动检测平台）
 ```
 
-`config/client.json` 只提供首次启动的默认值。安装后可以直接在“设置 > 连接”中覆盖 API 地址、设备 ID 和默认 Collection，无需重新编译；具体填写方式见下一节。
+`config/client.json` 只提供首次启动的默认值。设备 ID 在首次启动时自动生成并持久化；安装后可以直接在“设置 > 连接”中维护 API 地址、设备名称和默认 Collection，无需重新编译；具体填写方式见下一节。
 
 ### 3. Sync Server（Cloudflare Worker/D1）
 
@@ -224,14 +224,15 @@ cd ..
 |---|---|---|
 | **API 地址** | 所有设备填写同一个 Cloudflare Worker HTTPS 地址 | `https://calendar.example.com` |
 | **访问令牌** | 所有设备填写 `config/secrets.env` 中同一个 `ADMIN_TOKEN` | 上面生成的 64 位字符串 |
-| **设备 ID** | 每次安装必须唯一；2–128 位，只能使用字母、数字、点、下划线和连字符 | `lvxin-macbook`、`lvxin-phone`、`lvxin-windows` |
+| **设备名称** | 用于区分设备，可按习惯修改 | `工作电脑`、`手机` |
+| **设备 ID** | 首次启动自动生成并长期保存；通常无需修改，可在高级连接设置中复制或重建 | `device-<UUID>` |
 | **默认 Collection ID** | 需要共享默认日历的设备填写相同值 | `collection_local` |
 | **默认 Collection 名称** | 本机显示名称，可按需要填写 | `我的日程` |
 | **同步** | 打开开关，保存后点击“立即同步” | 开启 |
 
-这些设置会持久化在当前安装中，并覆盖构建时的 `EASYCALENDAR_API_URL`、`EASYCALENDAR_DEVICE_ID`、`EASYCALENDAR_DEFAULT_COLLECTION_ID` 和默认 Collection 名称，因此普通用户不需要编辑环境变量或重新构建应用。
+这些设置会持久化在当前安装中，并覆盖构建时的 API 地址、默认 Collection 等初始值，因此普通用户不需要编辑环境变量或重新构建应用。`EASYCALENDAR_DEVICE_ID` 默认留空；仅定制部署需要预设 ID，普通 Release 安装会自动生成。
 
-设备 ID 应长期保持稳定。修改它不会破坏尚未上传的旧变更，客户端会按旧、新设备 ID 分批上传；但日常使用中不要频繁修改。修改默认 Collection ID 只影响之后新建的日程，会创建或选择新的 Collection，不会自动迁移旧 Collection 中已有数据。
+设备 ID 应长期保持稳定。高级设置中的“重建设备身份”不会破坏尚未上传的旧变更，客户端会按旧、新设备 ID 分批上传；只应在复制安装、身份冲突或排查同步问题时使用。修改默认 Collection ID 只影响之后新建的日程，会创建或选择新的 Collection，不会自动迁移旧 Collection 中已有数据。
 
 #### Cloudflare 与已有远程服务器如何分工
 
@@ -278,7 +279,7 @@ cd server && npm test      # Worker 测试
 | ID | 任务 | 当前缺口 | 完成标准 |
 |---|---|---|---|
 | P0.1 | **拆分服务配置并做能力发现** | 同一个“API 地址”同时被同步、网址订阅和远程导入导出使用；Cloudflare Worker 只实现同步接口，Python Core 又不实现同步，按现有文档配置必有页面请求 404 | 设置中明确区分“同步服务”和“功能服务”，或提供统一网关；保存前请求 `/v1/health`、`/v1/capabilities` 和鉴权接口；只展示服务实际支持的功能；本地模式不要求 token |
-| P0.2 | **自动生成并持久化设备身份** | 所有安装包默认使用同一个 `my-easycalendar-client`，用户必须手工避免冲突 | 首次启动自动生成全局唯一且长期稳定的设备 ID；另设可读的设备名称；普通设置不要求填写技术 ID；高级重置有风险提示，并能兼容已有 outbox 和旧默认值 |
+| P0.2 | **自动生成并持久化设备身份（已完成）** | 首次启动生成并保存唯一 ID，同时迁移旧固定默认值 | 设置页提供可读设备名称；技术 ID 仅在高级区域复制或经确认后重建；旧 outbox 保持原 ID 并可继续上传 |
 | P0.3 | **建立多平台 Release 流水线** | 当前只有测试工作流，没有客户端 Release 工作流；Android release 仍使用 debug 签名 | Git tag 自动产出 macOS 签名并公证的 DMG/PKG、Windows 签名安装包、Android release 签名 APK（AAB 可选），同时上传 SHA-256、版本说明和必要的调试符号；签名材料只存在 CI Secrets |
 | P0.4 | **干净安装和覆盖升级验收** | 目前的运行说明面向开发环境，尚未证明安装包脱离源码配置可用 | 在全新 macOS、Windows、Android 环境验证：无需 `config/client.json`、Python、Flutter、Node 即可启动和本地使用；重启后设置仍在；覆盖升级不丢数据库、同步令牌和 AI Key；形成可重复的 smoke test 清单 |
 | P0.5 | **收敛 Python Core 与客户端的运行时边界** | README 宣传的规则解析、网址订阅等能力有一部分只在 Python Core；安装 Flutter 客户端不会自动获得这些能力 | 明确选择并完成一种交付方式：移植到 Flutter、本地打包并托管 Core sidecar，或连接独立功能服务；用户不需要手工启动后台进程；设置页可看到组件状态和错误；功能说明与安装包实际能力一致 |

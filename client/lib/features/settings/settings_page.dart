@@ -2,10 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../ai/ai_provider.dart';
 import '../../application/item_controller.dart';
 import '../../config/app_config.dart';
+import '../../device/device_identity.dart';
 import '../../domain/item.dart';
 import '../../sync/sync_models.dart';
 import '../../utils/tag_colors.dart';
@@ -30,6 +32,7 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _apiUrlController;
+  late final TextEditingController _deviceNameController;
   late final TextEditingController _deviceIdController;
   late final TextEditingController _collectionIdController;
   late final TextEditingController _collectionNameController;
@@ -48,6 +51,7 @@ class _SettingsPageState extends State<SettingsPage> {
     super.initState();
     final preferences = widget.controller.preferences;
     _apiUrlController = TextEditingController(text: preferences.apiUrl);
+    _deviceNameController = TextEditingController(text: preferences.deviceName);
     _deviceIdController = TextEditingController(text: preferences.deviceId);
     _collectionIdController = TextEditingController(
       text: preferences.defaultCollectionId,
@@ -70,6 +74,7 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   void dispose() {
     _apiUrlController.dispose();
+    _deviceNameController.dispose();
     _deviceIdController.dispose();
     _collectionIdController.dispose();
     _collectionNameController.dispose();
@@ -105,22 +110,13 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               const SizedBox(height: 10),
               TextFormField(
-                controller: _deviceIdController,
+                controller: _deviceNameController,
                 decoration: const InputDecoration(
-                  labelText: '设备 ID',
-                  helperText: '每台设备必须唯一，只能使用字母、数字、点、下划线和连字符',
+                  labelText: '设备名称',
+                  helperText: '用于识别这台设备，可以随时修改',
                   prefixIcon: Icon(Icons.devices_outlined),
                 ),
-                validator: _validateDeviceId,
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _collectionIdController,
-                decoration: const InputDecoration(
-                  labelText: '默认 Collection ID',
-                  helperText: '同一同步实例的设备应使用相同 ID；改名不会迁移旧 Collection',
-                  prefixIcon: Icon(Icons.folder_outlined),
-                ),
+                maxLength: 80,
                 validator: _validateRequired,
               ),
               const SizedBox(height: 10),
@@ -131,6 +127,51 @@ class _SettingsPageState extends State<SettingsPage> {
                   prefixIcon: Icon(Icons.label_outline),
                 ),
                 validator: _validateRequired,
+              ),
+              const SizedBox(height: 10),
+              ExpansionTile(
+                tilePadding: const EdgeInsets.symmetric(horizontal: 12),
+                childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                leading: const Icon(Icons.tune),
+                title: const Text('高级连接设置'),
+                subtitle: const Text('设备和 Collection 的内部标识'),
+                children: [
+                  TextFormField(
+                    controller: _deviceIdController,
+                    readOnly: true,
+                    decoration: InputDecoration(
+                      labelText: '设备 ID（自动管理）',
+                      helperText: '重建设备身份不会改写尚未同步的旧变更',
+                      prefixIcon: const Icon(Icons.fingerprint),
+                      suffixIcon: Wrap(
+                        spacing: 0,
+                        children: [
+                          IconButton(
+                            tooltip: '复制设备 ID',
+                            onPressed: _copyDeviceId,
+                            icon: const Icon(Icons.copy_outlined),
+                          ),
+                          IconButton(
+                            tooltip: '重建设备身份',
+                            onPressed: _regenerateDeviceIdentity,
+                            icon: const Icon(Icons.refresh),
+                          ),
+                        ],
+                      ),
+                    ),
+                    validator: _validateDeviceId,
+                  ),
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: _collectionIdController,
+                    decoration: const InputDecoration(
+                      labelText: '默认 Collection ID',
+                      helperText: '同一同步实例的设备应使用相同 ID；修改不会迁移旧数据',
+                      prefixIcon: Icon(Icons.folder_outlined),
+                    ),
+                    validator: _validateRequired,
+                  ),
+                ],
               ),
               const SizedBox(height: 10),
               TextFormField(
@@ -345,7 +386,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   String? _validateDeviceId(String? raw) {
     final value = raw?.trim() ?? '';
-    if (!RegExp(r'^[A-Za-z0-9][A-Za-z0-9_.-]{1,127}$').hasMatch(value)) {
+    if (!DeviceIdentity.isValid(value)) {
       return '请输入 2-128 位设备 ID（字母、数字、点、下划线或连字符）';
     }
     return null;
@@ -358,6 +399,7 @@ class _SettingsPageState extends State<SettingsPage> {
         ClientPreferences(
           apiUrl: _apiUrlController.text.trim(),
           deviceId: _deviceIdController.text.trim(),
+          deviceName: _deviceNameController.text.trim(),
           defaultCollectionId: _collectionIdController.text.trim(),
           defaultCollectionName: _collectionNameController.text.trim(),
           syncEnabled: _syncEnabled,
@@ -388,6 +430,51 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _refreshAiProviderKeys() async {
     final providers = await widget.controller.refreshAiProviderKeyStatus();
     if (mounted) setState(() => _aiProviders = providers);
+  }
+
+  Future<void> _copyDeviceId() async {
+    await Clipboard.setData(ClipboardData(text: _deviceIdController.text));
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('设备 ID 已复制')));
+  }
+
+  Future<void> _regenerateDeviceIdentity() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('重建设备身份？'),
+        content: const Text(
+          '只有复制安装、设备身份冲突或排查同步问题时才需要重建。'
+          '尚未同步的旧变更会继续使用旧 ID 上传，新变更将使用新 ID。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('重建'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      final preferences = await widget.controller.regenerateDeviceIdentity();
+      if (!mounted) return;
+      setState(() => _deviceIdController.text = preferences.deviceId);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已生成新的设备 ID')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('重建设备身份失败：$error')));
+    }
   }
 
   Future<void> _saveAiPreferences() async {

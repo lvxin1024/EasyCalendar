@@ -171,6 +171,7 @@ class ClientPreferences {
   const ClientPreferences({
     required this.apiUrl,
     this.deviceId = 'my-easycalendar-client',
+    this.deviceName = '',
     this.defaultCollectionId = 'collection_local',
     this.defaultCollectionName = '我的日程',
     required this.syncEnabled,
@@ -184,6 +185,7 @@ class ClientPreferences {
 
   final String apiUrl;
   final String deviceId;
+  final String deviceName;
   final String defaultCollectionId;
   final String defaultCollectionName;
   final bool syncEnabled;
@@ -197,6 +199,7 @@ class ClientPreferences {
   ClientPreferences copyWith({
     String? apiUrl,
     String? deviceId,
+    String? deviceName,
     String? defaultCollectionId,
     String? defaultCollectionName,
     bool? syncEnabled,
@@ -209,6 +212,7 @@ class ClientPreferences {
   }) => ClientPreferences(
     apiUrl: apiUrl ?? this.apiUrl,
     deviceId: deviceId ?? this.deviceId,
+    deviceName: deviceName ?? this.deviceName,
     defaultCollectionId: defaultCollectionId ?? this.defaultCollectionId,
     defaultCollectionName: defaultCollectionName ?? this.defaultCollectionName,
     syncEnabled: syncEnabled ?? this.syncEnabled,

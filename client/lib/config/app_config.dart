@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../device/device_identity.dart';
+
 class AppConfig {
   const AppConfig({
     required this.appName,
@@ -16,7 +18,8 @@ class AppConfig {
     required this.notificationsEnabled,
   });
 
-  factory AppConfig.fromEnvironment() {
+  factory AppConfig.fromEnvironment({DeviceIdentity? deviceIdentity}) {
+    final identity = deviceIdentity ?? DeviceIdentity();
     const localeName = String.fromEnvironment(
       'EASYCALENDAR_LOCALE',
       defaultValue: 'zh-CN',
@@ -24,6 +27,10 @@ class AppConfig {
     const colorValue = String.fromEnvironment(
       'EASYCALENDAR_DEFAULT_COLLECTION_COLOR',
       defaultValue: '#2563EB',
+    );
+    const configuredDeviceId = String.fromEnvironment(
+      'EASYCALENDAR_DEVICE_ID',
+      defaultValue: '',
     );
     return AppConfig(
       appName: const String.fromEnvironment(
@@ -48,10 +55,7 @@ class AppConfig {
         'EASYCALENDAR_DATABASE_NAME',
         defaultValue: 'easycalendar.sqlite3',
       ),
-      deviceId: const String.fromEnvironment(
-        'EASYCALENDAR_DEVICE_ID',
-        defaultValue: 'my-easycalendar-client',
-      ),
+      deviceId: identity.resolveInitialId(configuredDeviceId),
       apiUrl: const String.fromEnvironment(
         'EASYCALENDAR_API_URL',
         defaultValue: 'http://localhost:8000',
