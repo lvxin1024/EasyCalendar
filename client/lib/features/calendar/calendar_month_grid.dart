@@ -11,12 +11,14 @@ class CalendarMonthGrid extends StatelessWidget {
     required this.navigation,
     required this.items,
     required this.onEdit,
+    required this.onDateSelected,
     this.tagColors = const {},
   });
 
   final CalendarNavigationController navigation;
   final List<CalendarItem> items;
   final ValueChanged<CalendarItem> onEdit;
+  final ValueChanged<DateTime> onDateSelected;
   final Map<String, int> tagColors;
 
   @override
@@ -56,6 +58,7 @@ class CalendarMonthGrid extends StatelessWidget {
                       items: items,
                       navigation: navigation,
                       onEdit: onEdit,
+                      onDateSelected: onDateSelected,
                       tagColors: tagColors,
                     ),
                 ],
@@ -101,6 +104,7 @@ class _MonthWeekRow extends StatelessWidget {
     required this.items,
     required this.navigation,
     required this.onEdit,
+    required this.onDateSelected,
     required this.tagColors,
   });
 
@@ -110,6 +114,7 @@ class _MonthWeekRow extends StatelessWidget {
   final List<CalendarItem> items;
   final CalendarNavigationController navigation;
   final ValueChanged<CalendarItem> onEdit;
+  final ValueChanged<DateTime> onDateSelected;
   final Map<String, int> tagColors;
 
   @override
@@ -148,7 +153,7 @@ class _MonthWeekRow extends StatelessWidget {
                 isCurrentMonth: date.month == currentMonth,
                 isSelected: _sameDate(date, selectedDate),
                 events: navigation.eventsForDate(items, date),
-                onSelect: () => navigation.selectDate(date),
+                onSelect: () => onDateSelected(date),
                 onEdit: onEdit,
                 tagColors: tagColors,
               ),

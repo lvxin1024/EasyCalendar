@@ -34,6 +34,7 @@ class SyncCoordinator extends ChangeNotifier {
   SyncSnapshot _snapshot = const SyncSnapshot.disabled();
   StreamSubscription<bool>? _connectivitySubscription;
   Timer? _retryTimer;
+  Timer? _periodicSyncTimer;
   Future<void>? _activeSync;
   Uri? _serverUrl;
   bool _enabled = false;
@@ -69,6 +70,7 @@ class SyncCoordinator extends ChangeNotifier {
     _enabled = enabled;
     _serverUrl = Uri.tryParse(serverUrl);
     _retryTimer?.cancel();
+    _periodicSyncTimer?.cancel();
     if (!enabled) {
       _setSnapshot(const SyncSnapshot.disabled());
     } else if (!_tokenConfigured) {
@@ -76,6 +78,11 @@ class SyncCoordinator extends ChangeNotifier {
     } else if (_snapshot.phase == SyncPhase.disabled ||
         _snapshot.phase == SyncPhase.needsAuthentication) {
       _setSnapshot(const SyncSnapshot(phase: SyncPhase.idle));
+    }
+    if (enabled) {
+      _periodicSyncTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+        unawaited(synchronize());
+      });
     }
   }
 
@@ -261,6 +268,7 @@ class SyncCoordinator extends ChangeNotifier {
   @override
   void dispose() {
     _retryTimer?.cancel();
+    _periodicSyncTimer?.cancel();
     unawaited(_connectivitySubscription?.cancel());
     super.dispose();
   }

@@ -73,6 +73,16 @@ void main() {
     expect(placement.startMinutes, 14 * 60 + 30);
     expect(placement.endMinutes, 15 * 60);
   });
+
+  test('snaps timeline taps to quarter hours', () {
+    expect(snapTimelineMinutes(0, 72), 0);
+    expect(snapTimelineMinutes(7 * 72 / 60, 72), 0);
+    expect(snapTimelineMinutes(8 * 72 / 60, 72), 15);
+    expect(snapTimelineMinutes(22 * 72 / 60, 72), 15);
+    expect(snapTimelineMinutes(23 * 72 / 60, 72), 30);
+    expect(snapTimelineMinutes(53 * 72 / 60, 72), 60);
+    expect(snapTimelineMinutes(24 * 72, 72), 23 * 60);
+  });
 }
 
 CalendarItem _event(

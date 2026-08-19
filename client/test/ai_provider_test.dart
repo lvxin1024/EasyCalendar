@@ -106,8 +106,10 @@ void main() {
     'provider connection test uses the pending key without storing it',
     () async {
       late String? authorization;
+      late Uri requestedUrl;
       final tester = AiProviderConnectionTester(
         client: MockClient((request) async {
+          requestedUrl = request.url;
           authorization = request.headers['authorization'];
           return http.Response('{"data":[]}', 200);
         }),
@@ -125,6 +127,7 @@ void main() {
       );
 
       expect(authorization, 'Bearer unsaved-secret');
+      expect(requestedUrl, Uri.parse('https://ai.example.com/v1/models'));
     },
   );
 

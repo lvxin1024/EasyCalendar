@@ -13,11 +13,15 @@ class ItemEditorPage extends StatefulWidget {
     required this.config,
     required this.controller,
     this.item,
+    this.initialStartAt,
+    this.initialEndAt,
   });
 
   final AppConfig config;
   final ItemController controller;
   final CalendarItem? item;
+  final DateTime? initialStartAt;
+  final DateTime? initialEndAt;
 
   @override
   State<ItemEditorPage> createState() => _ItemEditorPageState();
@@ -56,8 +60,14 @@ class _ItemEditorPageState extends State<ItemEditorPage> {
     _reminderEnabled = item?.reminderEnabled ?? false;
     _reminderMinutes = item?.reminderMinutes ?? 30;
     _priority = item?.priority;
-    _startAt = item?.startAt ?? now.add(const Duration(hours: 1));
-    _endAt = item?.endAt ?? now.add(const Duration(hours: 2));
+    _startAt =
+        item?.startAt ??
+        widget.initialStartAt ??
+        now.add(const Duration(hours: 1));
+    _endAt =
+        item?.endAt ??
+        widget.initialEndAt ??
+        _startAt!.add(const Duration(hours: 1));
     _dueAt = item?.dueAt;
     _recurrenceFrequency = _frequencyFromRule(item?.recurrence);
     _recurrenceUntil = _untilFromRule(item?.recurrence);
@@ -216,6 +226,23 @@ class _ItemEditorPageState extends State<ItemEditorPage> {
                     prefixIcon: Icon(Icons.sell_outlined),
                   ),
                 ),
+                if (_availableTags.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text('已有标签', style: Theme.of(context).textTheme.labelMedium),
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 2,
+                    children: [
+                      for (final tag in _availableTags)
+                        FilterChip(
+                          label: Text(tag),
+                          selected: _enteredTags.contains(tag),
+                          onSelected: (_) => _toggleTag(tag),
+                        ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 12),
                 DropdownButtonFormField<ItemStatus>(
                   initialValue: _status,
@@ -384,6 +411,36 @@ class _ItemEditorPageState extends State<ItemEditorPage> {
         _recurrenceUntil = null;
       }
     });
+  }
+
+  List<String> get _availableTags {
+    final tags = <String>{};
+    for (final item in widget.controller.items) {
+      tags.addAll(
+        item.tags.map((tag) => tag.trim()).where((tag) => tag.isNotEmpty),
+      );
+    }
+    return tags.toList()..sort();
+  }
+
+  List<String> get _enteredTags => _tagsController.text
+      .split(',')
+      .map((tag) => tag.trim())
+      .where((tag) => tag.isNotEmpty)
+      .toList(growable: false);
+
+  void _toggleTag(String tag) {
+    final tags = [..._enteredTags];
+    if (tags.contains(tag)) {
+      tags.remove(tag);
+    } else {
+      tags.add(tag);
+    }
+    _tagsController.text = tags.join(', ');
+    _tagsController.selection = TextSelection.fromPosition(
+      TextPosition(offset: _tagsController.text.length),
+    );
+    setState(() {});
   }
 
   Future<void> _save() async {

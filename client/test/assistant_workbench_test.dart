@@ -80,6 +80,10 @@ void main() {
 
       expect(result.candidates.map((value) => value.title), ['评审', '提交报告']);
       expect(result.issues, isEmpty);
+      expect(
+        captured.url,
+        Uri.parse('https://ai.example.com/v1/chat/completions'),
+      );
       expect(captured.headers['Authorization'], 'Bearer top-secret');
       expect(captured.body, isNot(contains('top-secret')));
     },

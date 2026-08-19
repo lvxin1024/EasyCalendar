@@ -37,8 +37,8 @@ class AiAssistantClient {
         'Use ISO 8601 times and include source_text_span when possible. '
         'Timezone: $timezone. Input: $text';
     final endpoint = provider.kind == AiProviderKind.ollama
-        ? base.resolve('/api/chat')
-        : base.resolve('/chat/completions');
+        ? resolveAiProviderEndpoint(base, 'api/chat')
+        : resolveAiProviderEndpoint(base, 'chat/completions');
     final payload = provider.kind == AiProviderKind.ollama
         ? {
             ...provider.payloadRequestParameters,

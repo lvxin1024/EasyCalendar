@@ -93,22 +93,35 @@ class LocalItemRepository
     }
     final factory = _databaseFactoryOverride ?? _databaseFactory();
     await _backupBeforeMigrationIfNeeded(factory);
-    _database = await factory.openDatabase(
-      databasePath!,
-      options: OpenDatabaseOptions(
-        version: schemaVersion,
-        onConfigure: (database) async {
-          await database.execute('PRAGMA foreign_keys = ON');
-        },
-        onCreate: _createSchema,
-        onUpgrade: _upgradeSchema,
-      ),
-    );
-    await _ensureDefaultCollection();
-    await _ensureLegacySyncHeads();
+    try {
+      _database = await factory.openDatabase(
+        databasePath!,
+        options: OpenDatabaseOptions(
+          version: schemaVersion,
+          onConfigure: (database) async {
+            await database.execute('PRAGMA foreign_keys = ON');
+          },
+          onCreate: _createSchema,
+          onUpgrade: _upgradeSchema,
+        ),
+      );
+      await _ensureDefaultCollection();
+      await _ensureLegacySyncHeads();
+    } catch (_) {
+      // Do not leave a partially opened handle behind. The controller exposes
+      // a retry action when startup fails, and retry must be able to reopen it.
+      await _database?.close();
+      _database = null;
+      rethrow;
+    }
   }
 
   Future<void> _backupBeforeMigrationIfNeeded(DatabaseFactory factory) async {
+    // Android's sqflite implementation owns the database singleton and WAL
+    // lifecycle. Opening a second, non-singleton connection here can leave a
+    // lock behind when the app is relaunched, making the second launch fail.
+    // SQLite's onUpgrade callback still performs the actual migration.
+    if (Platform.isAndroid || Platform.isIOS) return;
     final source = File(databasePath!);
     if (_isMemoryDatabase(databasePath!) || !await source.exists()) return;
     Database? probe;
@@ -117,7 +130,7 @@ class LocalItemRepository
         databasePath!,
         options: OpenDatabaseOptions(singleInstance: false),
       );
-      await probe.execute('PRAGMA wal_checkpoint(FULL)');
+      await probe.rawQuery('PRAGMA wal_checkpoint(FULL)');
       final rows = await probe.rawQuery('PRAGMA user_version');
       final existingVersion = _firstInteger(rows) ?? 0;
       await probe.close();
@@ -174,7 +187,7 @@ class LocalItemRepository
     if (_isMemoryDatabase(databasePath ?? '')) {
       throw UnsupportedError('内存数据库不支持本地快照');
     }
-    await _db.execute('PRAGMA wal_checkpoint(FULL)');
+    await _db.rawQuery('PRAGMA wal_checkpoint(FULL)');
     final rows = await _db.rawQuery('PRAGMA user_version');
     return _copyDatabaseBackup(
       reason: reason,

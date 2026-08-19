@@ -83,7 +83,8 @@ class EasyCalendarApp extends StatelessWidget {
             ),
           ),
         ),
-        home: controller.preferences.onboardingCompleted
+        home: controller.preferences.onboardingCompleted ||
+                (!controller.initialized && controller.error != null)
             ? HomeShell(
                 config: config,
                 controller: controller,

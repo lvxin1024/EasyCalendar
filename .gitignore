@@ -37,13 +37,17 @@ htmlcov/
 .pytest_cache/
 
 # Build
+.tools/
 dist/
 build/
+release/
 *.egg-info/
 server/.generated/
 server/.wrangler/
 server/node_modules/
 client/.dart_tool/
+client/.flutter
+client/.flutter_tool_state
 client/.flutter-plugins
 client/.flutter-plugins-dependencies
 client/.packages

@@ -7,7 +7,6 @@ import '../../utils/date_formatters.dart';
 import 'calendar_navigation_controller.dart';
 import 'calendar_month_grid.dart';
 import 'calendar_time_grid.dart';
-import '../../widgets/tag_filter_bar.dart';
 
 class CalendarPage extends StatefulWidget {
   const CalendarPage({
@@ -16,12 +15,16 @@ class CalendarPage extends StatefulWidget {
     required this.navigation,
     required this.onEdit,
     required this.onDelete,
+    required this.onCreateTimedEvent,
+    required this.onSync,
   });
 
   final ItemController controller;
   final CalendarNavigationController navigation;
   final ValueChanged<CalendarItem> onEdit;
   final ValueChanged<CalendarItem> onDelete;
+  final Future<void> Function(DateTime) onCreateTimedEvent;
+  final VoidCallback onSync;
 
   @override
   State<CalendarPage> createState() => _CalendarPageState();
@@ -29,7 +32,6 @@ class CalendarPage extends StatefulWidget {
 
 class _CalendarPageState extends State<CalendarPage> {
   double _hourHeight = 72;
-  Set<String> _selectedTags = const {};
 
   @override
   Widget build(BuildContext context) {
@@ -42,12 +44,9 @@ class _CalendarPageState extends State<CalendarPage> {
     return AnimatedBuilder(
       animation: widget.navigation,
       builder: (context, _) {
-        final filteredItems = widget.controller.items
-            .where((item) => matchesTagFilter(item, _selectedTags))
-            .toList(growable: false);
-        final events = widget.navigation.eventsInRange(filteredItems);
+        final events = widget.navigation.eventsInRange(widget.controller.items);
         final dues =
-            filteredItems
+            widget.controller.items
                 .where(
                   (item) =>
                       item.type == ItemType.task &&
@@ -55,48 +54,186 @@ class _CalendarPageState extends State<CalendarPage> {
                 )
                 .toList(growable: false)
               ..sort((left, right) => left.dueAt!.compareTo(right.dueAt!));
-        final availableTags = tagsFromItems(widget.controller.items);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _CalendarToolbar(navigation: widget.navigation),
-            const Divider(),
-            TagFilterBar(
-              tags: availableTags,
-              selectedTags: _selectedTags,
-              colors: widget.controller.preferences.tagColors,
-              onChanged: (value) => setState(() => _selectedTags = value),
+            _CalendarViewModeBar(
+              navigation: widget.navigation,
+              onSync: widget.onSync,
             ),
             if (dues.isNotEmpty)
               _PinnedDueStrip(items: dues, onEdit: widget.onEdit),
             Expanded(
-              child: widget.navigation.mode == CalendarViewMode.month
-                  ? CalendarMonthGrid(
-                      navigation: widget.navigation,
-                      items: widget.navigation.calendarItemsInRange(
-                        widget.controller.items,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 260),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, animation) {
+                  final offset =
+                      Tween<Offset>(
+                        begin: const Offset(0.06, 0),
+                        end: Offset.zero,
+                      ).animate(
+                        CurvedAnimation(
+                          parent: animation,
+                          curve: Curves.easeOut,
+                        ),
+                      );
+                  return FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(position: offset, child: child),
+                  );
+                },
+                child: NotificationListener<ScrollMetricsNotification>(
+                  onNotification: _handleScrollMetrics,
+                  child: NotificationListener<ScrollNotification>(
+                    onNotification: _handleScrollNotification,
+                    child: Listener(
+                      key: ValueKey(
+                        '${widget.navigation.mode.name}-'
+                        '${widget.navigation.rangeStart.toIso8601String()}',
                       ),
-                      onEdit: widget.onEdit,
-                      tagColors: widget.controller.preferences.tagColors,
-                    )
-                  : CalendarTimeGrid(
-                      dates: widget.navigation.visibleDates,
-                      items: events,
-                      dueItems: dues,
-                      tagColors: widget.controller.preferences.tagColors,
-                      selectedDate: widget.navigation.selectedDate,
-                      hourHeight: _hourHeight,
-                      onHourHeightChanged: (value) =>
-                          setState(() => _hourHeight = value.clamp(16, 120)),
-                      onDateSelected: widget.navigation.selectDate,
-                      onEdit: widget.onEdit,
+                      onPointerDown: _handleNavigationPointerDown,
+                      onPointerUp: _handleNavigationPointerUp,
+                      onPointerCancel: _handleNavigationPointerCancel,
+                      child: widget.navigation.mode == CalendarViewMode.month
+                          ? CalendarMonthGrid(
+                              navigation: widget.navigation,
+                              items: widget.navigation.calendarItemsInRange(
+                                widget.controller.items,
+                              ),
+                              onEdit: widget.onEdit,
+                              onDateSelected: _openDay,
+                              tagColors:
+                                  widget.controller.preferences.tagColors,
+                            )
+                          : CalendarTimeGrid(
+                              dates: widget.navigation.visibleDates,
+                              items: events,
+                              dueItems: dues,
+                              tagColors:
+                                  widget.controller.preferences.tagColors,
+                              selectedDate: widget.navigation.selectedDate,
+                              hourHeight: _hourHeight,
+                              onHourHeightChanged: (value) => setState(
+                                () => _hourHeight = value.clamp(16, 120),
+                              ),
+                              onDateSelected: (date) =>
+                                  widget.navigation.mode ==
+                                      CalendarViewMode.week
+                                  ? _openDay(date)
+                                  : widget.navigation.selectDate(date),
+                              onEdit: widget.onEdit,
+                              onCreateTimedEvent: widget.onCreateTimedEvent,
+                            ),
                     ),
+                  ),
+                ),
+              ),
             ),
           ],
         );
       },
     );
   }
+
+  final Map<int, ({Offset position, bool atStart, bool atEnd})>
+  _navigationPointers = {};
+  bool _atHorizontalStart = true;
+  bool _atHorizontalEnd = false;
+
+  void _handleNavigationPointerDown(PointerDownEvent event) {
+    _navigationPointers[event.pointer] = (
+      position: event.position,
+      atStart: _atHorizontalStart,
+      atEnd: _atHorizontalEnd,
+    );
+  }
+
+  void _handleNavigationPointerUp(PointerUpEvent event) {
+    final start = _navigationPointers.remove(event.pointer);
+    if (start == null || _navigationPointers.isNotEmpty) return;
+    final delta = event.position - start.position;
+    final threshold = widget.navigation.mode == CalendarViewMode.day
+        ? 48.0
+        : 72.0;
+    if (delta.dx.abs() < threshold || delta.dx.abs() < delta.dy.abs()) return;
+    if (widget.navigation.mode != CalendarViewMode.day) {
+      if (delta.dx > 0 && !start.atStart) return;
+      if (delta.dx < 0 && !start.atEnd) return;
+    }
+    delta.dx > 0 ? widget.navigation.previous() : widget.navigation.next();
+  }
+
+  void _handleNavigationPointerCancel(PointerCancelEvent event) {
+    _navigationPointers.remove(event.pointer);
+  }
+
+  bool _handleScrollMetrics(ScrollMetricsNotification notification) {
+    _updateHorizontalEdges(notification.metrics);
+    return false;
+  }
+
+  bool _handleScrollNotification(ScrollNotification notification) {
+    _updateHorizontalEdges(notification.metrics);
+    return false;
+  }
+
+  void _updateHorizontalEdges(ScrollMetrics metrics) {
+    if (metrics.axis != Axis.horizontal) return;
+    const tolerance = 1.0;
+    _atHorizontalStart = metrics.pixels <= metrics.minScrollExtent + tolerance;
+    _atHorizontalEnd = metrics.pixels >= metrics.maxScrollExtent - tolerance;
+  }
+
+  void _openDay(DateTime date) {
+    widget.navigation.selectDate(date);
+    widget.navigation.setMode(CalendarViewMode.day);
+  }
+}
+
+class _CalendarViewModeBar extends StatelessWidget {
+  const _CalendarViewModeBar({required this.navigation, required this.onSync});
+
+  final CalendarNavigationController navigation;
+  final VoidCallback onSync;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+    child: Row(
+      children: [
+        SegmentedButton<CalendarViewMode>(
+          showSelectedIcon: false,
+          segments: const [
+            ButtonSegment(
+              value: CalendarViewMode.day,
+              icon: Icon(Icons.view_day_outlined),
+              label: Text('日'),
+            ),
+            ButtonSegment(
+              value: CalendarViewMode.week,
+              icon: Icon(Icons.view_week_outlined),
+              label: Text('周'),
+            ),
+            ButtonSegment(
+              value: CalendarViewMode.month,
+              icon: Icon(Icons.calendar_view_month_outlined),
+              label: Text('月'),
+            ),
+          ],
+          selected: {navigation.mode},
+          onSelectionChanged: (value) => navigation.setMode(value.first),
+        ),
+        const Spacer(),
+        IconButton(
+          tooltip: '同步刷新',
+          onPressed: onSync,
+          icon: const Icon(Icons.sync),
+        ),
+      ],
+    ),
+  );
 }
 
 class _PinnedDueStrip extends StatelessWidget {
@@ -107,14 +244,14 @@ class _PinnedDueStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    constraints: const BoxConstraints(maxHeight: 82),
-    padding: const EdgeInsets.fromLTRB(20, 6, 20, 8),
+    constraints: const BoxConstraints(maxHeight: 62),
+    padding: const EdgeInsets.fromLTRB(20, 4, 20, 5),
     color: Theme.of(context).colorScheme.errorContainer.withAlpha(90),
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.only(top: 5, right: 12),
+          padding: const EdgeInsets.only(top: 3, right: 10),
           child: Text(
             '未完成 Due',
             style: Theme.of(
@@ -153,89 +290,3 @@ class _PinnedDueStrip extends StatelessWidget {
     return '${formatMonthDay(context, local)} ${formatTime(context, local)}';
   }
 }
-
-class _CalendarToolbar extends StatelessWidget {
-  const _CalendarToolbar({required this.navigation});
-
-  final CalendarNavigationController navigation;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
-    child: Wrap(
-      spacing: 16,
-      runSpacing: 12,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      alignment: WrapAlignment.spaceBetween,
-      children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              tooltip: '上一${_periodLabel(navigation.mode)}',
-              onPressed: navigation.previous,
-              icon: const Icon(Icons.chevron_left),
-            ),
-            OutlinedButton(
-              onPressed: navigation.goToToday,
-              child: const Text('今天'),
-            ),
-            IconButton(
-              tooltip: '下一${_periodLabel(navigation.mode)}',
-              onPressed: navigation.next,
-              icon: const Icon(Icons.chevron_right),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              _rangeTitle(context, navigation),
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-          ],
-        ),
-        SegmentedButton<CalendarViewMode>(
-          showSelectedIcon: false,
-          segments: const [
-            ButtonSegment(
-              value: CalendarViewMode.day,
-              icon: Icon(Icons.view_day_outlined),
-              label: Text('日'),
-            ),
-            ButtonSegment(
-              value: CalendarViewMode.week,
-              icon: Icon(Icons.view_week_outlined),
-              label: Text('周'),
-            ),
-            ButtonSegment(
-              value: CalendarViewMode.month,
-              icon: Icon(Icons.calendar_view_month_outlined),
-              label: Text('月'),
-            ),
-          ],
-          selected: {navigation.mode},
-          onSelectionChanged: (value) => navigation.setMode(value.first),
-        ),
-      ],
-    ),
-  );
-}
-
-String _rangeTitle(
-  BuildContext context,
-  CalendarNavigationController navigation,
-) => switch (navigation.mode) {
-  CalendarViewMode.day => formatDateWithWeekday(
-    context,
-    navigation.selectedDate,
-  ),
-  CalendarViewMode.week =>
-    '${formatMonthDay(context, navigation.rangeStart)}'
-        ' - '
-        '${formatMonthDay(context, navigation.rangeEnd.subtract(const Duration(days: 1)))}',
-  CalendarViewMode.month => formatMonth(context, navigation.selectedDate),
-};
-
-String _periodLabel(CalendarViewMode mode) => switch (mode) {
-  CalendarViewMode.day => '天',
-  CalendarViewMode.week => '周',
-  CalendarViewMode.month => '月',
-};

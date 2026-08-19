@@ -2,6 +2,15 @@ import 'dart:convert';
 
 enum AiProviderKind { openaiCompatible, ollama }
 
+Uri resolveAiProviderEndpoint(Uri base, String endpoint) => base.replace(
+  pathSegments: [
+    ...base.pathSegments.where((segment) => segment.isNotEmpty),
+    ...endpoint.split('/').where((segment) => segment.isNotEmpty),
+  ],
+  query: null,
+  fragment: null,
+);
+
 AiProviderKind aiProviderKindFromJson(Object? value) {
   return switch (value) {
     'ollama' => AiProviderKind.ollama,

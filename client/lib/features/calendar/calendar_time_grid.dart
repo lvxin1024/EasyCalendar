@@ -139,6 +139,7 @@ class CalendarTimeGrid extends StatefulWidget {
     required this.onHourHeightChanged,
     required this.onDateSelected,
     required this.onEdit,
+    required this.onCreateTimedEvent,
   });
 
   final List<DateTime> dates;
@@ -150,6 +151,7 @@ class CalendarTimeGrid extends StatefulWidget {
   final ValueChanged<double> onHourHeightChanged;
   final ValueChanged<DateTime> onDateSelected;
   final ValueChanged<CalendarItem> onEdit;
+  final Future<void> Function(DateTime) onCreateTimedEvent;
 
   @override
   State<CalendarTimeGrid> createState() => _CalendarTimeGridState();
@@ -158,6 +160,9 @@ class CalendarTimeGrid extends StatefulWidget {
 class _CalendarTimeGridState extends State<CalendarTimeGrid> {
   final _verticalController = ScrollController();
   final _horizontalController = ScrollController();
+  final Map<int, Offset> _activePointers = {};
+  double? _pinchStartDistance;
+  double? _pinchStartHourHeight;
 
   @override
   void initState() {
@@ -185,8 +190,10 @@ class _CalendarTimeGridState extends State<CalendarTimeGrid> {
       Expanded(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final minimumWidth = widget.dates.length == 1 ? 420.0 : 900.0;
-            final width = math.max(constraints.maxWidth, minimumWidth);
+            final dateColumnWidth = widget.dates.length == 1
+                ? math.max(210.0, constraints.maxWidth - 48)
+                : 72.0;
+            final width = 48.0 + dateColumnWidth * widget.dates.length;
             return Scrollbar(
               controller: _horizontalController,
               notificationPredicate: (notification) =>
@@ -213,6 +220,10 @@ class _CalendarTimeGridState extends State<CalendarTimeGrid> {
                       Expanded(
                         child: Listener(
                           onPointerSignal: _handlePointerSignal,
+                          onPointerDown: _handlePointerDown,
+                          onPointerMove: _handlePointerMove,
+                          onPointerUp: _handlePointerUp,
+                          onPointerCancel: _handlePointerCancel,
                           child: Scrollbar(
                             controller: _verticalController,
                             thumbVisibility: true,
@@ -224,15 +235,25 @@ class _CalendarTimeGridState extends State<CalendarTimeGrid> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     _TimeGutter(hourHeight: widget.hourHeight),
-                                    for (final date in widget.dates)
-                                      Expanded(
+                                    for (
+                                      var dateIndex = 0;
+                                      dateIndex < widget.dates.length;
+                                      dateIndex++
+                                    )
+                                      SizedBox(
+                                        width: dateColumnWidth,
                                         child: _DayColumn(
-                                          date: date,
+                                          date: widget.dates[dateIndex],
+                                          dates: widget.dates,
+                                          dateIndex: dateIndex,
+                                          columnWidth: dateColumnWidth,
                                           items: widget.items,
                                           dueItems: widget.dueItems,
                                           tagColors: widget.tagColors,
                                           hourHeight: widget.hourHeight,
                                           onEdit: widget.onEdit,
+                                          onCreateTimedEvent:
+                                              widget.onCreateTimedEvent,
                                         ),
                                       ),
                                   ],
@@ -260,6 +281,53 @@ class _CalendarTimeGridState extends State<CalendarTimeGrid> {
     widget.onHourHeightChanged(
       (widget.hourHeight - event.scrollDelta.dy * 0.12).clamp(16, 120),
     );
+  }
+
+  void _handlePointerDown(PointerDownEvent event) {
+    _activePointers[event.pointer] = event.localPosition;
+    if (_activePointers.length != 2) return;
+    _pinchStartDistance = _pointerDistance();
+    _pinchStartHourHeight = widget.hourHeight;
+  }
+
+  void _handlePointerMove(PointerMoveEvent event) {
+    if (!_activePointers.containsKey(event.pointer)) return;
+    _activePointers[event.pointer] = event.localPosition;
+    final startDistance = _pinchStartDistance;
+    final startHourHeight = _pinchStartHourHeight;
+    if (startDistance == null ||
+        startDistance <= 0 ||
+        startHourHeight == null) {
+      return;
+    }
+    final distance = _pointerDistance();
+    if (distance <= 0) return;
+    widget.onHourHeightChanged(
+      (startHourHeight * distance / startDistance).clamp(16, 120),
+    );
+  }
+
+  void _handlePointerUp(PointerUpEvent event) {
+    _activePointers.remove(event.pointer);
+    _resetPinchIfNeeded();
+  }
+
+  void _handlePointerCancel(PointerCancelEvent event) {
+    _activePointers.remove(event.pointer);
+    _resetPinchIfNeeded();
+  }
+
+  void _resetPinchIfNeeded() {
+    if (_activePointers.length < 2) {
+      _pinchStartDistance = null;
+      _pinchStartHourHeight = null;
+    }
+  }
+
+  double _pointerDistance() {
+    if (_activePointers.length < 2) return 0;
+    final positions = _activePointers.values.take(2).toList(growable: false);
+    return (positions[0] - positions[1]).distance;
   }
 
   void _scrollToWorkingHours() {
@@ -339,10 +407,10 @@ class _DateHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-    height: 48,
+    height: 30,
     child: Row(
       children: [
-        const SizedBox(width: 58),
+        const SizedBox(width: 48),
         for (final date in dates)
           Expanded(
             child: InkWell(
@@ -357,9 +425,12 @@ class _DateHeader extends StatelessWidget {
                   ),
                 ),
                 child: Center(
-                  child: Text(
-                    formatCompactDateWithWeekday(context, date),
-                    style: Theme.of(context).textTheme.labelLarge,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      formatCompactDateWithWeekday(context, date),
+                      style: Theme.of(context).textTheme.labelSmall,
+                    ),
                   ),
                 ),
               ),
@@ -383,12 +454,12 @@ class _AllDayRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ConstrainedBox(
-    constraints: const BoxConstraints(minHeight: 34, maxHeight: 76),
+    constraints: const BoxConstraints(minHeight: 22, maxHeight: 36),
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SizedBox(
-          width: 58,
+          width: 48,
           child: Center(child: Text('全天', style: TextStyle(fontSize: 11))),
         ),
         for (final date in dates)
@@ -398,13 +469,13 @@ class _AllDayRow extends StatelessWidget {
                 border: Border(left: BorderSide(color: Color(0xFFE4E7EC))),
               ),
               child: Padding(
-                padding: const EdgeInsets.all(3),
+                padding: const EdgeInsets.all(2),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     for (final item in _allDayItems(items, date).take(2))
                       Padding(
-                        padding: const EdgeInsets.only(bottom: 2),
+                        padding: const EdgeInsets.only(bottom: 1),
                         child: _AllDayEvent(
                           item: item,
                           onTap: () => onEdit(item),
@@ -453,7 +524,7 @@ class _TimeGutter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-    width: 58,
+    width: 48,
     child: Stack(
       clipBehavior: Clip.none,
       children: [
@@ -473,56 +544,248 @@ class _TimeGutter extends StatelessWidget {
   );
 }
 
-class _DayColumn extends StatelessWidget {
+class _DayColumn extends StatefulWidget {
   const _DayColumn({
     required this.date,
+    required this.dates,
+    required this.dateIndex,
+    required this.columnWidth,
     required this.items,
     required this.dueItems,
     required this.tagColors,
     required this.hourHeight,
     required this.onEdit,
+    required this.onCreateTimedEvent,
   });
 
   final DateTime date;
+  final List<DateTime> dates;
+  final int dateIndex;
+  final double columnWidth;
   final List<CalendarItem> items;
   final List<CalendarItem> dueItems;
   final Map<String, int> tagColors;
   final double hourHeight;
   final ValueChanged<CalendarItem> onEdit;
+  final Future<void> Function(DateTime) onCreateTimedEvent;
+
+  @override
+  State<_DayColumn> createState() => _DayColumnState();
+}
+
+class _DayColumnState extends State<_DayColumn> {
+  int? _previewStartMinutes;
+  double _previewDragDx = 0;
+  double _dragOriginX = 0;
 
   @override
   Widget build(BuildContext context) {
-    final placements = layoutTimedEvents(items, date, dueItems: dueItems);
+    final placements = layoutTimedEvents(
+      widget.items,
+      widget.date,
+      dueItems: widget.dueItems,
+    );
     return LayoutBuilder(
       builder: (context, constraints) => DecoratedBox(
         decoration: const BoxDecoration(
           border: Border(left: BorderSide(color: Color(0xFFE4E7EC))),
         ),
         child: Stack(
+          clipBehavior: Clip.none,
           children: [
             for (var hour = 0; hour < 24; hour += 1)
               Positioned(
-                top: hour * hourHeight,
+                top: hour * widget.hourHeight,
                 left: 0,
                 right: 0,
                 child: const Divider(height: 1, color: Color(0xFFE4E7EC)),
               ),
-            if (_isSameDate(date, configuredNow()))
-              _CurrentTimeLine(hourHeight: hourHeight),
+            if (_isSameDate(widget.date, configuredNow()))
+              _CurrentTimeLine(hourHeight: widget.hourHeight),
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onLongPressStart: (details) =>
+                    _beginDrag(details.localPosition),
+                onLongPressMoveUpdate: (details) =>
+                    _updateDrag(details.localPosition),
+                onLongPressEnd: (_) => _finishDrag(),
+                onLongPressCancel: _clearPreview,
+                child: const SizedBox.expand(),
+              ),
+            ),
+            if (_previewStartMinutes != null)
+              _PreviewEvent(
+                startMinutes: _previewStartMinutes!,
+                hourHeight: widget.hourHeight,
+                width: constraints.maxWidth,
+                horizontalOffset: _previewDragDx,
+              ),
+            if (_previewStartMinutes != null)
+              _PreviewTimeLabel(
+                startMinutes: _previewStartMinutes!,
+                hourHeight: widget.hourHeight,
+                horizontalOffset: _previewDragDx,
+              ),
             for (final placement in placements)
               _PositionedEvent(
                 placement: placement,
                 availableWidth: constraints.maxWidth,
-                hourHeight: hourHeight,
-                tagColors: tagColors,
-                onTap: () => onEdit(placement.item),
+                hourHeight: widget.hourHeight,
+                tagColors: widget.tagColors,
+                onTap: () => widget.onEdit(placement.item),
               ),
           ],
         ),
       ),
     );
   }
+
+  void _beginDrag(Offset position) {
+    _dragOriginX = position.dx;
+    setState(() {
+      _previewStartMinutes = snapTimelineMinutes(
+        position.dy,
+        widget.hourHeight,
+      );
+      _previewDragDx = 0;
+    });
+  }
+
+  void _updateDrag(Offset position) {
+    if (_previewStartMinutes == null) return;
+    setState(() {
+      _previewStartMinutes = snapTimelineMinutes(
+        position.dy,
+        widget.hourHeight,
+      );
+      _previewDragDx = position.dx - _dragOriginX;
+    });
+  }
+
+  Future<void> _finishDrag() async {
+    if (_previewStartMinutes == null) return;
+    final shift = (_previewDragDx / widget.columnWidth).round();
+    final targetIndex = (widget.dateIndex + shift).clamp(
+      0,
+      widget.dates.length - 1,
+    );
+    await _commitPreview(targetIndex);
+  }
+
+  Future<void> _commitPreview(int targetIndex) async {
+    final startMinutes = _previewStartMinutes;
+    if (startMinutes == null) return;
+    final start = timelineDateTimeForOffset(
+      widget.dates[targetIndex],
+      startMinutes / 60 * widget.hourHeight,
+      widget.hourHeight,
+    );
+    try {
+      // Let the snapped block and gutter marker render before navigation.
+      await Future<void>.delayed(const Duration(milliseconds: 220));
+      if (!mounted) return;
+      await widget.onCreateTimedEvent(start);
+    } finally {
+      if (mounted) _clearPreview();
+    }
+  }
+
+  void _clearPreview() {
+    if (!mounted || _previewStartMinutes == null) return;
+    setState(() {
+      _previewStartMinutes = null;
+      _previewDragDx = 0;
+    });
+  }
 }
+
+class _PreviewEvent extends StatelessWidget {
+  const _PreviewEvent({
+    required this.startMinutes,
+    required this.hourHeight,
+    required this.width,
+    required this.horizontalOffset,
+  });
+
+  final int startMinutes;
+  final double hourHeight;
+  final double width;
+  final double horizontalOffset;
+
+  @override
+  Widget build(BuildContext context) {
+    final top = startMinutes / 60 * hourHeight;
+    return Positioned(
+      top: top + 1,
+      left: 3 + horizontalOffset,
+      width: math.max(8, width - 6),
+      height: math.max(24, hourHeight - 2),
+      child: IgnorePointer(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: Theme.of(
+              context,
+            ).colorScheme.primaryContainer.withAlpha(210),
+            border: Border.all(color: Theme.of(context).colorScheme.primary),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+            child: Text(
+              '新建日程 · ${_formatPreviewTime(startMinutes)}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: Theme.of(context).colorScheme.onPrimaryContainer,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PreviewTimeLabel extends StatelessWidget {
+  const _PreviewTimeLabel({
+    required this.startMinutes,
+    required this.hourHeight,
+    required this.horizontalOffset,
+  });
+
+  final int startMinutes;
+  final double hourHeight;
+  final double horizontalOffset;
+
+  @override
+  Widget build(BuildContext context) => Positioned(
+    top: startMinutes / 60 * hourHeight - 9,
+    left: -47 + horizontalOffset,
+    width: 44,
+    child: DecoratedBox(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primary,
+        borderRadius: BorderRadius.circular(3),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+        child: Text(
+          _formatPreviewTime(startMinutes),
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: Theme.of(context).colorScheme.onPrimary,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+String _formatPreviewTime(int minutes) =>
+    '${(minutes ~/ 60).toString().padLeft(2, '0')}:${(minutes % 60).toString().padLeft(2, '0')}';
 
 class _PositionedEvent extends StatelessWidget {
   const _PositionedEvent({
@@ -627,6 +890,30 @@ String _eventTime(BuildContext context, CalendarItem item) {
   final end = item.endAt;
   if (end == null) return formatTime(context, item.startAt!);
   return '${formatTime(context, item.startAt!)}–${formatTime(context, end)}';
+}
+
+/// Rounds a timeline tap to the nearest quarter hour and keeps it within the
+/// last hour that can still host a one-hour event on the same day.
+int snapTimelineMinutes(double localY, double hourHeight) {
+  if (hourHeight <= 0) return 0;
+  final rawMinutes = (localY / hourHeight * 60).round();
+  final snapped = ((rawMinutes + 7) ~/ 15) * 15;
+  return snapped.clamp(0, 23 * 60);
+}
+
+DateTime timelineDateTimeForOffset(
+  DateTime date,
+  double localY,
+  double hourHeight,
+) {
+  final minutes = snapTimelineMinutes(localY, hourHeight);
+  return configuredDateTime(
+    year: date.year,
+    month: date.month,
+    day: date.day,
+    hour: minutes ~/ 60,
+    minute: minutes % 60,
+  );
 }
 
 bool _isSameDate(DateTime left, DateTime right) =>

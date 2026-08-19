@@ -84,8 +84,8 @@ class AiProviderConnectionTester {
       );
     }
     final endpoint = config.kind == AiProviderKind.ollama
-        ? base.resolve('/api/tags')
-        : base.resolve('/models');
+        ? resolveAiProviderEndpoint(base, 'api/tags')
+        : resolveAiProviderEndpoint(base, 'models');
     final headers = <String, String>{'Accept': 'application/json'};
     if (config.kind == AiProviderKind.openaiCompatible &&
         (apiKey ?? '').trim().isNotEmpty) {

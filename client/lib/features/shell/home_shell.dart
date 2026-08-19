@@ -63,7 +63,7 @@ class _HomeShellState extends State<HomeShell> {
     NavigationDestination(
       icon: Icon(Icons.calendar_view_week_outlined),
       selectedIcon: Icon(Icons.calendar_view_week),
-      label: '日历',
+      label: '日程',
     ),
     NavigationDestination(
       icon: Icon(Icons.view_list_outlined),
@@ -106,104 +106,105 @@ class _HomeShellState extends State<HomeShell> {
         builder: (context, constraints) {
           final wide = constraints.maxWidth >= 900;
           return Scaffold(
-            appBar: wide
-                ? null
-                : AppBar(
-                    title: Text(widget.config.appName),
-                    actions: [
-                      IconButton(
-                        tooltip: '刷新',
-                        onPressed: widget.controller.refresh,
-                        icon: const Icon(Icons.refresh),
-                      ),
-                    ],
-                  ),
-            body: Row(
-              children: [
-                if (wide) ...[
-                  NavigationRail(
-                    extended: constraints.maxWidth >= 1180,
-                    minExtendedWidth: 220,
-                    selectedIndex: _selectedIndex,
-                    onDestinationSelected: _selectDestination,
-                    leading: Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 20, 12, 28),
-                      child: constraints.maxWidth >= 1180
-                          ? Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
+            appBar: null,
+            body: SafeArea(
+              child: Row(
+                children: [
+                  if (wide) ...[
+                    NavigationRail(
+                      extended: constraints.maxWidth >= 1180,
+                      minExtendedWidth: 220,
+                      selectedIndex: _selectedIndex,
+                      onDestinationSelected: _selectDestination,
+                      leading: Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 20, 12, 28),
+                        child: constraints.maxWidth >= 1180
+                            ? Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.calendar_month,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    widget.config.appName,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleMedium,
+                                  ),
+                                ],
+                              )
+                            : Tooltip(
+                                message: widget.config.appName,
+                                child: Icon(
                                   Icons.calendar_month,
                                   color: Theme.of(context).colorScheme.primary,
                                 ),
-                                const SizedBox(width: 10),
-                                Text(
-                                  widget.config.appName,
-                                  style: Theme.of(
-                                    context,
-                                  ).textTheme.titleMedium,
-                                ),
-                              ],
-                            )
-                          : Tooltip(
-                              message: widget.config.appName,
-                              child: Icon(
-                                Icons.calendar_month,
-                                color: Theme.of(context).colorScheme.primary,
                               ),
-                            ),
+                      ),
+                      destinations: const [
+                        NavigationRailDestination(
+                          icon: Icon(Icons.calendar_view_week_outlined),
+                          selectedIcon: Icon(Icons.calendar_view_week),
+                          label: Text('日历'),
+                        ),
+                        NavigationRailDestination(
+                          icon: Icon(Icons.view_list_outlined),
+                          selectedIcon: Icon(Icons.view_list),
+                          label: Text('全部'),
+                        ),
+                        NavigationRailDestination(
+                          icon: Icon(Icons.check_circle_outline),
+                          selectedIcon: Icon(Icons.check_circle),
+                          label: Text('Due'),
+                        ),
+                        NavigationRailDestination(
+                          icon: Icon(Icons.link_outlined),
+                          selectedIcon: Icon(Icons.link),
+                          label: Text('订阅'),
+                        ),
+                        NavigationRailDestination(
+                          icon: Icon(Icons.auto_awesome_outlined),
+                          selectedIcon: Icon(Icons.auto_awesome),
+                          label: Text('助手'),
+                        ),
+                        NavigationRailDestination(
+                          icon: Icon(Icons.settings_outlined),
+                          selectedIcon: Icon(Icons.settings),
+                          label: Text('设置'),
+                        ),
+                      ],
                     ),
-                    destinations: const [
-                      NavigationRailDestination(
-                        icon: Icon(Icons.calendar_view_week_outlined),
-                        selectedIcon: Icon(Icons.calendar_view_week),
-                        label: Text('日历'),
+                    const VerticalDivider(),
+                  ],
+                  Expanded(
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 1100),
+                        child: _currentPage(),
                       ),
-                      NavigationRailDestination(
-                        icon: Icon(Icons.view_list_outlined),
-                        selectedIcon: Icon(Icons.view_list),
-                        label: Text('全部'),
-                      ),
-                      NavigationRailDestination(
-                        icon: Icon(Icons.check_circle_outline),
-                        selectedIcon: Icon(Icons.check_circle),
-                        label: Text('Due'),
-                      ),
-                      NavigationRailDestination(
-                        icon: Icon(Icons.link_outlined),
-                        selectedIcon: Icon(Icons.link),
-                        label: Text('订阅'),
-                      ),
-                      NavigationRailDestination(
-                        icon: Icon(Icons.auto_awesome_outlined),
-                        selectedIcon: Icon(Icons.auto_awesome),
-                        label: Text('助手'),
-                      ),
-                      NavigationRailDestination(
-                        icon: Icon(Icons.settings_outlined),
-                        selectedIcon: Icon(Icons.settings),
-                        label: Text('设置'),
-                      ),
-                    ],
+                    ),
                   ),
-                  const VerticalDivider(),
                 ],
-                Expanded(
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 1100),
-                      child: _currentPage(),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
             bottomNavigationBar: wide
                 ? null
-                : NavigationBar(
-                    selectedIndex: _selectedIndex,
-                    destinations: _destinations,
-                    onDestinationSelected: _selectDestination,
+                : LayoutBuilder(
+                    builder: (context, navigationConstraints) => Listener(
+                      onPointerUp: (event) => _handleBottomNavigationTap(
+                        event,
+                        navigationConstraints.maxWidth,
+                      ),
+                      child: NavigationBar(
+                        selectedIndex: _selectedIndex,
+                        destinations: _destinations,
+                        onDestinationSelected: _selectDestination,
+                      ),
+                    ),
                   ),
             floatingActionButton: _selectedIndex >= 3
                 ? null
@@ -226,6 +227,9 @@ class _HomeShellState extends State<HomeShell> {
       navigation: _calendarNavigation,
       onEdit: _openEditor,
       onDelete: _confirmDelete,
+      onCreateTimedEvent: (startAt) =>
+          _openEditor(null, startAt, startAt.add(const Duration(hours: 1))),
+      onSync: _syncNow,
     ),
     1 => ItemsPage(
       controller: widget.controller,
@@ -245,6 +249,26 @@ class _HomeShellState extends State<HomeShell> {
   };
 
   void _selectDestination(int value) => setState(() => _selectedIndex = value);
+
+  DateTime? _lastCalendarNavigationTap;
+
+  void _handleBottomNavigationTap(PointerUpEvent event, double width) {
+    final itemWidth = width / _destinations.length;
+    if (event.localPosition.dx < 0 || event.localPosition.dx >= itemWidth) {
+      _lastCalendarNavigationTap = null;
+      return;
+    }
+    final now = DateTime.now();
+    final previous = _lastCalendarNavigationTap;
+    if (_selectedIndex == 0 &&
+        previous != null &&
+        now.difference(previous) <= const Duration(milliseconds: 360)) {
+      _lastCalendarNavigationTap = null;
+      _calendarNavigation.goToToday();
+      return;
+    }
+    _lastCalendarNavigationTap = now;
+  }
 
   Future<void> _handleWidgetDeepLink() async {
     final target = widget.widgetDeepLinks.takePendingTarget();
@@ -270,13 +294,19 @@ class _HomeShellState extends State<HomeShell> {
     await _openEditor(item);
   }
 
-  Future<void> _openEditor([CalendarItem? item]) async {
+  Future<void> _openEditor([
+    CalendarItem? item,
+    DateTime? initialStartAt,
+    DateTime? initialEndAt,
+  ]) async {
     await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (context) => ItemEditorPage(
           config: widget.config,
           controller: widget.controller,
           item: item,
+          initialStartAt: initialStartAt,
+          initialEndAt: initialEndAt,
         ),
       ),
     );
@@ -312,6 +342,14 @@ class _HomeShellState extends State<HomeShell> {
   Future<void> _toggleCompleted(CalendarItem item, bool completed) async {
     try {
       await widget.controller.setTaskCompleted(item, completed: completed);
+    } catch (error) {
+      if (mounted) _showError(error);
+    }
+  }
+
+  Future<void> _syncNow() async {
+    try {
+      await widget.controller.synchronizeNow();
     } catch (error) {
       if (mounted) _showError(error);
     }
