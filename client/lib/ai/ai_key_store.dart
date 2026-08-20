@@ -1,5 +1,7 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../platform/secure_storage.dart';
+
 abstract interface class AiApiKeyStore {
   Future<String?> read(String providerId);
   Future<void> write(String providerId, String apiKey);
@@ -8,7 +10,7 @@ abstract interface class AiApiKeyStore {
 
 class SecureAiApiKeyStore implements AiApiKeyStore {
   SecureAiApiKeyStore({FlutterSecureStorage? storage})
-    : _storage = storage ?? const FlutterSecureStorage();
+    : _storage = storage ?? easyCalendarSecureStorage;
 
   final FlutterSecureStorage _storage;
 

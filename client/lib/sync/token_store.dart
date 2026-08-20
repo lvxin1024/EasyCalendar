@@ -1,5 +1,7 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../platform/secure_storage.dart';
+
 abstract interface class SyncTokenStore {
   Future<String?> read();
   Future<void> write(String token);
@@ -8,7 +10,7 @@ abstract interface class SyncTokenStore {
 
 class SecureSyncTokenStore implements SyncTokenStore {
   SecureSyncTokenStore({FlutterSecureStorage? storage})
-    : _storage = storage ?? const FlutterSecureStorage();
+    : _storage = storage ?? easyCalendarSecureStorage;
 
   static const _key = 'easycalendar_admin_token';
   final FlutterSecureStorage _storage;
@@ -25,7 +27,7 @@ class SecureSyncTokenStore implements SyncTokenStore {
 
 class SecureFeatureTokenStore implements SyncTokenStore {
   SecureFeatureTokenStore({FlutterSecureStorage? storage})
-    : _storage = storage ?? const FlutterSecureStorage();
+    : _storage = storage ?? easyCalendarSecureStorage;
 
   static const _key = 'easycalendar_feature_api_token';
   final FlutterSecureStorage _storage;

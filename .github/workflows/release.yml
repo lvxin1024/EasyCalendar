@@ -248,6 +248,7 @@ jobs:
           flutter build macos --release --config-only \
             --build-name "${{ needs.version.outputs.name }}" \
             --build-number "${{ needs.version.outputs.number }}" \
+            --dart-define=EASYCALENDAR_USE_DATA_PROTECTION_KEYCHAIN=${{ steps.signing.outputs.enabled }} \
             --obfuscate --split-debug-info=build/symbols/macos
           xcodebuild \
             -workspace macos/Runner.xcworkspace \
@@ -301,21 +302,25 @@ jobs:
           /usr/libexec/PlistBuddy -c "Delete :com.apple.security.application-groups" "$entitlements"
           /usr/libexec/PlistBuddy -c "Delete :keychain-access-groups" "$entitlements"
 
+          # Ad-hoc signatures have no stable Team ID. Enabling hardened runtime
+          # would make macOS reject the separately signed Flutter frameworks.
           find "$app/Contents/Frameworks" -type f \( -name '*.dylib' -o -perm -111 \) -print0 | while IFS= read -r -d '' binary; do
-            codesign --force --options runtime --sign - "$binary"
+            codesign --force --sign - "$binary"
           done
           find "$app/Contents/Frameworks" -type d -name '*.framework' -print0 | while IFS= read -r -d '' framework; do
-            codesign --force --options runtime --sign - "$framework"
+            codesign --force --sign - "$framework"
           done
-          codesign --force --options runtime --sign - \
+          codesign --force --sign - \
             --entitlements "$entitlements" "$app"
           codesign --verify --deep --strict --verbose=2 "$app"
 
+          rm -rf client/build/release/dmg
           mkdir -p client/build/release/dmg
           cp -R "$app" client/build/release/dmg/EasyCalendar.app
           ln -s /Applications client/build/release/dmg/Applications
           dmg="client/build/release/EasyCalendar-${{ needs.version.outputs.name }}-unsigned-macos.dmg"
           hdiutil create -volname EasyCalendar -srcfolder client/build/release/dmg -ov -format UDZO "$dmg"
+          rm -rf client/build/release/dmg
       - name: Package macOS debug symbols
         shell: bash
         run: |

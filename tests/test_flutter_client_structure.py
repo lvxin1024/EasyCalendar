@@ -42,7 +42,7 @@ def test_flutter_project_declares_pinned_sdk_and_offline_dependencies():
     assert pubspec["dependencies"]["uuid"] == "4.6.0"
     assert pubspec["dependencies"]["http"] == "1.6.0"
     assert pubspec["dependencies"]["connectivity_plus"] == "7.3.1"
-    assert pubspec["dependencies"]["flutter_secure_storage"] == "11.0.0"
+    assert pubspec["dependencies"]["flutter_secure_storage"] == "^10.3.1"
 
 
 def test_t16_views_repository_and_platform_bootstrap_are_present():
@@ -187,3 +187,28 @@ def test_tag_release_builds_signed_installers_and_checksums():
     assert "softprops/action-gh-release@v2" in workflow
     assert "PrivilegesRequired=lowest" in installer
     assert "UninstallDisplayIcon" in installer
+
+
+def test_unsigned_macos_release_does_not_enable_library_validation():
+    workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(
+        encoding="utf-8"
+    )
+    signed_block, unsigned_and_later = workflow.split(
+        "- name: Ad-hoc sign and package unsigned DMG", maxsplit=1
+    )
+    unsigned_block = unsigned_and_later.split(
+        "- name: Package macOS debug symbols", maxsplit=1
+    )[0]
+
+    assert "--options runtime" in signed_block
+    assert "--options runtime" not in unsigned_block
+    assert 'codesign --force --sign - "$binary"' in unsigned_block
+    assert 'codesign --force --sign - \\' in unsigned_block
+    assert '--entitlements "$entitlements" "$app"' in unsigned_block
+    assert "Delete :com.apple.security.application-groups" in unsigned_block
+    assert "Delete :keychain-access-groups" in unsigned_block
+    assert unsigned_block.count("rm -rf client/build/release/dmg") == 2
+    assert (
+        "--dart-define=EASYCALENDAR_USE_DATA_PROTECTION_KEYCHAIN="
+        "${{ steps.signing.outputs.enabled }}"
+    ) in workflow
