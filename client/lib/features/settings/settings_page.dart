@@ -1317,8 +1317,15 @@ class _SectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 10),
-    child: Text(label, style: Theme.of(context).textTheme.titleSmall),
+    padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+    child: Text(
+      label,
+      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0.4,
+      ),
+    ),
   );
 }
 
@@ -1397,9 +1404,11 @@ class _SettingSwitch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => DecoratedBox(
-    decoration: const BoxDecoration(
-      color: Colors.white,
-      border: Border(bottom: BorderSide(color: Color(0xFFE4E7EC))),
+    decoration: BoxDecoration(
+      color: Theme.of(context).colorScheme.surface,
+      border: Border(
+        bottom: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+      ),
     ),
     child: SwitchListTile(
       secondary: Icon(icon),
@@ -1435,9 +1444,13 @@ class _DesktopWindowSection extends StatelessWidget {
       const SizedBox(height: 24),
       const _SectionLabel(label: '桌面窗口'),
       DecoratedBox(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          border: Border(bottom: BorderSide(color: Color(0xFFE4E7EC))),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          border: Border(
+            bottom: BorderSide(
+              color: Theme.of(context).colorScheme.outlineVariant,
+            ),
+          ),
         ),
         child: Column(
           children: [
@@ -1739,9 +1752,13 @@ class _AiProviderSection extends StatelessWidget {
         ),
       for (final provider in providers)
         DecoratedBox(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            border: Border(bottom: BorderSide(color: Color(0xFFE4E7EC))),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            border: Border(
+              bottom: BorderSide(
+                color: Theme.of(context).colorScheme.outlineVariant,
+              ),
+            ),
           ),
           child: ListTile(
             leading: Icon(
@@ -2451,9 +2468,11 @@ class _InfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => DecoratedBox(
-    decoration: const BoxDecoration(
-      color: Colors.white,
-      border: Border(bottom: BorderSide(color: Color(0xFFE4E7EC))),
+    decoration: BoxDecoration(
+      color: Theme.of(context).colorScheme.surface,
+      border: Border(
+        bottom: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+      ),
     ),
     child: ListTile(
       leading: Icon(icon),

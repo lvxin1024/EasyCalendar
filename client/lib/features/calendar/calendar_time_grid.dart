@@ -229,6 +229,7 @@ class _CalendarTimeGridState extends State<CalendarTimeGrid> {
                             thumbVisibility: true,
                             child: SingleChildScrollView(
                               controller: _verticalController,
+                              padding: const EdgeInsets.only(bottom: 96),
                               child: SizedBox(
                                 height: widget.hourHeight * 24,
                                 child: Row(
@@ -420,8 +421,10 @@ class _DateHeader extends StatelessWidget {
                   color: _isSameDate(date, selectedDate)
                       ? Theme.of(context).colorScheme.primaryContainer
                       : null,
-                  border: const Border(
-                    left: BorderSide(color: Color(0xFFE4E7EC)),
+                  border: Border(
+                    left: BorderSide(
+                      color: Theme.of(context).colorScheme.outlineVariant,
+                    ),
                   ),
                 ),
                 child: Center(
@@ -465,8 +468,12 @@ class _AllDayRow extends StatelessWidget {
         for (final date in dates)
           Expanded(
             child: DecoratedBox(
-              decoration: const BoxDecoration(
-                border: Border(left: BorderSide(color: Color(0xFFE4E7EC))),
+              decoration: BoxDecoration(
+                border: Border(
+                  left: BorderSide(
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                  ),
+                ),
               ),
               child: Padding(
                 padding: const EdgeInsets.all(2),
@@ -500,9 +507,9 @@ class _AllDayEvent extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Material(
     color: Theme.of(context).colorScheme.secondaryContainer,
-    borderRadius: BorderRadius.circular(4),
+    borderRadius: BorderRadius.circular(6),
     child: InkWell(
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: BorderRadius.circular(6),
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
@@ -587,8 +594,12 @@ class _DayColumnState extends State<_DayColumn> {
     );
     return LayoutBuilder(
       builder: (context, constraints) => DecoratedBox(
-        decoration: const BoxDecoration(
-          border: Border(left: BorderSide(color: Color(0xFFE4E7EC))),
+        decoration: BoxDecoration(
+          border: Border(
+            left: BorderSide(
+              color: Theme.of(context).colorScheme.outlineVariant,
+            ),
+          ),
         ),
         child: Stack(
           clipBehavior: Clip.none,
@@ -598,7 +609,10 @@ class _DayColumnState extends State<_DayColumn> {
                 top: hour * widget.hourHeight,
                 left: 0,
                 right: 0,
-                child: const Divider(height: 1, color: Color(0xFFE4E7EC)),
+                child: Divider(
+                  height: 1,
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                ),
               ),
             if (_isSameDate(widget.date, configuredNow()))
               _CurrentTimeLine(hourHeight: widget.hourHeight),
@@ -728,7 +742,7 @@ class _PreviewEvent extends StatelessWidget {
               context,
             ).colorScheme.primaryContainer.withAlpha(210),
             border: Border.all(color: Theme.of(context).colorScheme.primary),
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: BorderRadius.circular(8),
           ),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
@@ -767,7 +781,7 @@ class _PreviewTimeLabel extends StatelessWidget {
     child: DecoratedBox(
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.primary,
-        borderRadius: BorderRadius.circular(3),
+        borderRadius: BorderRadius.circular(6),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
@@ -804,6 +818,19 @@ class _PositionedEvent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isTask = placement.item.type == ItemType.task;
+    final tagged = placement.item.tags.isNotEmpty;
+    final accent = isTask
+        ? colorScheme.tertiary
+        : tagged
+        ? colorForTag(placement.item.tags.first, tagColors)
+        : colorScheme.primary;
+    final background = isTask
+        ? colorScheme.tertiaryContainer
+        : tagged
+        ? Color.alphaBlend(accent.withAlpha(44), colorScheme.surface)
+        : colorScheme.primaryContainer;
     const gap = 2.0;
     final columnWidth = availableWidth / placement.columnCount;
     final top = placement.startMinutes / 60 * hourHeight;
@@ -815,39 +842,49 @@ class _PositionedEvent extends StatelessWidget {
       width: math.max(8, columnWidth - gap * 2),
       height: math.max(24, rawHeight - 2),
       child: Material(
-        color: placement.item.type == ItemType.task
-            ? Theme.of(context).colorScheme.errorContainer
-            : placement.item.tags.isEmpty
-            ? Theme.of(context).colorScheme.primaryContainer
-            : colorForTag(placement.item.tags.first, tagColors).withAlpha(50),
-        borderRadius: BorderRadius.circular(4),
+        color: background,
+        borderRadius: BorderRadius.circular(8),
+        clipBehavior: Clip.antiAlias,
         child: InkWell(
-          borderRadius: BorderRadius.circular(4),
           onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  placement.item.type == ItemType.task
-                      ? 'Due · ${placement.item.title}'
-                      : placement.item.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(width: 3, color: accent),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 5,
+                    vertical: 3,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        isTask
+                            ? 'Due · ${placement.item.title}'
+                            : placement.item.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: colorScheme.onSurface,
+                            ),
+                      ),
+                      if (rawHeight >= 38)
+                        Text(
+                          _eventTime(context, placement.item),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(color: colorScheme.onSurfaceVariant),
+                        ),
+                    ],
                   ),
                 ),
-                if (rawHeight >= 38)
-                  Text(
-                    _eventTime(context, placement.item),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelSmall,
-                  ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -864,11 +901,30 @@ class _CurrentTimeLine extends StatelessWidget {
   Widget build(BuildContext context) {
     final now = configuredNow();
     final top = (now.hour * 60 + now.minute) / 60 * hourHeight;
+    final color = Theme.of(context).colorScheme.tertiary;
     return Positioned(
       top: top,
       left: 0,
       right: 0,
-      child: Container(height: 2, color: Theme.of(context).colorScheme.error),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            margin: const EdgeInsets.only(left: 1, top: 1),
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 2),
+          Expanded(
+            child: Container(
+              height: 2,
+              margin: const EdgeInsets.only(top: 4),
+              color: color,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

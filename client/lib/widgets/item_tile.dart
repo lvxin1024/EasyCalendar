@@ -28,9 +28,11 @@ class ItemTile extends StatelessWidget {
     final completed = item.status == ItemStatus.done;
     final cancelled = item.status == ItemStatus.cancelled;
     return DecoratedBox(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFE4E7EC))),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        border: Border(
+          bottom: BorderSide(color: colorScheme.outlineVariant, width: 0.5),
+        ),
       ),
       child: ListTile(
         minTileHeight: 72,

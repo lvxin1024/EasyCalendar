@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/item.dart';
+import '../../utils/configured_time.dart';
 import '../../utils/date_formatters.dart';
 import '../../utils/tag_colors.dart';
 import 'calendar_navigation_controller.dart';
@@ -184,63 +185,63 @@ class _MonthDayCell extends StatelessWidget {
   final Map<String, int> tagColors;
 
   @override
-  Widget build(BuildContext context) => DecoratedBox(
-    decoration: BoxDecoration(
-      color: isSelected
-          ? Theme.of(context).colorScheme.primaryContainer.withAlpha(110)
-          : isCurrentMonth
-          ? Colors.white
-          : Theme.of(context).colorScheme.surfaceContainerLowest,
-      border: Border.all(
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isToday = _sameDate(date, configuredNow());
+    return DecoratedBox(
+      decoration: BoxDecoration(
         color: isSelected
-            ? Theme.of(context).colorScheme.primary
-            : const Color(0xFFE4E7EC),
-        width: isSelected ? 1.5 : 1,
-      ),
-    ),
-    child: InkWell(
-      onTap: onSelect,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(6, 5, 5, 4),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Align(
-              alignment: Alignment.topRight,
-              child: Text(
-                '${date.day}',
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: isCurrentMonth
-                      ? null
-                      : Theme.of(context).colorScheme.outline,
-                ),
-              ),
-            ),
-            const SizedBox(height: 3),
-            for (final event in events.take(3))
-              Padding(
-                padding: const EdgeInsets.only(bottom: 2),
-                child: _MonthEventChip(
-                  item: event,
-                  tagColors: tagColors,
-                  onTap: () => onEdit(event),
-                ),
-              ),
-            if (events.length > 3)
-              InkWell(
-                onTap: () => _showAllEvents(context),
-                child: Text(
-                  '+${events.length - 3} 项',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-              ),
-          ],
+            ? colorScheme.primaryContainer.withAlpha(90)
+            : isCurrentMonth
+            ? colorScheme.surface
+            : colorScheme.surface.withAlpha(120),
+        border: Border(
+          right: BorderSide(color: colorScheme.outlineVariant, width: 0.5),
+          bottom: BorderSide(color: colorScheme.outlineVariant, width: 0.5),
         ),
       ),
-    ),
-  );
+      child: InkWell(
+        onTap: onSelect,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(6, 5, 5, 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Align(
+                alignment: Alignment.topRight,
+                child: _DayNumber(
+                  day: date.day,
+                  isToday: isToday,
+                  isCurrentMonth: isCurrentMonth,
+                  isSelected: isSelected,
+                ),
+              ),
+              const SizedBox(height: 3),
+              for (final event in events.take(3))
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: _MonthEventChip(
+                    item: event,
+                    tagColors: tagColors,
+                    onTap: () => onEdit(event),
+                  ),
+                ),
+              if (events.length > 3)
+                InkWell(
+                  onTap: () => _showAllEvents(context),
+                  child: Text(
+                    '+${events.length - 3} 项',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   Future<void> _showAllEvents(BuildContext context) async {
     await showDialog<void>(
@@ -275,6 +276,47 @@ class _MonthDayCell extends StatelessWidget {
   }
 }
 
+class _DayNumber extends StatelessWidget {
+  const _DayNumber({
+    required this.day,
+    required this.isToday,
+    required this.isCurrentMonth,
+    required this.isSelected,
+  });
+
+  final int day;
+  final bool isToday;
+  final bool isCurrentMonth;
+  final bool isSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final style = Theme.of(context).textTheme.labelMedium?.copyWith(
+      color: isCurrentMonth ? colorScheme.onSurface : colorScheme.outline,
+      fontWeight: FontWeight.w600,
+    );
+    final highlighted = isToday || isSelected;
+    if (!highlighted) return Text('$day', style: style);
+    return Container(
+      width: 24,
+      height: 24,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: isToday ? colorScheme.tertiary : colorScheme.primary,
+        shape: BoxShape.circle,
+      ),
+      child: Text(
+        '$day',
+        style: style?.copyWith(
+          color: isToday ? colorScheme.onTertiary : colorScheme.onPrimary,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
 class _MonthEventChip extends StatelessWidget {
   const _MonthEventChip({
     required this.item,
@@ -287,25 +329,36 @@ class _MonthEventChip extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Material(
-    color: item.tags.isEmpty
-        ? Theme.of(context).colorScheme.secondaryContainer
-        : colorForTag(item.tags.first, tagColors).withAlpha(50),
-    borderRadius: BorderRadius.circular(3),
-    child: InkWell(
-      borderRadius: BorderRadius.circular(3),
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-        child: Text(
-          item.title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.labelSmall,
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final tagged = item.tags.isNotEmpty;
+    final accent = tagged
+        ? colorForTag(item.tags.first, tagColors)
+        : colorScheme.secondaryContainer;
+    final onAccent = tagged
+        ? onTagColor(accent)
+        : colorScheme.onSecondaryContainer;
+    return Material(
+      color: accent,
+      borderRadius: BorderRadius.circular(6),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(6),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+          child: Text(
+            item.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: onAccent,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 bool _sameDate(DateTime left, DateTime right) =>

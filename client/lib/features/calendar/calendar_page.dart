@@ -4,6 +4,7 @@ import '../../application/item_controller.dart';
 import '../../domain/item.dart';
 import '../../utils/configured_time.dart';
 import '../../utils/date_formatters.dart';
+import '../../widgets/glass_surface.dart';
 import 'calendar_navigation_controller.dart';
 import 'calendar_month_grid.dart';
 import 'calendar_time_grid.dart';
@@ -243,47 +244,69 @@ class _PinnedDueStrip extends StatelessWidget {
   final ValueChanged<CalendarItem> onEdit;
 
   @override
-  Widget build(BuildContext context) => Container(
-    constraints: const BoxConstraints(maxHeight: 62),
-    padding: const EdgeInsets.fromLTRB(20, 4, 20, 5),
-    color: Theme.of(context).colorScheme.errorContainer.withAlpha(90),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(top: 3, right: 10),
-          child: Text(
-            '未完成 Due',
-            style: Theme.of(
-              context,
-            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
-          ),
-        ),
-        Expanded(
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                for (final item in items)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ActionChip(
-                      avatar: const Icon(Icons.check_circle_outline, size: 16),
-                      label: Text(
-                        '${item.title} · ${_dueLabel(context, item.dueAt!)}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      onPressed: () => onEdit(item),
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+      child: GlassSurface(
+        borderRadius: BorderRadius.circular(16),
+        tint: colorScheme.tertiaryContainer.withAlpha(215),
+        borderColor: colorScheme.tertiary.withAlpha(45),
+        blur: 20,
+        padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
+        child: Row(
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(right: 10),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.flag_outlined,
+                    size: 16,
+                    color: colorScheme.tertiary,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    '未完成 Due',
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: colorScheme.onTertiaryContainer,
                     ),
                   ),
-              ],
+                ],
+              ),
             ),
-          ),
+            Expanded(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (final item in items)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ActionChip(
+                          avatar: const Icon(
+                            Icons.check_circle_outline,
+                            size: 16,
+                          ),
+                          label: Text(
+                            '${item.title} · ${_dueLabel(context, item.dueAt!)}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          onPressed: () => onEdit(item),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
-      ],
-    ),
-  );
+      ),
+    );
+  }
 
   static String _dueLabel(BuildContext context, DateTime value) {
     final local = inConfiguredTimezone(value);

@@ -5,6 +5,7 @@ import '../../config/app_config.dart';
 import '../../data/transfer_models.dart';
 import '../../domain/item.dart';
 import '../../widget/widget_deep_link_controller.dart';
+import '../../widgets/glass_surface.dart';
 import '../calendar/calendar_navigation_controller.dart';
 import '../calendar/calendar_page.dart';
 import '../due/due_page.dart';
@@ -107,6 +108,7 @@ class _HomeShellState extends State<HomeShell> {
           final wide = constraints.maxWidth >= 900;
           return Scaffold(
             appBar: null,
+            extendBody: true,
             body: SafeArea(
               child: Row(
                 children: [
@@ -199,10 +201,15 @@ class _HomeShellState extends State<HomeShell> {
                         event,
                         navigationConstraints.maxWidth,
                       ),
-                      child: NavigationBar(
-                        selectedIndex: _selectedIndex,
-                        destinations: _destinations,
-                        onDestinationSelected: _selectDestination,
+                      child: GlassSurface(
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(24),
+                        ),
+                        child: NavigationBar(
+                          selectedIndex: _selectedIndex,
+                          destinations: _destinations,
+                          onDestinationSelected: _selectDestination,
+                        ),
                       ),
                     ),
                   ),
