@@ -46,6 +46,10 @@ class _CalendarPageState extends State<CalendarPage> {
       animation: widget.navigation,
       builder: (context, _) {
         final events = widget.navigation.eventsInRange(widget.controller.items);
+        final collectionColors = <String, int>{
+          for (final collection in widget.controller.collections)
+            if (collection.color != null) collection.id: collection.color!,
+        };
         final dues =
             widget.controller.items
                 .where(
@@ -107,6 +111,7 @@ class _CalendarPageState extends State<CalendarPage> {
                               onDateSelected: _openDay,
                               tagColors:
                                   widget.controller.preferences.tagColors,
+                              collectionColors: collectionColors,
                             )
                           : CalendarTimeGrid(
                               dates: widget.navigation.visibleDates,
@@ -114,6 +119,7 @@ class _CalendarPageState extends State<CalendarPage> {
                               dueItems: dues,
                               tagColors:
                                   widget.controller.preferences.tagColors,
+                              collectionColors: collectionColors,
                               selectedDate: widget.navigation.selectedDate,
                               hourHeight: _hourHeight,
                               onHourHeightChanged: (value) => setState(
@@ -200,41 +206,51 @@ class _CalendarViewModeBar extends StatelessWidget {
   final VoidCallback onSync;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
-    child: Row(
-      children: [
-        SegmentedButton<CalendarViewMode>(
-          showSelectedIcon: false,
-          segments: const [
-            ButtonSegment(
-              value: CalendarViewMode.day,
-              icon: Icon(Icons.view_day_outlined),
-              label: Text('日'),
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
+      child: GlassSurface(
+        borderRadius: BorderRadius.circular(14),
+        tint: colorScheme.surface.withAlpha(188),
+        borderColor: colorScheme.outlineVariant.withAlpha(175),
+        blur: 16,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: Row(
+          children: [
+            SegmentedButton<CalendarViewMode>(
+              showSelectedIcon: false,
+              segments: const [
+                ButtonSegment(
+                  value: CalendarViewMode.day,
+                  icon: Icon(Icons.view_day_outlined),
+                  label: Text('日'),
+                ),
+                ButtonSegment(
+                  value: CalendarViewMode.week,
+                  icon: Icon(Icons.view_week_outlined),
+                  label: Text('周'),
+                ),
+                ButtonSegment(
+                  value: CalendarViewMode.month,
+                  icon: Icon(Icons.calendar_view_month_outlined),
+                  label: Text('月'),
+                ),
+              ],
+              selected: {navigation.mode},
+              onSelectionChanged: (value) => navigation.setMode(value.first),
             ),
-            ButtonSegment(
-              value: CalendarViewMode.week,
-              icon: Icon(Icons.view_week_outlined),
-              label: Text('周'),
-            ),
-            ButtonSegment(
-              value: CalendarViewMode.month,
-              icon: Icon(Icons.calendar_view_month_outlined),
-              label: Text('月'),
+            const Spacer(),
+            IconButton(
+              tooltip: '同步刷新',
+              onPressed: onSync,
+              icon: const Icon(Icons.sync),
             ),
           ],
-          selected: {navigation.mode},
-          onSelectionChanged: (value) => navigation.setMode(value.first),
         ),
-        const Spacer(),
-        IconButton(
-          tooltip: '同步刷新',
-          onPressed: onSync,
-          icon: const Icon(Icons.sync),
-        ),
-      ],
-    ),
-  );
+      ),
+    );
+  }
 }
 
 class _PinnedDueStrip extends StatelessWidget {
@@ -250,8 +266,8 @@ class _PinnedDueStrip extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
       child: GlassSurface(
         borderRadius: BorderRadius.circular(16),
-        tint: colorScheme.tertiaryContainer.withAlpha(215),
-        borderColor: colorScheme.tertiary.withAlpha(45),
+        tint: colorScheme.tertiaryContainer.withAlpha(164),
+        borderColor: colorScheme.tertiary.withAlpha(72),
         blur: 20,
         padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
         child: Row(

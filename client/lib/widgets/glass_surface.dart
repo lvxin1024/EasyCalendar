@@ -14,9 +14,9 @@ class GlassSurface extends StatelessWidget {
     super.key,
     required this.child,
     this.borderRadius = const BorderRadius.all(Radius.circular(20)),
-    this.tint = const Color(0x99FFFFFF),
-    this.borderColor = const Color(0x33FFFFFF),
-    this.blur = 24,
+    this.tint = const Color(0xB8F6F4ED),
+    this.borderColor = const Color(0x99FFFFFF),
+    this.blur = 20,
     this.padding,
   });
 
@@ -26,10 +26,10 @@ class GlassSurface extends StatelessWidget {
   /// Outer corner radius of the glass panel.
   final BorderRadius borderRadius;
 
-  /// Translucent fill color. Defaults to ~60% white for light chrome.
+  /// Translucent fill color. Defaults to a cool ivory glass tint.
   final Color tint;
 
-  /// Hairline highlight / edge color. Defaults to ~20% white.
+  /// Hairline highlight / edge color.
   final Color borderColor;
 
   /// Blur sigma applied to the backdrop.

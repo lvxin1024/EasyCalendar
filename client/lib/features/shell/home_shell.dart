@@ -113,74 +113,84 @@ class _HomeShellState extends State<HomeShell> {
               child: Row(
                 children: [
                   if (wide) ...[
-                    NavigationRail(
-                      extended: constraints.maxWidth >= 1180,
-                      minExtendedWidth: 220,
-                      selectedIndex: _selectedIndex,
-                      onDestinationSelected: _selectDestination,
-                      leading: Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 20, 12, 28),
-                        child: constraints.maxWidth >= 1180
-                            ? Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
+                    GlassSurface(
+                      borderRadius: BorderRadius.zero,
+                      tint: Theme.of(
+                        context,
+                      ).colorScheme.surface.withAlpha(194),
+                      borderColor: Theme.of(
+                        context,
+                      ).colorScheme.outlineVariant.withAlpha(180),
+                      child: NavigationRail(
+                        extended: constraints.maxWidth >= 1180,
+                        minExtendedWidth: 220,
+                        selectedIndex: _selectedIndex,
+                        onDestinationSelected: _selectDestination,
+                        leading: Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 20, 12, 28),
+                          child: constraints.maxWidth >= 1180
+                              ? Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.calendar_month,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primary,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Text(
+                                      widget.config.appName,
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.titleMedium,
+                                    ),
+                                  ],
+                                )
+                              : Tooltip(
+                                  message: widget.config.appName,
+                                  child: Icon(
                                     Icons.calendar_month,
                                     color: Theme.of(
                                       context,
                                     ).colorScheme.primary,
                                   ),
-                                  const SizedBox(width: 10),
-                                  Text(
-                                    widget.config.appName,
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.titleMedium,
-                                  ),
-                                ],
-                              )
-                            : Tooltip(
-                                message: widget.config.appName,
-                                child: Icon(
-                                  Icons.calendar_month,
-                                  color: Theme.of(context).colorScheme.primary,
                                 ),
-                              ),
+                        ),
+                        destinations: const [
+                          NavigationRailDestination(
+                            icon: Icon(Icons.calendar_view_week_outlined),
+                            selectedIcon: Icon(Icons.calendar_view_week),
+                            label: Text('日历'),
+                          ),
+                          NavigationRailDestination(
+                            icon: Icon(Icons.view_list_outlined),
+                            selectedIcon: Icon(Icons.view_list),
+                            label: Text('全部'),
+                          ),
+                          NavigationRailDestination(
+                            icon: Icon(Icons.check_circle_outline),
+                            selectedIcon: Icon(Icons.check_circle),
+                            label: Text('Due'),
+                          ),
+                          NavigationRailDestination(
+                            icon: Icon(Icons.link_outlined),
+                            selectedIcon: Icon(Icons.link),
+                            label: Text('订阅'),
+                          ),
+                          NavigationRailDestination(
+                            icon: Icon(Icons.auto_awesome_outlined),
+                            selectedIcon: Icon(Icons.auto_awesome),
+                            label: Text('助手'),
+                          ),
+                          NavigationRailDestination(
+                            icon: Icon(Icons.settings_outlined),
+                            selectedIcon: Icon(Icons.settings),
+                            label: Text('设置'),
+                          ),
+                        ],
                       ),
-                      destinations: const [
-                        NavigationRailDestination(
-                          icon: Icon(Icons.calendar_view_week_outlined),
-                          selectedIcon: Icon(Icons.calendar_view_week),
-                          label: Text('日历'),
-                        ),
-                        NavigationRailDestination(
-                          icon: Icon(Icons.view_list_outlined),
-                          selectedIcon: Icon(Icons.view_list),
-                          label: Text('全部'),
-                        ),
-                        NavigationRailDestination(
-                          icon: Icon(Icons.check_circle_outline),
-                          selectedIcon: Icon(Icons.check_circle),
-                          label: Text('Due'),
-                        ),
-                        NavigationRailDestination(
-                          icon: Icon(Icons.link_outlined),
-                          selectedIcon: Icon(Icons.link),
-                          label: Text('订阅'),
-                        ),
-                        NavigationRailDestination(
-                          icon: Icon(Icons.auto_awesome_outlined),
-                          selectedIcon: Icon(Icons.auto_awesome),
-                          label: Text('助手'),
-                        ),
-                        NavigationRailDestination(
-                          icon: Icon(Icons.settings_outlined),
-                          selectedIcon: Icon(Icons.settings),
-                          label: Text('设置'),
-                        ),
-                      ],
                     ),
-                    const VerticalDivider(),
                   ],
                   Expanded(
                     child: Center(

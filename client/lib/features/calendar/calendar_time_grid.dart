@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -134,6 +135,7 @@ class CalendarTimeGrid extends StatefulWidget {
     required this.items,
     required this.dueItems,
     this.tagColors = const {},
+    this.collectionColors = const {},
     required this.selectedDate,
     required this.hourHeight,
     required this.onHourHeightChanged,
@@ -146,6 +148,7 @@ class CalendarTimeGrid extends StatefulWidget {
   final List<CalendarItem> items;
   final List<CalendarItem> dueItems;
   final Map<String, int> tagColors;
+  final Map<String, int> collectionColors;
   final DateTime selectedDate;
   final double hourHeight;
   final ValueChanged<double> onHourHeightChanged;
@@ -190,9 +193,11 @@ class _CalendarTimeGridState extends State<CalendarTimeGrid> {
       Expanded(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final dateColumnWidth = widget.dates.length == 1
-                ? math.max(210.0, constraints.maxWidth - 48)
-                : 72.0;
+            final dateColumnWidth = calendarDateColumnWidth(
+              dateCount: widget.dates.length,
+              availableWidth: constraints.maxWidth,
+              platform: defaultTargetPlatform,
+            );
             final width = 48.0 + dateColumnWidth * widget.dates.length;
             return Scrollbar(
               controller: _horizontalController,
@@ -214,6 +219,8 @@ class _CalendarTimeGridState extends State<CalendarTimeGrid> {
                       _AllDayRow(
                         dates: widget.dates,
                         items: widget.items,
+                        tagColors: widget.tagColors,
+                        collectionColors: widget.collectionColors,
                         onEdit: widget.onEdit,
                       ),
                       const Divider(height: 1),
@@ -251,6 +258,8 @@ class _CalendarTimeGridState extends State<CalendarTimeGrid> {
                                           items: widget.items,
                                           dueItems: widget.dueItems,
                                           tagColors: widget.tagColors,
+                                          collectionColors:
+                                              widget.collectionColors,
                                           hourHeight: widget.hourHeight,
                                           onEdit: widget.onEdit,
                                           onCreateTimedEvent:
@@ -342,6 +351,26 @@ class _CalendarTimeGridState extends State<CalendarTimeGrid> {
     );
     _verticalController.jumpTo(offset);
   }
+}
+
+@visibleForTesting
+double calendarDateColumnWidth({
+  required int dateCount,
+  required double availableWidth,
+  required TargetPlatform platform,
+}) {
+  const gutterWidth = 48.0;
+  const compactColumnWidth = 72.0;
+  if (dateCount <= 1) {
+    return math.max(210, availableWidth - gutterWidth);
+  }
+  final desktop =
+      platform == TargetPlatform.macOS || platform == TargetPlatform.windows;
+  if (!desktop) return compactColumnWidth;
+  return math.max(
+    compactColumnWidth,
+    (availableWidth - gutterWidth) / dateCount,
+  );
 }
 
 class _EventSegment {
@@ -448,11 +477,15 @@ class _AllDayRow extends StatelessWidget {
   const _AllDayRow({
     required this.dates,
     required this.items,
+    required this.tagColors,
+    required this.collectionColors,
     required this.onEdit,
   });
 
   final List<DateTime> dates;
   final List<CalendarItem> items;
+  final Map<String, int> tagColors;
+  final Map<String, int> collectionColors;
   final ValueChanged<CalendarItem> onEdit;
 
   @override
@@ -485,6 +518,8 @@ class _AllDayRow extends StatelessWidget {
                         padding: const EdgeInsets.only(bottom: 1),
                         child: _AllDayEvent(
                           item: item,
+                          tagColors: tagColors,
+                          collectionColors: collectionColors,
                           onTap: () => onEdit(item),
                         ),
                       ),
@@ -499,29 +534,53 @@ class _AllDayRow extends StatelessWidget {
 }
 
 class _AllDayEvent extends StatelessWidget {
-  const _AllDayEvent({required this.item, required this.onTap});
+  const _AllDayEvent({
+    required this.item,
+    required this.tagColors,
+    required this.collectionColors,
+    required this.onTap,
+  });
 
   final CalendarItem item;
+  final Map<String, int> tagColors;
+  final Map<String, int> collectionColors;
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Material(
-    color: Theme.of(context).colorScheme.secondaryContainer,
-    borderRadius: BorderRadius.circular(6),
-    child: InkWell(
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final accent = colorForItemAccent(
+      collectionId: item.collectionId,
+      tags: item.tags,
+      tagColors: tagColors,
+      collectionColors: collectionColors,
+    );
+    return Material(
+      color: Color.alphaBlend(accent.withAlpha(44), colorScheme.surface),
       borderRadius: BorderRadius.circular(6),
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-        child: Text(
-          item.title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.labelSmall,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(6),
+        onTap: onTap,
+        child: Row(
+          children: [
+            Container(width: 3, color: accent),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                child: Text(
+                  item.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelSmall,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _TimeGutter extends StatelessWidget {
@@ -560,6 +619,7 @@ class _DayColumn extends StatefulWidget {
     required this.items,
     required this.dueItems,
     required this.tagColors,
+    required this.collectionColors,
     required this.hourHeight,
     required this.onEdit,
     required this.onCreateTimedEvent,
@@ -572,6 +632,7 @@ class _DayColumn extends StatefulWidget {
   final List<CalendarItem> items;
   final List<CalendarItem> dueItems;
   final Map<String, int> tagColors;
+  final Map<String, int> collectionColors;
   final double hourHeight;
   final ValueChanged<CalendarItem> onEdit;
   final Future<void> Function(DateTime) onCreateTimedEvent;
@@ -647,6 +708,7 @@ class _DayColumnState extends State<_DayColumn> {
                 availableWidth: constraints.maxWidth,
                 hourHeight: widget.hourHeight,
                 tagColors: widget.tagColors,
+                collectionColors: widget.collectionColors,
                 onTap: () => widget.onEdit(placement.item),
               ),
           ],
@@ -807,6 +869,7 @@ class _PositionedEvent extends StatelessWidget {
     required this.availableWidth,
     required this.hourHeight,
     required this.tagColors,
+    required this.collectionColors,
     required this.onTap,
   });
 
@@ -814,23 +877,24 @@ class _PositionedEvent extends StatelessWidget {
   final double availableWidth;
   final double hourHeight;
   final Map<String, int> tagColors;
+  final Map<String, int> collectionColors;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final isTask = placement.item.type == ItemType.task;
-    final tagged = placement.item.tags.isNotEmpty;
     final accent = isTask
         ? colorScheme.tertiary
-        : tagged
-        ? colorForTag(placement.item.tags.first, tagColors)
-        : colorScheme.primary;
+        : colorForItemAccent(
+            collectionId: placement.item.collectionId,
+            tags: placement.item.tags,
+            tagColors: tagColors,
+            collectionColors: collectionColors,
+          );
     final background = isTask
         ? colorScheme.tertiaryContainer
-        : tagged
-        ? Color.alphaBlend(accent.withAlpha(44), colorScheme.surface)
-        : colorScheme.primaryContainer;
+        : Color.alphaBlend(accent.withAlpha(44), colorScheme.surface);
     const gap = 2.0;
     final columnWidth = availableWidth / placement.columnCount;
     final top = placement.startMinutes / 60 * hourHeight;

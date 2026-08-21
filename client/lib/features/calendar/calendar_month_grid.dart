@@ -14,6 +14,7 @@ class CalendarMonthGrid extends StatelessWidget {
     required this.onEdit,
     required this.onDateSelected,
     this.tagColors = const {},
+    this.collectionColors = const {},
   });
 
   final CalendarNavigationController navigation;
@@ -21,6 +22,7 @@ class CalendarMonthGrid extends StatelessWidget {
   final ValueChanged<CalendarItem> onEdit;
   final ValueChanged<DateTime> onDateSelected;
   final Map<String, int> tagColors;
+  final Map<String, int> collectionColors;
 
   @override
   Widget build(BuildContext context) {
@@ -61,6 +63,7 @@ class CalendarMonthGrid extends StatelessWidget {
                       onEdit: onEdit,
                       onDateSelected: onDateSelected,
                       tagColors: tagColors,
+                      collectionColors: collectionColors,
                     ),
                 ],
               ),
@@ -107,6 +110,7 @@ class _MonthWeekRow extends StatelessWidget {
     required this.onEdit,
     required this.onDateSelected,
     required this.tagColors,
+    required this.collectionColors,
   });
 
   final List<DateTime> week;
@@ -117,6 +121,7 @@ class _MonthWeekRow extends StatelessWidget {
   final ValueChanged<CalendarItem> onEdit;
   final ValueChanged<DateTime> onDateSelected;
   final Map<String, int> tagColors;
+  final Map<String, int> collectionColors;
 
   @override
   Widget build(BuildContext context) {
@@ -157,6 +162,7 @@ class _MonthWeekRow extends StatelessWidget {
                 onSelect: () => onDateSelected(date),
                 onEdit: onEdit,
                 tagColors: tagColors,
+                collectionColors: collectionColors,
               ),
             ),
         ],
@@ -174,6 +180,7 @@ class _MonthDayCell extends StatelessWidget {
     required this.onSelect,
     required this.onEdit,
     required this.tagColors,
+    required this.collectionColors,
   });
 
   final DateTime date;
@@ -183,11 +190,18 @@ class _MonthDayCell extends StatelessWidget {
   final VoidCallback onSelect;
   final ValueChanged<CalendarItem> onEdit;
   final Map<String, int> tagColors;
+  final Map<String, int> collectionColors;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final isToday = _sameDate(date, configuredNow());
+    final accents = <Color>[];
+    for (final event in events) {
+      final accent = _itemAccent(context, event, tagColors, collectionColors);
+      if (!accents.contains(accent)) accents.add(accent);
+      if (accents.length == 3) break;
+    }
     return DecoratedBox(
       decoration: BoxDecoration(
         color: isSelected
@@ -207,14 +221,36 @@ class _MonthDayCell extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Align(
-                alignment: Alignment.topRight,
-                child: _DayNumber(
-                  day: date.day,
-                  isToday: isToday,
-                  isCurrentMonth: isCurrentMonth,
-                  isSelected: isSelected,
-                ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (accents.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          for (final accent in accents)
+                            Container(
+                              width: 6,
+                              height: 6,
+                              margin: const EdgeInsets.only(right: 4),
+                              decoration: BoxDecoration(
+                                color: accent,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  const Spacer(),
+                  _DayNumber(
+                    day: date.day,
+                    isToday: isToday,
+                    isCurrentMonth: isCurrentMonth,
+                    isSelected: isSelected,
+                  ),
+                ],
               ),
               const SizedBox(height: 3),
               for (final event in events.take(3))
@@ -223,6 +259,7 @@ class _MonthDayCell extends StatelessWidget {
                   child: _MonthEventChip(
                     item: event,
                     tagColors: tagColors,
+                    collectionColors: collectionColors,
                     onTap: () => onEdit(event),
                   ),
                 ),
@@ -254,15 +291,28 @@ class _MonthDayCell extends StatelessWidget {
             shrinkWrap: true,
             itemCount: events.length,
             separatorBuilder: (_, _) => const Divider(height: 1),
-            itemBuilder: (context, index) => ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.event_outlined),
-              title: Text(events[index].title),
-              onTap: () {
-                Navigator.pop(context);
-                onEdit(events[index]);
-              },
-            ),
+            itemBuilder: (context, index) {
+              final item = events[index];
+              return ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(
+                  item.type == ItemType.task
+                      ? Icons.flag_outlined
+                      : Icons.event_outlined,
+                  color: _itemAccent(
+                    context,
+                    item,
+                    tagColors,
+                    collectionColors,
+                  ),
+                ),
+                title: Text(item.title),
+                onTap: () {
+                  Navigator.pop(context);
+                  onEdit(item);
+                },
+              );
+            },
           ),
         ),
         actions: [
@@ -321,45 +371,63 @@ class _MonthEventChip extends StatelessWidget {
   const _MonthEventChip({
     required this.item,
     required this.tagColors,
+    required this.collectionColors,
     required this.onTap,
   });
 
   final CalendarItem item;
   final Map<String, int> tagColors;
+  final Map<String, int> collectionColors;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final tagged = item.tags.isNotEmpty;
-    final accent = tagged
-        ? colorForTag(item.tags.first, tagColors)
-        : colorScheme.secondaryContainer;
-    final onAccent = tagged
-        ? onTagColor(accent)
-        : colorScheme.onSecondaryContainer;
+    final accent = _itemAccent(context, item, tagColors, collectionColors);
     return Material(
-      color: accent,
+      color: Color.alphaBlend(accent.withAlpha(44), colorScheme.surface),
       borderRadius: BorderRadius.circular(6),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         borderRadius: BorderRadius.circular(6),
         onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-          child: Text(
-            item.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: onAccent,
-              fontWeight: FontWeight.w500,
+        child: Row(
+          children: [
+            Container(width: 3, height: 18, color: accent),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                child: Text(
+                  item.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: colorScheme.onSurface,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
   }
 }
+
+Color _itemAccent(
+  BuildContext context,
+  CalendarItem item,
+  Map<String, int> tagColors,
+  Map<String, int> collectionColors,
+) => item.type == ItemType.task
+    ? Theme.of(context).colorScheme.tertiary
+    : colorForItemAccent(
+        collectionId: item.collectionId,
+        tags: item.tags,
+        tagColors: tagColors,
+        collectionColors: collectionColors,
+      );
 
 bool _sameDate(DateTime left, DateTime right) =>
     left.year == right.year &&

@@ -22,77 +22,76 @@ class EasyCalendarApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // An Apple-like palette: iOS system blue drives structure and selection,
-    // a single red (system red) reserves the living moment — today, the
-    // now-line, and deadlines — and green marks ordinary scheduled events.
-    // Neutrals follow iOS grouped-background greys so surfaces stay quiet and
-    // let translucent "liquid glass" chrome read clearly.
+    // An Ophelia-inspired palette: river teal structures the interface, moss
+    // identifies ordinary events, and a restrained petal red is reserved for
+    // today, the now-line, and deadlines. Cool ivory surfaces keep dense
+    // calendar content quiet while giving translucent chrome visible depth.
     final scheme =
         ColorScheme.fromSeed(
-          seedColor: const Color(0xFF0A84FF),
+          seedColor: const Color(0xFF426B68),
           brightness: Brightness.light,
         ).copyWith(
-          primary: const Color(0xFF007AFF),
+          primary: const Color(0xFF426B68),
           onPrimary: const Color(0xFFFFFFFF),
-          primaryContainer: const Color(0xFFE5F1FF),
-          onPrimaryContainer: const Color(0xFF004A99),
-          secondary: const Color(0xFF34C759),
+          primaryContainer: const Color(0xFFDDE9E4),
+          onPrimaryContainer: const Color(0xFF203F3C),
+          secondary: const Color(0xFF60765A),
           onSecondary: const Color(0xFFFFFFFF),
-          secondaryContainer: const Color(0xFFE3F9E9),
-          onSecondaryContainer: const Color(0xFF0B3A1C),
-          tertiary: const Color(0xFFFF3B30),
+          secondaryContainer: const Color(0xFFE4EBDD),
+          onSecondaryContainer: const Color(0xFF293D26),
+          tertiary: const Color(0xFFA33F49),
           onTertiary: const Color(0xFFFFFFFF),
-          tertiaryContainer: const Color(0xFFFFE5E3),
-          onTertiaryContainer: const Color(0xFF5B0A00),
-          error: const Color(0xFFFF3B30),
+          tertiaryContainer: const Color(0xFFF3DEE0),
+          onTertiaryContainer: const Color(0xFF61272D),
+          error: const Color(0xFFB3261E),
           onError: const Color(0xFFFFFFFF),
-          surface: const Color(0xFFFFFFFF),
-          onSurface: const Color(0xFF1C1C1E),
-          onSurfaceVariant: const Color(0xFF6E6E73),
-          outline: const Color(0xFFC6C6C8),
-          outlineVariant: const Color(0xFFE5E5EA),
-          surfaceContainerLowest: const Color(0xFFFFFFFF),
-          surfaceContainerLow: const Color(0xFFF8F8FA),
-          surfaceContainer: const Color(0xFFF2F2F7),
-          surfaceContainerHigh: const Color(0xFFECECF0),
-          surfaceContainerHighest: const Color(0xFFE5E5EA),
-          inverseSurface: const Color(0xFF1C1C1E),
-          onInverseSurface: const Color(0xFFF2F2F7),
-          inversePrimary: const Color(0xFFA8CFFF),
+          surface: const Color(0xFFFAF9F5),
+          onSurface: const Color(0xFF25302B),
+          onSurfaceVariant: const Color(0xFF68716B),
+          outline: const Color(0xFFAAB2AA),
+          outlineVariant: const Color(0xFFDDE2DC),
+          surfaceContainerLowest: const Color(0xFFFFFEFA),
+          surfaceContainerLow: const Color(0xFFF5F4EE),
+          surfaceContainer: const Color(0xFFF0F1EB),
+          surfaceContainerHigh: const Color(0xFFE7EAE3),
+          surfaceContainerHighest: const Color(0xFFDCE1DA),
+          inverseSurface: const Color(0xFF26332E),
+          onInverseSurface: const Color(0xFFF5F3ED),
+          inversePrimary: const Color(0xFFB6D3CD),
         );
     final base = ThemeData(useMaterial3: true, colorScheme: scheme);
     final theme = base.copyWith(
-      scaffoldBackgroundColor: const Color(0xFFF2F2F7),
+      scaffoldBackgroundColor: const Color(0xFFF0F1EB),
       textTheme: base.textTheme.copyWith(
         headlineLarge: base.textTheme.headlineLarge?.copyWith(
           fontWeight: FontWeight.w700,
-          letterSpacing: -0.5,
+          letterSpacing: 0,
         ),
         headlineMedium: base.textTheme.headlineMedium?.copyWith(
           fontWeight: FontWeight.w700,
-          letterSpacing: -0.4,
+          letterSpacing: 0,
         ),
         headlineSmall: base.textTheme.headlineSmall?.copyWith(
           fontWeight: FontWeight.w700,
-          letterSpacing: -0.4,
+          letterSpacing: 0,
         ),
         titleLarge: base.textTheme.titleLarge?.copyWith(
           fontWeight: FontWeight.w700,
-          letterSpacing: -0.3,
+          letterSpacing: 0,
         ),
         titleMedium: base.textTheme.titleMedium?.copyWith(
           fontWeight: FontWeight.w600,
-          letterSpacing: -0.2,
+          letterSpacing: 0,
         ),
         titleSmall: base.textTheme.titleSmall?.copyWith(
           fontWeight: FontWeight.w600,
         ),
         labelLarge: base.textTheme.labelLarge?.copyWith(
           fontWeight: FontWeight.w600,
-          letterSpacing: 0.1,
+          letterSpacing: 0,
         ),
-        labelMedium: base.textTheme.labelMedium?.copyWith(letterSpacing: 0.2),
-        labelSmall: base.textTheme.labelSmall?.copyWith(letterSpacing: 0.3),
+        labelMedium: base.textTheme.labelMedium?.copyWith(letterSpacing: 0),
+        labelSmall: base.textTheme.labelSmall?.copyWith(letterSpacing: 0),
         bodyLarge: base.textTheme.bodyLarge?.copyWith(height: 1.45),
         bodyMedium: base.textTheme.bodyMedium?.copyWith(height: 1.45),
       ),
@@ -104,7 +103,7 @@ class EasyCalendarApp extends StatelessWidget {
         centerTitle: false,
         titleTextStyle: base.textTheme.titleLarge?.copyWith(
           fontWeight: FontWeight.w700,
-          letterSpacing: -0.3,
+          letterSpacing: 0,
           color: scheme.onSurface,
         ),
       ),
@@ -119,7 +118,7 @@ class EasyCalendarApp extends StatelessWidget {
         color: scheme.surface,
         shape: RoundedRectangleBorder(
           side: BorderSide(color: scheme.outlineVariant),
-          borderRadius: const BorderRadius.all(Radius.circular(16)),
+          borderRadius: const BorderRadius.all(Radius.circular(8)),
         ),
       ),
       inputDecorationTheme: base.inputDecorationTheme.copyWith(
@@ -139,7 +138,7 @@ class EasyCalendarApp extends StatelessWidget {
         ),
       ),
       navigationRailTheme: base.navigationRailTheme.copyWith(
-        backgroundColor: scheme.surface,
+        backgroundColor: Colors.transparent,
         indicatorColor: scheme.primaryContainer,
         selectedIconTheme: IconThemeData(color: scheme.onPrimaryContainer),
         selectedLabelTextStyle: TextStyle(

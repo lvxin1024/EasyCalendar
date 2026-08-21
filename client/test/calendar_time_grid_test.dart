@@ -1,5 +1,6 @@
 import 'package:easy_calendar/domain/item.dart';
 import 'package:easy_calendar/features/calendar/calendar_time_grid.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
@@ -82,6 +83,41 @@ void main() {
     expect(snapTimelineMinutes(23 * 72 / 60, 72), 30);
     expect(snapTimelineMinutes(53 * 72 / 60, 72), 60);
     expect(snapTimelineMinutes(24 * 72, 72), 23 * 60);
+  });
+
+  test('keeps compact week columns on Android', () {
+    expect(
+      calendarDateColumnWidth(
+        dateCount: 7,
+        availableWidth: 1200,
+        platform: TargetPlatform.android,
+      ),
+      72,
+    );
+  });
+
+  test('fits week columns to macOS and Windows window width', () {
+    for (final platform in [TargetPlatform.macOS, TargetPlatform.windows]) {
+      expect(
+        calendarDateColumnWidth(
+          dateCount: 7,
+          availableWidth: 1048,
+          platform: platform,
+        ),
+        closeTo(1000 / 7, 0.001),
+      );
+    }
+  });
+
+  test('desktop week columns retain a usable minimum width', () {
+    expect(
+      calendarDateColumnWidth(
+        dateCount: 7,
+        availableWidth: 420,
+        platform: TargetPlatform.macOS,
+      ),
+      72,
+    );
   });
 }
 
