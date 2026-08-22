@@ -139,7 +139,7 @@ class EasyCalendarApp extends StatelessWidget {
       ),
       navigationRailTheme: base.navigationRailTheme.copyWith(
         backgroundColor: Colors.transparent,
-        indicatorColor: scheme.primaryContainer,
+        indicatorColor: Colors.transparent,
         selectedIconTheme: IconThemeData(color: scheme.onPrimaryContainer),
         selectedLabelTextStyle: TextStyle(
           color: scheme.primary,
@@ -152,7 +152,7 @@ class EasyCalendarApp extends StatelessWidget {
       navigationBarTheme: base.navigationBarTheme.copyWith(
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
-        indicatorColor: scheme.primaryContainer,
+        indicatorColor: Colors.transparent,
         elevation: 0,
       ),
       segmentedButtonTheme: SegmentedButtonThemeData(

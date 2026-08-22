@@ -252,41 +252,6 @@ cd server && npm test      # Worker 测试
 
 离线优先架构：客户端 `LocalItemRepository` 直连本地 SQLite，所有 CRUD 即时完成。同步层通过 outbox push / cursor pull 异步交换变更，确定性 LWW 冲突恢复。ICS 订阅由客户端直接执行 ETag/Last-Modified 条件请求，解析到只读 Collection 后通过同一同步协议交换。
 
----
-
-## 📋 待办事项 / TODO
-
-目标：普通用户下载 Release 安装包后即可使用本地功能；除可选的云同步服务部署外，不需要安装 Python、Flutter 或 Node.js，不需要编辑配置文件或设置环境变量。所有运行时配置都应能在 App 内完成。
-
-完整实施顺序、任务状态和验收标准见 **[ROADMAP.md](ROADMAP.md)**。本节保留优先级摘要，具体状态以 Roadmap 为准。
-
-同步与可选功能服务、设备身份、默认日历、AI Provider/API Key、通知和桌面窗口参数均已实现 App 内设置。P0.1、P0.2、P0.5 与 P1.1-P1.9 已完成；Python Compatibility API 不是待发布的客户端功能。
-
-### P0：Release / 开箱即用阻塞项
-
-| ID | 任务 | 当前缺口 | 完成标准 |
-|---|---|---|---|
-| P0.3 | **建立多平台 Release 流水线** | 受外部条件阻塞：待维护者配置签名 Secrets 并触发首次真实 Release | 三平台签名产物、调试符号和 SHA-256 均由 tag 工作流产出 |
-| P0.4 | **干净安装和覆盖升级验收** | 受 P0.3 阻塞：需要可安装的正式签名产物 | 全新三平台无需开发工具即可使用；覆盖升级不丢数据、设置或密钥 |
-| P0.6 | **验证 Release 环境下的安全存储** | 受 P0.3/P0.4 阻塞：需要签名安装包和三平台验收环境 | AI Key 和服务令牌在重启/升级后可读，且不进入 SQLite、备份、日志或崩溃报告 |
-
-### 待修复 / Known Issues
-
-| # | 问题 | 说明 | 优先级 |
-|---|------|------|--------|
-| 1 | **Parser 覆盖有限** | 复杂时间范围、自然语言时长、重复规则需补充 fixture | 中 |
-| 2 | **服务端自动备份未接入** | `auto_backup_before_migrate` 仍待实现；这是云端部署任务，不阻塞纯本地安装包 | 低 |
-| 3 | **标签可复用** | 编辑标签时需手动输入，应列出已有标签供直接选择，避免重复和不一致 | 中 |
-
-### 暂缓任务 / Deferred
-
-| 任务 | 说明 |
-|------|------|
-| T7.1 Importer SDK | 统一外部日历导入契约（Google/Microsoft/飞书） |
-| T7.2 外部适配器 | OAuth、最小权限、外部 ID 映射 |
-| Docker Compose 部署 | 一键本地容器化部署 |
-| Cloudflare Cron/R2 备份 | 自动 D1 导出 + R2 存储 |
-| Windows Widget | 桌面小部件（macOS WidgetKit 已完成） |
 
 
 ## 🤝 贡献 / Contributing

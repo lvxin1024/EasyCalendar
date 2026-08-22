@@ -60,37 +60,67 @@ class _HomeShellState extends State<HomeShell> {
     super.dispose();
   }
 
-  static const _destinations = [
-    NavigationDestination(
-      icon: Icon(Icons.calendar_view_week_outlined),
-      selectedIcon: Icon(Icons.calendar_view_week),
+  static const _navAccents = [
+    (color: Color(0xFF426B68), background: Color(0xFFDDE9E4)),
+    (color: Color(0xFF60765A), background: Color(0xFFE4EBDD)),
+    (color: Color(0xFFB23A48), background: Color(0xFFF3DEE0)),
+    (color: Color(0xFF5877A6), background: Color(0xFFE7EDF5)),
+    (color: Color(0xFF705783), background: Color(0xFFE9E3EE)),
+    (color: Color(0xFFA37B25), background: Color(0xFFF3E8C8)),
+  ];
+
+  static const _destinationData = [
+    (
+      icon: Icons.calendar_view_week_outlined,
+      selectedIcon: Icons.calendar_view_week,
       label: '日程',
     ),
-    NavigationDestination(
-      icon: Icon(Icons.view_list_outlined),
-      selectedIcon: Icon(Icons.view_list),
+    (
+      icon: Icons.view_list_outlined,
+      selectedIcon: Icons.view_list,
       label: '全部',
     ),
-    NavigationDestination(
-      icon: Icon(Icons.check_circle_outline),
-      selectedIcon: Icon(Icons.check_circle),
+    (
+      icon: Icons.check_circle_outline,
+      selectedIcon: Icons.check_circle,
       label: 'Due',
     ),
-    NavigationDestination(
-      icon: Icon(Icons.link_outlined),
-      selectedIcon: Icon(Icons.link),
-      label: '订阅',
-    ),
-    NavigationDestination(
-      icon: Icon(Icons.auto_awesome_outlined),
-      selectedIcon: Icon(Icons.auto_awesome),
+    (icon: Icons.link_outlined, selectedIcon: Icons.link, label: '订阅'),
+    (
+      icon: Icons.auto_awesome_outlined,
+      selectedIcon: Icons.auto_awesome,
       label: '助手',
     ),
-    NavigationDestination(
-      icon: Icon(Icons.settings_outlined),
-      selectedIcon: Icon(Icons.settings),
-      label: '设置',
-    ),
+    (icon: Icons.settings_outlined, selectedIcon: Icons.settings, label: '设置'),
+  ];
+
+  List<NavigationDestination> get _destinations => [
+    for (var index = 0; index < _destinationData.length; index++)
+      NavigationDestination(
+        icon: _navGlyph(index, selected: false),
+        selectedIcon: _navGlyph(index, selected: true),
+        label: _destinationData[index].label,
+      ),
+  ];
+
+  Widget _navGlyph(int index, {required bool selected}) {
+    final data = _destinationData[index];
+    final accent = _navAccents[index];
+    return _ColoredNavGlyph(
+      icon: selected ? data.selectedIcon : data.icon,
+      color: accent.color,
+      background: accent.background,
+      selected: selected,
+    );
+  }
+
+  List<NavigationRailDestination> get _railDestinations => [
+    for (var index = 0; index < _destinationData.length; index++)
+      NavigationRailDestination(
+        icon: _navGlyph(index, selected: false),
+        selectedIcon: _navGlyph(index, selected: true),
+        label: Text(_destinationData[index].label),
+      ),
   ];
 
   @override
@@ -157,38 +187,7 @@ class _HomeShellState extends State<HomeShell> {
                                   ),
                                 ),
                         ),
-                        destinations: const [
-                          NavigationRailDestination(
-                            icon: Icon(Icons.calendar_view_week_outlined),
-                            selectedIcon: Icon(Icons.calendar_view_week),
-                            label: Text('日历'),
-                          ),
-                          NavigationRailDestination(
-                            icon: Icon(Icons.view_list_outlined),
-                            selectedIcon: Icon(Icons.view_list),
-                            label: Text('全部'),
-                          ),
-                          NavigationRailDestination(
-                            icon: Icon(Icons.check_circle_outline),
-                            selectedIcon: Icon(Icons.check_circle),
-                            label: Text('Due'),
-                          ),
-                          NavigationRailDestination(
-                            icon: Icon(Icons.link_outlined),
-                            selectedIcon: Icon(Icons.link),
-                            label: Text('订阅'),
-                          ),
-                          NavigationRailDestination(
-                            icon: Icon(Icons.auto_awesome_outlined),
-                            selectedIcon: Icon(Icons.auto_awesome),
-                            label: Text('助手'),
-                          ),
-                          NavigationRailDestination(
-                            icon: Icon(Icons.settings_outlined),
-                            selectedIcon: Icon(Icons.settings),
-                            label: Text('设置'),
-                          ),
-                        ],
+                        destinations: _railDestinations,
                       ),
                     ),
                   ],
@@ -377,6 +376,33 @@ class _HomeShellState extends State<HomeShell> {
       context,
     ).showSnackBar(SnackBar(content: Text(error.toString())));
   }
+}
+
+class _ColoredNavGlyph extends StatelessWidget {
+  const _ColoredNavGlyph({
+    required this.icon,
+    required this.color,
+    required this.background,
+    required this.selected,
+  });
+
+  final IconData icon;
+  final Color color;
+  final Color background;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) => AnimatedContainer(
+    duration: const Duration(milliseconds: 180),
+    width: 44,
+    height: 32,
+    alignment: Alignment.center,
+    decoration: BoxDecoration(
+      color: selected ? background : Colors.transparent,
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Icon(icon, size: 21, color: selected ? color : color.withAlpha(150)),
+  );
 }
 
 class _StartupError extends StatefulWidget {
