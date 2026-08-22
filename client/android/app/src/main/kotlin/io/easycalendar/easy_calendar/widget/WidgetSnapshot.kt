@@ -7,6 +7,18 @@ import org.json.JSONException
 import java.time.Instant
 import java.time.ZoneId
 
+private object WidgetSnapshotFields {
+    const val SCHEMA_VERSION = "schema_version"
+    const val GENERATED_AT = "generated_at"
+    const val TIMEZONE = "timezone"
+    const val CALENDAR_EVENTS = "calendar_events"
+    const val WEEK_EVENTS = "week_events"
+    const val TODAY_EVENTS = "today_events"
+    const val UPCOMING_EVENTS = "upcoming_events"
+    const val DUE_ITEMS = "due_items"
+    const val QUOTES = "quotes"
+}
+
 internal data class WidgetItem(
     val id: String,
     val title: String,
@@ -28,25 +40,25 @@ internal data class WidgetSnapshot(
     companion object {
         fun decode(json: String): WidgetSnapshot {
             val root = JSONObject(json)
-            require(root.optInt("schema_version", -1) in 1..2) {
+            require(root.optInt(WidgetSnapshotFields.SCHEMA_VERSION, -1) in 1..2) {
                 "Unsupported widget snapshot schema"
             }
             val zoneId = runCatching {
-                ZoneId.of(root.optString("timezone"))
+                ZoneId.of(root.optString(WidgetSnapshotFields.TIMEZONE))
             }.getOrDefault(ZoneId.systemDefault())
-            val weekEvents = root.optJSONArray("calendar_events")
-                ?: root.optJSONArray("week_events")
+            val weekEvents = root.optJSONArray(WidgetSnapshotFields.CALENDAR_EVENTS)
+                ?: root.optJSONArray(WidgetSnapshotFields.WEEK_EVENTS)
                 ?: mergeArrays(
-                    root.optJSONArray("today_events"),
-                    root.optJSONArray("upcoming_events"),
+                    root.optJSONArray(WidgetSnapshotFields.TODAY_EVENTS),
+                    root.optJSONArray(WidgetSnapshotFields.UPCOMING_EVENTS),
                 )
             return WidgetSnapshot(
-                generatedAt = instantOrNull(root.stringOrNull("generated_at")),
+                generatedAt = instantOrNull(root.stringOrNull(WidgetSnapshotFields.GENERATED_AT)),
                 zoneId = zoneId,
-                dueItems = decodeItems(root.optJSONArray("due_items")),
+                dueItems = decodeItems(root.optJSONArray(WidgetSnapshotFields.DUE_ITEMS)),
                 weekEvents = decodeItems(weekEvents),
-                calendarEvents = decodeItems(root.optJSONArray("calendar_events")),
-                quotes = decodeStrings(root.optJSONArray("quotes")),
+                calendarEvents = decodeItems(root.optJSONArray(WidgetSnapshotFields.CALENDAR_EVENTS)),
+                quotes = decodeStrings(root.optJSONArray(WidgetSnapshotFields.QUOTES)),
             )
         }
 
@@ -133,7 +145,7 @@ object WidgetSnapshotStore {
         val json = prefs.getString(SNAPSHOT_KEY, null) ?: return false
         return runCatching {
             val root = JSONObject(json)
-            val source = root.optJSONArray("due_items") ?: return false
+            val source = root.optJSONArray(WidgetSnapshotFields.DUE_ITEMS) ?: return false
             val filtered = JSONArray()
             var changed = false
             for (index in 0 until source.length()) {
@@ -147,7 +159,7 @@ object WidgetSnapshotStore {
                 filtered.put(source.opt(index))
             }
             if (!changed) return false
-            root.put("due_items", filtered)
+            root.put(WidgetSnapshotFields.DUE_ITEMS, filtered)
             prefs.edit().putString(SNAPSHOT_KEY, root.toString()).commit()
         }.getOrDefault(false)
     }

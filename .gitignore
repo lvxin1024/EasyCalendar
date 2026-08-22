@@ -66,6 +66,8 @@ Thumbs.db
 
 # Internal development docs (not for public repo)
 docs/
+.codex-docs-cache/
+.codex-log/
 
 # Temporary files
 *.tmp

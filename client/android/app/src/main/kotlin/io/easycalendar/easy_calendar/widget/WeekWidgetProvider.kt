@@ -6,6 +6,10 @@ import android.content.Context
 import android.util.Log
 
 class WeekWidgetProvider : AppWidgetProvider() {
+    override fun onDisabled(context: Context) {
+        WeekWidgetRefreshScheduler.cancel(context)
+    }
+
     override fun onUpdate(
         context: Context,
         appWidgetManager: AppWidgetManager,
@@ -34,16 +38,14 @@ class WeekWidgetProvider : AppWidgetProvider() {
                 try {
                     val options = manager.getAppWidgetOptions(id)
                     val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 250)
-                    val maxWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, minWidth)
                     val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 250)
-                    val maxHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, minHeight)
                     manager.updateAppWidget(
                         id,
                         EasyCalendarWidgetRenderer.week(
                             context,
                             snapshot,
-                            maxOf(minWidth, maxWidth),
-                            maxOf(minHeight, maxHeight),
+                            minWidth,
+                            minHeight,
                         ),
                     )
                 } catch (error: Throwable) {

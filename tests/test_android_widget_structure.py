@@ -61,15 +61,21 @@ def test_widgets_consume_the_shared_snapshot_without_opening_sqlite():
     assert "due_items" in snapshot
     assert "SQLite" not in combined
     assert "sqflite" not in combined
-    assert "easycalendar://due" in renderer
+    assert "easycalendar://due" not in renderer
     assert "easycalendar://today" in renderer
     assert "writeSnapshot" in activity
     assert "Platform.isAndroid" in dart_writer
     assert "week_events" in dart_writer
     assert "calendar_events" in dart_writer
+    assert "WidgetSnapshotSchema.version" in dart_writer
+    assert "SCHEMA_VERSION" in snapshot
+    assert "MAX_BITMAP_PIXELS" in renderer
+    assert "OPTION_APPWIDGET_MAX_WIDTH" not in (
+        kotlin_dir / "widget" / "WeekWidgetProvider.kt"
+    ).read_text(encoding="utf-8")
 
 
-def test_widget_layouts_have_stable_row_slots_and_dark_colors():
+def test_widget_layouts_have_stable_slots_and_dark_colors():
     due = (ANDROID / "res" / "layout" / "widget_due.xml").read_text(
         encoding="utf-8"
     )
@@ -78,5 +84,32 @@ def test_widget_layouts_have_stable_row_slots_and_dark_colors():
     )
 
     assert all(f"due_row_{index}" in due for index in range(1, 4))
-    assert all(f"week_row_{index}" in week for index in range(1, 8))
+    assert "widget_week_root" in week
+    assert "week_snapshot" in week
+    assert "week_row_1" not in week
     assert (ANDROID / "res" / "values-night" / "colors.xml").is_file()
+
+
+def test_due_widget_completes_items_without_an_app_open_pending_intent():
+    renderer = (
+        ANDROID
+        / "kotlin"
+        / "io"
+        / "easycalendar"
+        / "easy_calendar"
+        / "widget"
+        / "EasyCalendarWidgetRenderer.kt"
+    ).read_text(encoding="utf-8")
+    actions = (
+        ANDROID
+        / "kotlin"
+        / "io"
+        / "easycalendar"
+        / "easy_calendar"
+        / "widget"
+        / "DueWidgetActions.kt"
+    ).read_text(encoding="utf-8")
+
+    assert "ACTION_COMPLETE_DUE" in renderer
+    assert "completeDueIntent" in renderer
+    assert "openAppIntent" not in actions

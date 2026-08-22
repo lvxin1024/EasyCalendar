@@ -31,6 +31,7 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlin.math.sqrt
 import android.text.style.BackgroundColorSpan
 import android.text.style.ForegroundColorSpan
 
@@ -122,8 +123,14 @@ internal object EasyCalendarWidgetRenderer {
         minHeight: Int,
     ): Bitmap {
         val density = context.resources.displayMetrics.density
-        val width = max(360, (minWidth * density).roundToInt())
-        val height = max(260, (minHeight * density).roundToInt())
+        val requestedWidth = max(360, (minWidth * density).roundToInt())
+        val requestedHeight = max(260, (minHeight * density).roundToInt())
+        val scale = min(
+            1.0,
+            sqrt(MAX_BITMAP_PIXELS.toDouble() / (requestedWidth.toDouble() * requestedHeight)),
+        ).toFloat()
+        val width = max(360, (requestedWidth * scale).roundToInt())
+        val height = max(260, (requestedHeight * scale).roundToInt())
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
 
@@ -455,4 +462,6 @@ internal object EasyCalendarWidgetRenderer {
         } else {
             context.resources.getColor(colorId)
         }
+
+    private const val MAX_BITMAP_PIXELS = 1_500_000
 }

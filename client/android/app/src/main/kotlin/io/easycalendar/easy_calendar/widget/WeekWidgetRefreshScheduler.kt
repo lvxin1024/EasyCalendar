@@ -35,4 +35,19 @@ internal object WeekWidgetRefreshScheduler {
             pendingIntent,
         )
     }
+
+    fun cancel(context: Context) {
+        val alarmManager = context.getSystemService(AlarmManager::class.java) ?: return
+        val intent = Intent(context, WeekWidgetRefreshReceiver::class.java).apply {
+            action = ACTION_REFRESH
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            REQUEST_CODE,
+            intent,
+            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE,
+        ) ?: return
+        alarmManager.cancel(pendingIntent)
+        pendingIntent.cancel()
+    }
 }

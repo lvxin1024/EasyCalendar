@@ -7,6 +7,20 @@ import '../domain/item.dart';
 import '../domain/recurrence.dart';
 import '../utils/configured_time.dart';
 
+abstract final class WidgetSnapshotSchema {
+  static const version = 2;
+  static const schemaVersion = 'schema_version';
+  static const generatedAt = 'generated_at';
+  static const timezone = 'timezone';
+  static const todayEvents = 'today_events';
+  static const upcomingEvents = 'upcoming_events';
+  static const weekEvents = 'week_events';
+  static const calendarEvents = 'calendar_events';
+  static const dueItems = 'due_items';
+  static const quotes = 'quotes';
+  static const items = 'items';
+}
+
 abstract interface class WidgetSnapshotWriter {
   Future<void> write({
     required List<CalendarItem> items,
@@ -117,28 +131,36 @@ class WidgetSnapshotBuilder {
       ...dueItems,
     ];
     return <String, dynamic>{
-      'schema_version': 2,
-      'generated_at': effectiveNow.toUtc().toIso8601String(),
-      'timezone': timezone,
+      WidgetSnapshotSchema.schemaVersion: WidgetSnapshotSchema.version,
+      WidgetSnapshotSchema.generatedAt: effectiveNow.toUtc().toIso8601String(),
+      WidgetSnapshotSchema.timezone: timezone,
       'version': items.fold<int>(
         0,
         (max, item) => item.version > max ? item.version : max,
       ),
-      'today_events': todayEvents.map(_serializeItem).toList(growable: false),
-      'upcoming_events': upcomingEvents
+      WidgetSnapshotSchema.todayEvents: todayEvents
           .map(_serializeItem)
           .toList(growable: false),
-      'week_events': weekEvents.map(_serializeItem).toList(growable: false),
-      'calendar_events': calendarEvents
+      WidgetSnapshotSchema.upcomingEvents: upcomingEvents
+          .map(_serializeItem)
+          .toList(growable: false),
+      WidgetSnapshotSchema.weekEvents: weekEvents
+          .map(_serializeItem)
+          .toList(growable: false),
+      WidgetSnapshotSchema.calendarEvents: calendarEvents
           .map(_serializeOccurrence)
           .toList(growable: false),
-      'due_items': dueItems.map(_serializeItem).toList(growable: false),
-      'quotes': quotes
+      WidgetSnapshotSchema.dueItems: dueItems
+          .map(_serializeItem)
+          .toList(growable: false),
+      WidgetSnapshotSchema.quotes: quotes
           .map((value) => value.trim())
           .where((value) => value.isNotEmpty)
           .take(10)
           .toList(growable: false),
-      'items': included.map(_serializeItem).toList(growable: false),
+      WidgetSnapshotSchema.items: included
+          .map(_serializeItem)
+          .toList(growable: false),
     };
   }
 
