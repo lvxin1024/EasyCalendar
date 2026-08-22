@@ -2,6 +2,18 @@
 cmake_minimum_required(VERSION 3.14)
 project(EasyCalendar LANGUAGES CXX)
 
+# The Windows secure-storage and notifications plugins use ATL headers. ATL is
+# an optional Visual Studio component, so add its include directory explicitly
+# when it is present instead of relying on the compiler environment to find it.
+if(MSVC)
+  get_filename_component(_msvc_bin_dir "${CMAKE_CXX_COMPILER}" DIRECTORY)
+  get_filename_component(_msvc_tools_dir "${_msvc_bin_dir}/../../.." ABSOLUTE)
+  set(_atl_include_dir "${_msvc_tools_dir}/atlmfc/include")
+  if(EXISTS "${_atl_include_dir}/atlstr.h")
+    include_directories("${_atl_include_dir}")
+  endif()
+endif()
+
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
 set(BINARY_NAME "EasyCalendar")

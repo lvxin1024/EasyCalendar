@@ -7,6 +7,12 @@ enum ItemStatus { todo, done, cancelled }
 
 enum ClockFormat { system, hour12, hour24 }
 
+const defaultWidgetQuotes = <String>[
+  'every day u fight like ur running out of time',
+  'do it with all your heart',
+  'small steps still move you forward',
+];
+
 class ItemDraft {
   const ItemDraft({
     this.collectionId,
@@ -189,6 +195,7 @@ class ClientPreferences {
     this.assistantEnabled = false,
     this.aiProviders = const [],
     this.tagColors = const {},
+    this.widgetQuotes = defaultWidgetQuotes,
   });
 
   final String apiUrl;
@@ -211,6 +218,7 @@ class ClientPreferences {
   final bool assistantEnabled;
   final List<AiProviderConfig> aiProviders;
   final Map<String, int> tagColors;
+  final List<String> widgetQuotes;
 
   ClientPreferences copyWith({
     String? apiUrl,
@@ -231,6 +239,7 @@ class ClientPreferences {
     bool? assistantEnabled,
     List<AiProviderConfig>? aiProviders,
     Map<String, int>? tagColors,
+    List<String>? widgetQuotes,
   }) => ClientPreferences(
     apiUrl: apiUrl ?? this.apiUrl,
     featureApiUrl: featureApiUrl ?? this.featureApiUrl,
@@ -250,5 +259,6 @@ class ClientPreferences {
     assistantEnabled: assistantEnabled ?? this.assistantEnabled,
     aiProviders: aiProviders ?? this.aiProviders,
     tagColors: tagColors ?? this.tagColors,
+    widgetQuotes: widgetQuotes ?? this.widgetQuotes,
   );
 }

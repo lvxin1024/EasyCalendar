@@ -311,6 +311,16 @@ class _HomeShellState extends State<HomeShell> {
       _showError('该事项已不存在。');
       return;
     }
+    if (target.kind == WidgetDeepLinkKind.complete) {
+      if (item.type == ItemType.task && item.status == ItemStatus.todo) {
+        try {
+          await widget.controller.setTaskCompleted(item, completed: true);
+        } catch (error) {
+          if (mounted) _showError('完成事项失败：$error');
+        }
+      }
+      return;
+    }
     await _openEditor(item);
   }
 

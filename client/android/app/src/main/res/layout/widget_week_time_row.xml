@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="30dp"
+    android:gravity="center_vertical"
+    android:orientation="horizontal">
+    <TextView
+        android:id="@+id/week_time_label"
+        android:layout_width="34dp"
+        android:layout_height="match_parent"
+        android:gravity="top|center_horizontal"
+        android:paddingTop="2dp"
+        android:textColor="@color/widget_secondary_text"
+        android:textSize="8sp"/>
+    <TextView android:id="@+id/week_cell_1" style="@style/EasyCalendarWidgetGridCell"/>
+    <TextView android:id="@+id/week_cell_2" style="@style/EasyCalendarWidgetGridCell"/>
+    <TextView android:id="@+id/week_cell_3" style="@style/EasyCalendarWidgetGridCell"/>
+    <TextView android:id="@+id/week_cell_4" style="@style/EasyCalendarWidgetGridCell"/>
+    <TextView android:id="@+id/week_cell_5" style="@style/EasyCalendarWidgetGridCell"/>
+    <TextView android:id="@+id/week_cell_6" style="@style/EasyCalendarWidgetGridCell"/>
+    <TextView android:id="@+id/week_cell_7" style="@style/EasyCalendarWidgetGridCell"/>
+</LinearLayout>

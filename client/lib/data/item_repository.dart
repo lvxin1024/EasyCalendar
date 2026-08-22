@@ -60,6 +60,7 @@ abstract interface class ItemRepository {
     required String title,
     required String url,
     required int refreshIntervalMinutes,
+    required List<String> tags,
   });
 
   Future<CalendarSubscription> updateSubscription(
@@ -68,6 +69,7 @@ abstract interface class ItemRepository {
     required String url,
     required bool enabled,
     required int refreshIntervalMinutes,
+    required List<String> tags,
   });
 
   Future<void> deleteSubscription(CalendarSubscription current);

@@ -13,6 +13,7 @@ class CalendarSubscription {
     this.lastModified,
     this.sourceHash,
     this.refreshIntervalMinutes = 60,
+    this.tags = const [],
   });
 
   factory CalendarSubscription.fromJson(Map<String, Object?> json) {
@@ -32,6 +33,10 @@ class CalendarSubscription {
       sourceHash: json['source_hash'] as String?,
       refreshIntervalMinutes:
           metadata['refresh_interval_minutes'] as int? ?? 60,
+      tags: _list(metadata['tags'])
+          .map((value) => value.trim())
+          .where((value) => value.isNotEmpty)
+          .toList(growable: false),
     );
   }
 
@@ -48,6 +53,7 @@ class CalendarSubscription {
   final String? lastModified;
   final String? sourceHash;
   final int refreshIntervalMinutes;
+  final List<String> tags;
 }
 
 class SubscriptionFetchLog {
@@ -108,3 +114,7 @@ DateTime? _date(Object? value) =>
 
 Map<String, Object?> _map(Object? value) =>
     value is Map<Object?, Object?> ? value.cast<String, Object?>() : const {};
+
+List<String> _list(Object? value) => value is List
+    ? value.whereType<String>().toList(growable: false)
+    : const [];

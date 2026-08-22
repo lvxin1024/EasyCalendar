@@ -77,6 +77,7 @@ class _SettingsPageState extends State<SettingsPage> {
   late ClockFormat _clockFormat;
   late List<AiProviderConfig> _aiProviders;
   late Map<String, int> _tagColors;
+  late List<String> _widgetQuotes;
   bool _obscureToken = true;
   bool _obscureFeatureToken = true;
   bool _testingSyncService = false;
@@ -115,6 +116,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _clockFormat = preferences.clockFormat;
     _aiProviders = [...preferences.aiProviders];
     _tagColors = {...preferences.tagColors};
+    _widgetQuotes = [...preferences.widgetQuotes];
     widget.controller.desktopWindowController?.addListener(_windowChanged);
     unawaited(_refreshAiProviderKeys());
   }
@@ -492,6 +494,16 @@ class _SettingsPageState extends State<SettingsPage> {
                 colors: _tagColors,
                 onChanged: _setTagColor,
               ),
+              _WidgetQuoteSection(
+                quotes: _widgetQuotes,
+                onAdd: _widgetQuotes.length >= 10
+                    ? null
+                    : () => _editWidgetQuote(),
+                onEdit: (index) => _editWidgetQuote(index),
+                onDelete: (index) => setState(
+                  () => _widgetQuotes = [..._widgetQuotes]..removeAt(index),
+                ),
+              ),
               if (widget.controller.desktopWindowController?.available == true)
                 _DesktopWindowSection(
                   opacity: _windowOpacity,
@@ -706,6 +718,7 @@ class _SettingsPageState extends State<SettingsPage> {
           assistantEnabled: _assistantEnabled,
           aiProviders: _aiProviders,
           tagColors: _tagColors,
+          widgetQuotes: _widgetQuotes,
         ),
       );
       if (_tokenController.text.trim().isNotEmpty) {
@@ -753,6 +766,48 @@ class _SettingsPageState extends State<SettingsPage> {
       _clockFormat = preferences.clockFormat;
       _aiProviders = [...preferences.aiProviders];
       _tagColors = {...preferences.tagColors};
+      _widgetQuotes = [...preferences.widgetQuotes];
+    });
+  }
+
+  Future<void> _editWidgetQuote([int? index]) async {
+    final controller = TextEditingController(
+      text: index == null ? '' : _widgetQuotes[index],
+    );
+    final value = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(index == null ? '添加小组件文案' : '编辑小组件文案'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 160,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            labelText: '文案',
+            hintText: 'every day u fight like ur running out of time',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (!mounted || value == null || value.isEmpty) return;
+    setState(() {
+      if (index == null) {
+        _widgetQuotes = [..._widgetQuotes, value];
+      } else {
+        _widgetQuotes = [..._widgetQuotes]..[index] = value;
+      }
     });
   }
 
@@ -1639,6 +1694,58 @@ class _CollectionDialogState extends State<_CollectionDialog> {
         },
         child: const Text('保存'),
       ),
+    ],
+  );
+}
+
+class _WidgetQuoteSection extends StatelessWidget {
+  const _WidgetQuoteSection({
+    required this.quotes,
+    required this.onAdd,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final List<String> quotes;
+  final VoidCallback? onAdd;
+  final ValueChanged<int> onEdit;
+  final ValueChanged<int> onDelete;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      const SizedBox(height: 24),
+      Row(
+        children: [
+          const Expanded(child: _SectionLabel(label: 'Due 小组件文案')),
+          IconButton(
+            tooltip: quotes.length >= 10 ? '最多 10 句' : '添加文案',
+            onPressed: onAdd,
+            icon: const Icon(Icons.add),
+          ),
+        ],
+      ),
+      if (quotes.isEmpty)
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
+          child: Text('Due 清空后显示默认文案；最多可配置 10 句。'),
+        ),
+      for (var index = 0; index < quotes.length; index++)
+        ListTile(
+          leading: const Icon(Icons.format_quote_outlined),
+          title: Text(
+            quotes[index],
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          onTap: () => onEdit(index),
+          trailing: IconButton(
+            tooltip: '删除',
+            onPressed: () => onDelete(index),
+            icon: const Icon(Icons.delete_outline),
+          ),
+        ),
     ],
   );
 }

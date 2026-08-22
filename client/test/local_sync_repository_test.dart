@@ -345,11 +345,13 @@ void main() {
       title: 'Team calendar',
       url: 'webcal://example.com/team.ics',
       refreshIntervalMinutes: 180,
+      tags: const ['team'],
     );
 
     expect(created.url, 'https://example.com/team.ics');
     expect(created.enabled, isTrue);
     expect(created.refreshIntervalMinutes, 180);
+    expect(created.tags, ['team']);
     final collection = (await repository.listCollections()).singleWhere(
       (value) => value.id == created.collectionId,
     );
@@ -374,10 +376,12 @@ void main() {
       url: created.url,
       enabled: false,
       refreshIntervalMinutes: 360,
+      tags: const ['shared'],
     );
     expect(updated.version, 2);
     expect(updated.enabled, isFalse);
     expect(updated.refreshIntervalMinutes, 360);
+    expect(updated.tags, ['shared']);
     expect(
       (await repository.listCollections())
           .singleWhere((value) => value.id == created.collectionId)
@@ -405,6 +409,7 @@ void main() {
         title: 'Team calendar',
         url: 'https://example.com/team.ics',
         refreshIntervalMinutes: 60,
+        tags: const ['team'],
       );
       final firstFetch = DateTime.utc(2026, 8, 18, 1);
       final firstLog = await repository.applySubscriptionRefresh(
@@ -432,6 +437,7 @@ void main() {
       final firstItem = (await repository.listItems()).single;
       expect(firstItem.collectionId, created.collectionId);
       expect(firstItem.title, 'Team meeting');
+      expect(firstItem.tags, ['team']);
       final refreshed = (await repository.listSubscriptions()).single;
       expect(refreshed.etag, '"v1"');
       expect(refreshed.sourceHash, 'hash-v1');

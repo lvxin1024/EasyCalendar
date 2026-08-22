@@ -14,7 +14,7 @@ void main() {
         '{"data":[{"id":"sub_1","collection_id":"col_1",'
         '"title":"course","url":"https://example.com/a.ics",'
         '"enabled":true,"version":2,"metadata":'
-        '{"refresh_interval_minutes":180}}]}',
+        '{"refresh_interval_minutes":180,"tags":["course"]}}]}',
         200,
       );
     });
@@ -27,6 +27,7 @@ void main() {
 
     expect(subscriptions.single.title, 'course');
     expect(subscriptions.single.refreshIntervalMinutes, 180);
+    expect(subscriptions.single.tags, ['course']);
     expect(request.headers['Authorization'], 'Bearer token');
   });
 
@@ -50,11 +51,13 @@ void main() {
       title: 'course',
       url: 'https://example.com/a.ics',
       refreshIntervalMinutes: 180,
+      tags: const ['course'],
     );
 
     expect(request.headers['Authorization'], 'Bearer token');
     expect(request.headers['Idempotency-Key'], startsWith('subscription_'));
     expect(request.body, contains('"refresh_interval_minutes":180'));
+    expect(request.body, contains('"tags":["course"]'));
   });
 
   test('refresh accepts a refresh report response', () async {

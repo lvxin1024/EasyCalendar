@@ -445,6 +445,7 @@ class ItemController extends ChangeNotifier {
     assistantEnabled: preferences.assistantEnabled,
     aiProviders: preferences.aiProviders,
     tagColors: preferences.tagColors,
+    widgetQuotes: preferences.widgetQuotes,
   ).encode();
 
   Future<void> importPortableSettings(String content) async {
@@ -464,6 +465,7 @@ class ItemController extends ChangeNotifier {
         assistantEnabled: imported.assistantEnabled,
         aiProviders: imported.aiProviders,
         tagColors: imported.tagColors,
+        widgetQuotes: imported.widgetQuotes,
       ),
     );
   }
@@ -504,6 +506,7 @@ class ItemController extends ChangeNotifier {
     required String title,
     required String url,
     required int refreshIntervalMinutes,
+    required List<String> tags,
   }) async {
     late CalendarSubscription result;
     await _mutate(() async {
@@ -511,6 +514,7 @@ class ItemController extends ChangeNotifier {
         title: title,
         url: url,
         refreshIntervalMinutes: refreshIntervalMinutes,
+        tags: tags,
       );
     });
     return result;
@@ -522,6 +526,7 @@ class ItemController extends ChangeNotifier {
     required String url,
     required bool enabled,
     required int refreshIntervalMinutes,
+    required List<String> tags,
   }) async {
     late CalendarSubscription result;
     await _mutate(() async {
@@ -531,6 +536,7 @@ class ItemController extends ChangeNotifier {
         url: url,
         enabled: enabled,
         refreshIntervalMinutes: refreshIntervalMinutes,
+        tags: tags,
       );
     });
     return result;
@@ -616,6 +622,15 @@ class ItemController extends ChangeNotifier {
       _preferences = value;
       await _applyRuntimeSettings(value);
       try {
+        await widgetSnapshotWriter?.write(
+          items: _items,
+          timezone: activeTimezone,
+          quotes: value.widgetQuotes,
+        );
+      } catch (_) {
+        // Widget refresh is derived state and must not block settings changes.
+      }
+      try {
         await desktopWindowController?.setOpacity(value.windowOpacity);
         await desktopWindowController?.setAlwaysOnTop(value.windowAlwaysOnTop);
       } catch (_) {
@@ -696,6 +711,7 @@ class ItemController extends ChangeNotifier {
       await widgetSnapshotWriter?.write(
         items: _items,
         timezone: activeTimezone,
+        quotes: preferences.widgetQuotes,
       );
     } catch (_) {
       // Widget refresh is derived state and must not block local CRUD.

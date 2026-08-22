@@ -11,6 +11,7 @@ abstract interface class WidgetSnapshotWriter {
   Future<void> write({
     required List<CalendarItem> items,
     required String timezone,
+    required List<String> quotes,
   });
 }
 
@@ -23,9 +24,14 @@ class PlatformWidgetSnapshotWriter implements WidgetSnapshotWriter {
   Future<void> write({
     required List<CalendarItem> items,
     required String timezone,
+    required List<String> quotes,
   }) async {
     if (!Platform.isMacOS && !Platform.isAndroid) return;
-    final payload = WidgetSnapshotBuilder.build(items, timezone: timezone);
+    final payload = WidgetSnapshotBuilder.build(
+      items,
+      timezone: timezone,
+      quotes: quotes,
+    );
     await _channel.invokeMethod<void>('writeSnapshot', <String, dynamic>{
       'json': jsonEncode(payload),
     });
@@ -38,6 +44,7 @@ class WidgetSnapshotBuilder {
   static Map<String, dynamic> build(
     List<CalendarItem> items, {
     required String timezone,
+    List<String> quotes = defaultWidgetQuotes,
     DateTime? now,
   }) {
     final effectiveNow = now ?? configuredNow();
@@ -76,8 +83,7 @@ class WidgetSnapshotBuilder {
         }
       } else if (item.type == ItemType.task &&
           item.status != ItemStatus.done &&
-          item.status != ItemStatus.cancelled &&
-          localSchedule.isBefore(upcomingEnd)) {
+          item.status != ItemStatus.cancelled) {
         dueItems.add(item);
       }
     }
@@ -111,7 +117,7 @@ class WidgetSnapshotBuilder {
       ...dueItems,
     ];
     return <String, dynamic>{
-      'schema_version': 1,
+      'schema_version': 2,
       'generated_at': effectiveNow.toUtc().toIso8601String(),
       'timezone': timezone,
       'version': items.fold<int>(
@@ -127,6 +133,11 @@ class WidgetSnapshotBuilder {
           .map(_serializeOccurrence)
           .toList(growable: false),
       'due_items': dueItems.map(_serializeItem).toList(growable: false),
+      'quotes': quotes
+          .map((value) => value.trim())
+          .where((value) => value.isNotEmpty)
+          .take(10)
+          .toList(growable: false),
       'items': included.map(_serializeItem).toList(growable: false),
     };
   }

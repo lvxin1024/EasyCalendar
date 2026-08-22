@@ -111,6 +111,7 @@ class _SubscriptionsPageState extends State<SubscriptionsPage> {
         title: draft.title,
         url: draft.url,
         refreshIntervalMinutes: draft.refreshIntervalMinutes,
+        tags: draft.tags,
       );
       await _refresh(created);
     } catch (error) {
@@ -131,6 +132,7 @@ class _SubscriptionsPageState extends State<SubscriptionsPage> {
         url: draft.url,
         enabled: current.enabled,
         refreshIntervalMinutes: draft.refreshIntervalMinutes,
+        tags: draft.tags,
       );
       await _reload();
     } catch (error) {
@@ -146,6 +148,7 @@ class _SubscriptionsPageState extends State<SubscriptionsPage> {
         url: current.url,
         enabled: enabled,
         refreshIntervalMinutes: current.refreshIntervalMinutes,
+        tags: current.tags,
       );
       await _reload();
     } catch (error) {
@@ -273,6 +276,7 @@ class _SubscriptionTile extends StatelessWidget {
         subtitle: Text(
           '${subscription.url}\n'
           '每 ${_interval(subscription.refreshIntervalMinutes)}刷新 · $status'
+          '${subscription.tags.isEmpty ? '' : '\n标签：${subscription.tags.join(' · ')}'}'
           '${etag == null ? '' : '\nETag ${_SubscriptionsPageState._short(etag)}'}'
           '${sourceHash == null ? '' : ' · 哈希 ${_SubscriptionsPageState._short(sourceHash)}'}',
           maxLines: 5,
@@ -343,11 +347,13 @@ class _SubscriptionDraft {
     required this.title,
     required this.url,
     required this.refreshIntervalMinutes,
+    required this.tags,
   });
 
   final String title;
   final String url;
   final int refreshIntervalMinutes;
+  final List<String> tags;
 }
 
 class _SubscriptionDialog extends StatefulWidget {
@@ -363,6 +369,7 @@ class _SubscriptionDialogState extends State<_SubscriptionDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _title;
   late final TextEditingController _url;
+  late final TextEditingController _tags;
   late int _refreshIntervalMinutes;
 
   @override
@@ -370,6 +377,7 @@ class _SubscriptionDialogState extends State<_SubscriptionDialog> {
     super.initState();
     _title = TextEditingController(text: widget.initial?.title);
     _url = TextEditingController(text: widget.initial?.url);
+    _tags = TextEditingController(text: widget.initial?.tags.join(', '));
     _refreshIntervalMinutes = widget.initial?.refreshIntervalMinutes ?? 60;
   }
 
@@ -377,6 +385,7 @@ class _SubscriptionDialogState extends State<_SubscriptionDialog> {
   void dispose() {
     _title.dispose();
     _url.dispose();
+    _tags.dispose();
     super.dispose();
   }
 
@@ -412,6 +421,14 @@ class _SubscriptionDialogState extends State<_SubscriptionDialog> {
               onChanged: (value) {
                 if (value != null) _refreshIntervalMinutes = value;
               },
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _tags,
+              decoration: const InputDecoration(
+                labelText: '标签',
+                helperText: '多个标签请用逗号分隔；订阅中的日程都会带上这些标签',
+              ),
             ),
             const SizedBox(height: 12),
             TextFormField(
@@ -452,6 +469,12 @@ class _SubscriptionDialogState extends State<_SubscriptionDialog> {
                   ? rawUrl.replaceFirst('webcal://', 'https://')
                   : rawUrl,
               refreshIntervalMinutes: _refreshIntervalMinutes,
+              tags: _tags.text
+                  .split(RegExp(r'[,，]'))
+                  .map((value) => value.trim())
+                  .where((value) => value.isNotEmpty)
+                  .toSet()
+                  .toList(growable: false),
             ),
           );
         },

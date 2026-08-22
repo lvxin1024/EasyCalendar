@@ -30,7 +30,16 @@ class WeekWidgetProvider : AppWidgetProvider() {
         ) {
             val snapshot = WidgetSnapshotStore.read(context)
             widgetIds.forEach { id ->
-                manager.updateAppWidget(id, EasyCalendarWidgetRenderer.week(context, snapshot))
+                val options = manager.getAppWidgetOptions(id)
+                manager.updateAppWidget(
+                    id,
+                    EasyCalendarWidgetRenderer.week(
+                        context,
+                        snapshot,
+                        options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 250),
+                        options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 250),
+                    ),
+                )
             }
         }
     }

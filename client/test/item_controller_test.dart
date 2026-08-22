@@ -562,6 +562,7 @@ class _MemoryRepository implements ItemRepository {
     required String title,
     required String url,
     required int refreshIntervalMinutes,
+    required List<String> tags,
   }) async => throw UnimplementedError();
 
   @override
@@ -571,6 +572,7 @@ class _MemoryRepository implements ItemRepository {
     required String url,
     required bool enabled,
     required int refreshIntervalMinutes,
+    required List<String> tags,
   }) async => throw UnimplementedError();
 
   @override

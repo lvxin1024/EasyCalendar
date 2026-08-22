@@ -18,6 +18,7 @@ class PortableClientSettings {
     required this.assistantEnabled,
     required this.aiProviders,
     required this.tagColors,
+    this.widgetQuotes = defaultWidgetQuotes,
   });
 
   factory PortableClientSettings.decode(String content) {
@@ -72,6 +73,14 @@ class PortableClientSettings {
       assistantEnabled: _boolean(value, 'assistant_enabled'),
       aiProviders: providers,
       tagColors: colors,
+      widgetQuotes: value.containsKey('widget_quotes')
+          ? (value['widget_quotes'] as List<dynamic>? ?? const [])
+                .whereType<String>()
+                .map((entry) => entry.trim())
+                .where((entry) => entry.isNotEmpty)
+                .take(10)
+                .toList(growable: false)
+          : defaultWidgetQuotes,
     );
   }
 
@@ -88,6 +97,7 @@ class PortableClientSettings {
   final bool assistantEnabled;
   final List<AiProviderConfig> aiProviders;
   final Map<String, int> tagColors;
+  final List<String> widgetQuotes;
 
   String encode() => jsonEncode({
     'schema_version': 1,
@@ -114,6 +124,7 @@ class PortableClientSettings {
       'assistant_enabled': assistantEnabled,
       'ai_providers': aiProviders.map((provider) => provider.toJson()).toList(),
       'tag_colors': tagColors,
+      'widget_quotes': widgetQuotes.take(10).toList(growable: false),
     },
   });
 

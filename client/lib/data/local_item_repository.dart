@@ -1194,9 +1194,11 @@ class LocalItemRepository
     required String title,
     required String url,
     required int refreshIntervalMinutes,
+    required List<String> tags,
   }) async {
     final normalizedTitle = title.trim();
     final normalizedUrl = _validateSubscriptionUrl(url);
+    final normalizedTags = _normalizeTags(tags);
     _validateRefreshInterval(refreshIntervalMinutes);
     if (normalizedTitle.isEmpty) {
       throw const RepositoryConflict('订阅名称不能为空。');
@@ -1222,6 +1224,7 @@ class LocalItemRepository
       url: normalizedUrl,
       enabled: true,
       refreshIntervalMinutes: refreshIntervalMinutes,
+      tags: normalizedTags,
       createdAt: now,
       updatedAt: now,
       version: 1,
@@ -1246,9 +1249,11 @@ class LocalItemRepository
     required String url,
     required bool enabled,
     required int refreshIntervalMinutes,
+    required List<String> tags,
   }) async {
     final normalizedTitle = title.trim();
     final normalizedUrl = _validateSubscriptionUrl(url);
+    final normalizedTags = _normalizeTags(tags);
     _validateRefreshInterval(refreshIntervalMinutes);
     if (normalizedTitle.isEmpty) {
       throw const RepositoryConflict('订阅名称不能为空。');
@@ -1271,6 +1276,7 @@ class LocalItemRepository
             ? (payload['metadata'] as Map).cast<String, Object?>()
             : const {},
       )..['refresh_interval_minutes'] = refreshIntervalMinutes;
+      metadata['tags'] = normalizedTags;
       updatedPayload = {
         ...payload,
         'title': normalizedTitle,
@@ -1324,6 +1330,50 @@ class LocalItemRepository
             collection,
             operation: 'update',
           );
+        }
+      }
+      if (jsonEncode(normalizedTags) != jsonEncode(current.tags)) {
+        final itemRows = await transaction.query(
+          'items',
+          where: 'collection_id = ? AND deleted_at IS NULL',
+          whereArgs: [current.collectionId],
+        );
+        for (final row in itemRows) {
+          final previous = _itemFromRow(row);
+          final nextTags = _normalizeTags([
+            ...previous.tags.where((tag) => !current.tags.contains(tag)),
+            ...normalizedTags,
+          ]);
+          if (jsonEncode(nextTags) == jsonEncode(previous.tags)) continue;
+          final updated = _subscriptionItem(
+            id: previous.id,
+            collectionId: previous.collectionId,
+            draft: ItemDraft(
+              type: previous.type,
+              title: previous.title,
+              body: previous.body,
+              startAt: previous.startAt,
+              endAt: previous.endAt,
+              dueAt: previous.dueAt,
+              recurrence: previous.recurrence,
+              timezone: previous.timezone,
+              allDay: previous.allDay,
+              location: previous.location,
+              status: previous.status,
+              priority: previous.priority,
+              tags: nextTags,
+            ),
+            createdAt: previous.createdAt,
+            updatedAt: now,
+            version: previous.version + 1,
+          );
+          await transaction.update(
+            'items',
+            _itemToRow(updated),
+            where: 'id = ? AND version = ?',
+            whereArgs: [previous.id, previous.version],
+          );
+          await _writeOutbox(transaction, updated, 'update');
         }
       }
     });
@@ -1466,6 +1516,7 @@ class LocalItemRepository
         };
         final seen = <String>{};
         for (final event in events) {
+          final taggedDraft = _withSubscriptionTags(event.draft, current.tags);
           final itemId = _subscriptionItemId(current.id, event.externalId);
           seen.add(itemId);
           final previous = existing[itemId];
@@ -1473,7 +1524,7 @@ class LocalItemRepository
             final created = _subscriptionItem(
               id: itemId,
               collectionId: current.collectionId,
-              draft: event.draft,
+              draft: taggedDraft,
               createdAt: fetchedAt,
               updatedAt: fetchedAt,
               version: 1,
@@ -1481,14 +1532,14 @@ class LocalItemRepository
             await transaction.insert('items', _itemToRow(created));
             await _writeOutbox(transaction, created, 'create');
             createdCount += 1;
-          } else if (_sameSubscriptionItem(previous, event.draft) &&
+          } else if (_sameSubscriptionItem(previous, taggedDraft) &&
               !previous.isDeleted) {
             unchangedCount += 1;
           } else {
             final updated = _subscriptionItem(
               id: previous.id,
               collectionId: current.collectionId,
-              draft: event.draft,
+              draft: taggedDraft,
               createdAt: previous.createdAt,
               updatedAt: fetchedAt,
               version: previous.version + 1,
@@ -1680,6 +1731,7 @@ class LocalItemRepository
     required String url,
     required bool enabled,
     required int refreshIntervalMinutes,
+    required List<String> tags,
     required DateTime createdAt,
     required DateTime updatedAt,
     required int version,
@@ -1696,7 +1748,10 @@ class LocalItemRepository
     'etag': null,
     'last_modified': null,
     'source_hash': null,
-    'metadata': {'refresh_interval_minutes': refreshIntervalMinutes},
+    'metadata': {
+      'refresh_interval_minutes': refreshIntervalMinutes,
+      'tags': tags,
+    },
     'created_at': _timeText(createdAt),
     'updated_at': _timeText(updatedAt),
     'deleted_at': null,
@@ -1750,6 +1805,28 @@ class LocalItemRepository
     createdAt: createdAt,
     updatedAt: updatedAt,
     version: version,
+  );
+
+  static ItemDraft _withSubscriptionTags(
+    ItemDraft draft,
+    List<String> subscriptionTags,
+  ) => ItemDraft(
+    collectionId: draft.collectionId,
+    type: draft.type,
+    title: draft.title,
+    body: draft.body,
+    startAt: draft.startAt,
+    endAt: draft.endAt,
+    dueAt: draft.dueAt,
+    recurrence: draft.recurrence,
+    timezone: draft.timezone,
+    allDay: draft.allDay,
+    location: draft.location,
+    status: draft.status,
+    priority: draft.priority,
+    reminderEnabled: draft.reminderEnabled,
+    reminderMinutes: draft.reminderMinutes,
+    tags: _normalizeTags([...draft.tags, ...subscriptionTags]),
   );
 
   static bool _sameSubscriptionItem(CalendarItem item, ItemDraft draft) =>
@@ -1836,6 +1913,10 @@ class LocalItemRepository
         defaults.aiProviders,
       ),
       tagColors: _storedTagColors(values['tag_colors'], defaults.tagColors),
+      widgetQuotes: _storedWidgetQuotes(
+        values['widget_quotes'],
+        defaults.widgetQuotes,
+      ),
     );
   }
 
@@ -1869,6 +1950,13 @@ class LocalItemRepository
           preferences.aiProviders.map((provider) => provider.toJson()).toList(),
         ),
         'tag_colors': jsonEncode(preferences.tagColors),
+        'widget_quotes': jsonEncode(
+          preferences.widgetQuotes
+              .map((value) => value.trim())
+              .where((value) => value.isNotEmpty)
+              .take(10)
+              .toList(growable: false),
+        ),
       }.entries) {
         await transaction.insert('app_settings', {
           'key': entry.key,
@@ -1881,6 +1969,23 @@ class LocalItemRepository
   static double _storedOpacity(String? value, double fallback) {
     final parsed = double.tryParse(value ?? '');
     return (parsed ?? fallback).clamp(0.2, 1.0).toDouble();
+  }
+
+  static List<String> _storedWidgetQuotes(
+    String? value,
+    List<String> fallback,
+  ) {
+    if (value == null) return fallback;
+    try {
+      return (jsonDecode(value) as List<dynamic>)
+          .whereType<String>()
+          .map((entry) => entry.trim())
+          .where((entry) => entry.isNotEmpty)
+          .take(10)
+          .toList(growable: false);
+    } catch (_) {
+      return fallback;
+    }
   }
 
   static int _storedFirstDayOfWeek(String? value, int fallback) {

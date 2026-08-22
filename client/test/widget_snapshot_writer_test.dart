@@ -35,7 +35,7 @@ void main() {
     expect(calendarIds, contains(startsWith('monday@')));
     expect(calendarIds, contains(startsWith('sunday@')));
     expect(calendarIds, contains(startsWith('next-week@')));
-    expect(snapshot['schema_version'], 1);
+    expect(snapshot['schema_version'], 2);
     expect(snapshot['timezone'], 'Asia/Shanghai');
   });
 
@@ -66,28 +66,28 @@ void main() {
     );
   });
 
-  test(
-    'snapshot exposes only incomplete due items inside the active window',
-    () {
-      final snapshot = WidgetSnapshotBuilder.build(
-        [
-          _task('overdue', 2026, 8, 18, 9),
-          _task('soon', 2026, 8, 19, 14),
-          _task('done', 2026, 8, 20, 9, status: ItemStatus.done),
-          _task('cancelled', 2026, 8, 20, 10, status: ItemStatus.cancelled),
-          _task('outside', 2026, 8, 28, 9),
-        ],
-        timezone: 'Asia/Shanghai',
-        now: tz.TZDateTime(tz.local, 2026, 8, 19, 12),
-      );
+  test('snapshot exposes all incomplete due items and configured quotes', () {
+    final snapshot = WidgetSnapshotBuilder.build(
+      [
+        _task('overdue', 2026, 8, 18, 9),
+        _task('soon', 2026, 8, 19, 14),
+        _task('done', 2026, 8, 20, 9, status: ItemStatus.done),
+        _task('cancelled', 2026, 8, 20, 10, status: ItemStatus.cancelled),
+        _task('outside', 2026, 8, 28, 9),
+      ],
+      timezone: 'Asia/Shanghai',
+      quotes: const ['keep going'],
+      now: tz.TZDateTime(tz.local, 2026, 8, 19, 12),
+    );
 
-      final due = snapshot['due_items']! as List<dynamic>;
-      expect(due.map((value) => (value as Map<String, dynamic>)['id']), [
-        'overdue',
-        'soon',
-      ]);
-    },
-  );
+    final due = snapshot['due_items']! as List<dynamic>;
+    expect(due.map((value) => (value as Map<String, dynamic>)['id']), [
+      'overdue',
+      'soon',
+      'outside',
+    ]);
+    expect(snapshot['quotes'], ['keep going']);
+  });
 }
 
 CalendarItem _event(

@@ -34,6 +34,7 @@ class SubscriptionApiClient {
     required String title,
     required String url,
     required int refreshIntervalMinutes,
+    List<String> tags = const [],
   }) async {
     final response = await _send(
       (headers) => _client.post(
@@ -44,7 +45,10 @@ class SubscriptionApiClient {
           'title': title,
           'url': url,
           'enabled': true,
-          'metadata': {'refresh_interval_minutes': refreshIntervalMinutes},
+          'metadata': {
+            'refresh_interval_minutes': refreshIntervalMinutes,
+            'tags': tags,
+          },
         }),
       ),
       idempotencyKey: 'subscription_${_uuid.v4()}',

@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-enum WidgetDeepLinkKind { today, due, item }
+enum WidgetDeepLinkKind { today, due, item, complete }
 
 class WidgetDeepLinkTarget {
   const WidgetDeepLinkTarget.today()
@@ -15,6 +15,9 @@ class WidgetDeepLinkTarget {
       itemId = null;
 
   const WidgetDeepLinkTarget.item(this.itemId) : kind = WidgetDeepLinkKind.item;
+
+  const WidgetDeepLinkTarget.complete(this.itemId)
+    : kind = WidgetDeepLinkKind.complete;
 
   final WidgetDeepLinkKind kind;
   final String? itemId;
@@ -66,6 +69,10 @@ WidgetDeepLinkTarget? parseWidgetDeepLink(String? value) {
   if (uri.host == 'item' && uri.pathSegments.length == 1) {
     final itemId = uri.pathSegments.single;
     if (itemId.isNotEmpty) return WidgetDeepLinkTarget.item(itemId);
+  }
+  if (uri.host == 'complete' && uri.pathSegments.length == 1) {
+    final itemId = uri.pathSegments.single;
+    if (itemId.isNotEmpty) return WidgetDeepLinkTarget.complete(itemId);
   }
   return null;
 }

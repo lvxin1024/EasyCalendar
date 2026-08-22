@@ -11,6 +11,7 @@ internal data class WidgetItem(
     val title: String,
     val type: String,
     val startAt: Instant?,
+    val endAt: Instant?,
     val dueAt: Instant?,
     val allDay: Boolean,
 )
@@ -20,11 +21,12 @@ internal data class WidgetSnapshot(
     val zoneId: ZoneId,
     val dueItems: List<WidgetItem>,
     val weekEvents: List<WidgetItem>,
+    val quotes: List<String>,
 ) {
     companion object {
         fun decode(json: String): WidgetSnapshot {
             val root = JSONObject(json)
-            require(root.optInt("schema_version", -1) == 1) {
+            require(root.optInt("schema_version", -1) in 1..2) {
                 "Unsupported widget snapshot schema"
             }
             val zoneId = runCatching {
@@ -41,6 +43,7 @@ internal data class WidgetSnapshot(
                 zoneId = zoneId,
                 dueItems = decodeItems(root.optJSONArray("due_items")),
                 weekEvents = decodeItems(weekEvents),
+                quotes = decodeStrings(root.optJSONArray("quotes")),
             )
         }
 
@@ -49,7 +52,9 @@ internal data class WidgetSnapshot(
             return buildList {
                 for (index in 0 until array.length()) {
                     val value = array.optJSONObject(index) ?: continue
-                    val id = value.stringOrNull("id") ?: continue
+                    val id = value.stringOrNull("source_id")
+                        ?: value.stringOrNull("id")
+                        ?: continue
                     val title = value.stringOrNull("title") ?: continue
                     add(
                         WidgetItem(
@@ -57,10 +62,20 @@ internal data class WidgetSnapshot(
                             title = title,
                             type = value.optString("type"),
                             startAt = instantOrNull(value.stringOrNull("start_at")),
+                            endAt = instantOrNull(value.stringOrNull("end_at")),
                             dueAt = instantOrNull(value.stringOrNull("due_at")),
                             allDay = value.optBoolean("all_day", false),
                         ),
                     )
+                }
+            }
+        }
+
+        private fun decodeStrings(array: JSONArray?): List<String> {
+            if (array == null) return emptyList()
+            return buildList {
+                for (index in 0 until minOf(array.length(), 10)) {
+                    array.optString(index).trim().takeIf(String::isNotEmpty)?.let(::add)
                 }
             }
         }
@@ -96,5 +111,17 @@ object WidgetSnapshotStore {
             .getString(SNAPSHOT_KEY, null)
             ?: return null
         return runCatching { WidgetSnapshot.decode(json) }.getOrNull()
+    }
+
+    internal fun quoteIndex(context: Context, widgetId: Int): Int =
+        context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+            .getInt("quote_index_$widgetId", (widgetId * 1103515245).ushr(1))
+
+    internal fun advanceQuote(context: Context, widgetId: Int) {
+        val next = quoteIndex(context, widgetId) + 1
+        context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+            .edit()
+            .putInt("quote_index_$widgetId", next)
+            .apply()
     }
 }
