@@ -1,60 +1,91 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 700" role="img" aria-labelledby="title desc">
-  <title id="title">EasyCalendar GitHub hero</title>
-  <desc id="desc">EasyCalendar local-first calendar and due manager with an offline schedule grid and sync path.</desc>
-  <rect width="1600" height="700" fill="#F7F8FA"/>
-  <path d="M0 538h1600" stroke="#E4E7EC" stroke-width="2"/>
-  <path d="M0 138h1600M0 238h1600M0 338h1600M0 438h1600" stroke="#E9EEF5" stroke-width="2"/>
-  <path d="M1040 0v700M1160 0v700M1280 0v700M1400 0v700M1520 0v700" stroke="#E9EEF5" stroke-width="2"/>
+  <title id="title">EasyCalendar GitHub header</title>
+  <desc id="desc">EasyCalendar local-first calendar and Due manager, expressed through a calm river-teal calendar, ivory glass panels, and sparse flower-color accents.</desc>
 
-  <g transform="translate(120 146)">
-    <rect width="248" height="248" rx="58" fill="#102A43"/>
-    <rect x="34" y="48" width="180" height="164" rx="26" fill="#2563EB"/>
-    <path d="M34 88h180" stroke="#BFD7FF" stroke-width="10"/>
-    <path d="M74 28v40M174 28v40" stroke="#F7FAFC" stroke-linecap="round" stroke-width="16"/>
-    <path d="M82 132c0-22 18-40 40-40 17 0 32 11 38 27" fill="none" stroke="#8DE1D1" stroke-linecap="round" stroke-width="13"/>
-    <path d="m164 111 4 21-21-3" fill="#8DE1D1"/>
-    <path d="M182 158c0 22-18 40-40 40-17 0-32-11-38-27" fill="none" stroke="#8DE1D1" stroke-linecap="round" stroke-width="13"/>
-    <path d="m100 179-4-21 21 3" fill="#8DE1D1"/>
-    <circle cx="190" cy="186" r="25" fill="#EA6A47" stroke="#102A43" stroke-width="8"/>
-    <path d="m179 186 8 8 16-18" fill="none" stroke="#FFF7F2" stroke-linecap="round" stroke-linejoin="round" stroke-width="8"/>
+  <rect width="1600" height="700" fill="#F0F1EB"/>
+  <path d="M0 548h1600" stroke="#DDE2DC" stroke-width="2"/>
+  <g stroke="#E4E8E1" stroke-width="2">
+    <path d="M0 148h1600M0 248h1600M0 348h1600M0 448h1600"/>
+    <path d="M1040 0v700M1160 0v700M1280 0v700M1400 0v700M1520 0v700"/>
   </g>
 
-  <g fill="#102A43" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
-    <text x="450" y="232" font-size="78" font-weight="700">EasyCalendar</text>
-    <text x="454" y="300" fill="#486581" font-size="30" font-weight="500">Local-first time, tasks, and sync.</text>
-    <text x="454" y="348" fill="#627D98" font-size="22">Calendar views, Due tracking, ICS subscriptions,</text>
-    <text x="454" y="382" fill="#627D98" font-size="22">and a self-hosted Worker/D1 sync service.</text>
+  <!-- Quiet botanical stems keep the painting reference atmospheric, not decorative noise. -->
+  <g fill="none" stroke-linecap="round">
+    <path d="M72 626c86-75 109-179 76-301M152 626c-9-103 31-182 115-238M1440 700c-7-105 34-188 121-247M1510 700c44-83 40-147 14-209" stroke="#60765A" stroke-opacity=".58" stroke-width="6"/>
+    <path d="m107 457-29-22M120 420l31-21M213 462l-35-6M1500 537l-31-26M1494 499l35-17" stroke="#4F7658" stroke-width="9"/>
+  </g>
+  <g>
+    <circle cx="78" cy="324" r="11" fill="#B23A48"/>
+    <circle cx="273" cy="389" r="10" fill="#705783"/>
+    <circle cx="1451" cy="454" r="11" fill="#D0A33F"/>
+    <circle cx="1512" cy="493" r="8" fill="#5877A6"/>
   </g>
 
-  <g transform="translate(1040 88)">
-    <rect width="424" height="430" rx="28" fill="#FFFFFF" stroke="#D9E2EC" stroke-width="3"/>
-    <rect width="424" height="70" rx="28" fill="#102A43"/>
-    <rect y="42" width="424" height="28" fill="#102A43"/>
-    <circle cx="34" cy="35" r="8" fill="#EA6A47"/>
-    <circle cx="62" cy="35" r="8" fill="#8DE1D1"/>
-    <circle cx="90" cy="35" r="8" fill="#BFD7FF"/>
-    <text x="126" y="43" fill="#FFFFFF" font-size="19" font-weight="600" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">TODAY</text>
-    <g font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="16">
-      <text x="28" y="110" fill="#627D98">08:30</text>
-      <text x="28" y="190" fill="#627D98">10:00</text>
-      <text x="28" y="270" fill="#627D98">13:30</text>
-      <text x="28" y="350" fill="#627D98">17:00</text>
+  <!-- Brand mark. -->
+  <g transform="translate(126 142)">
+    <rect width="260" height="260" rx="64" fill="#263C39"/>
+    <rect x="14" y="14" width="232" height="232" rx="56" fill="#426B68"/>
+    <rect x="52" y="58" width="156" height="146" rx="22" fill="#FAF9F5"/>
+    <rect x="52" y="58" width="156" height="45" rx="22" fill="#DDE9E4"/>
+    <rect x="52" y="81" width="156" height="22" fill="#DDE9E4"/>
+    <path d="M52 103h156" stroke="#AABDB5" stroke-width="5"/>
+    <path d="M86 36v43M174 36v43" stroke="#FAF9F5" stroke-linecap="round" stroke-width="15"/>
+    <g stroke="#DDE2DC" stroke-width="3">
+      <path d="M70 131h120M70 158h120M70 185h120"/>
+      <path d="M100 120v78M130 120v78M160 120v78"/>
     </g>
-    <path d="M100 96h286M100 176h286M100 256h286M100 336h286" stroke="#E9EEF5" stroke-width="2"/>
-    <rect x="122" y="112" width="218" height="48" rx="12" fill="#D9F5EF"/>
-    <rect x="122" y="192" width="174" height="48" rx="12" fill="#DCE9FF"/>
-    <rect x="122" y="272" width="244" height="48" rx="12" fill="#FFF0EB"/>
-    <circle cx="108" cy="136" r="7" fill="#0F766E"/>
-    <circle cx="108" cy="216" r="7" fill="#2563EB"/>
-    <circle cx="108" cy="296" r="7" fill="#EA6A47"/>
-    <path d="M100 376h286" stroke="#D9E2EC" stroke-width="2"/>
-    <text x="122" y="402" fill="#486581" font-size="17" font-weight="600" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">offline ready</text>
-    <path d="M310 386h48" stroke="#0F766E" stroke-linecap="round" stroke-width="5"/>
-    <path d="m352 374 12 12-12 12" fill="none" stroke="#0F766E" stroke-linecap="round" stroke-linejoin="round" stroke-width="5"/>
+    <circle cx="83" cy="125" r="7" fill="#B23A48"/>
+    <circle cx="143" cy="152" r="7" fill="#705783"/>
+    <circle cx="184" cy="180" r="7" fill="#D0A33F"/>
+    <circle cx="203" cy="203" r="22" fill="#B23A48" stroke="#FAF9F5" stroke-width="6"/>
+    <path d="m193 203 7 7 14-17" fill="none" stroke="#FAF9F5" stroke-linecap="round" stroke-linejoin="round" stroke-width="6"/>
   </g>
 
-  <path d="M826 526c92 0 112-84 194-84" fill="none" stroke="#0F766E" stroke-linecap="round" stroke-width="6"/>
-  <circle cx="826" cy="526" r="10" fill="#EA6A47"/>
-  <circle cx="1020" cy="442" r="10" fill="#0F766E"/>
-  <text x="120" y="622" fill="#486581" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="20">SQLite  ·  Flutter  ·  FastAPI  ·  Cloudflare Worker / D1</text>
+  <g fill="#25302B" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+    <text x="486" y="230" font-size="78" font-weight="700">EasyCalendar</text>
+    <text x="490" y="300" fill="#426B68" font-size="30" font-weight="600">Local-first time, tasks, and sync.</text>
+    <text x="490" y="351" fill="#68716B" font-size="22">A quiet calendar with room to breathe.</text>
+    <text x="490" y="390" fill="#68716B" font-size="22">Offline-ready. Self-hostable. Yours.</text>
+  </g>
+
+  <!-- Glass calendar panel: the product signal in the first viewport. -->
+  <g transform="translate(1030 84)">
+    <rect width="438" height="450" rx="30" fill="#FAF9F5" fill-opacity=".92" stroke="#FFFFFF" stroke-width="4"/>
+    <path d="M0 30a30 30 0 0 1 30-30h378a30 30 0 0 1 30 30v58H0Z" fill="#426B68"/>
+    <circle cx="36" cy="44" r="8" fill="#B23A48"/>
+    <circle cx="64" cy="44" r="8" fill="#D0A33F"/>
+    <circle cx="92" cy="44" r="8" fill="#B6D3CD"/>
+    <text x="128" y="51" fill="#FAF9F5" font-size="19" font-weight="700" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">THIS WEEK</text>
+    <g stroke="#DDE2DC" stroke-width="2">
+      <path d="M88 136h310M88 216h310M88 296h310M88 376h310"/>
+      <path d="M140 106v292M192 106v292M244 106v292M296 106v292M348 106v292"/>
+    </g>
+    <g font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="15" fill="#68716B">
+      <text x="22" y="140">09:00</text>
+      <text x="22" y="220">11:00</text>
+      <text x="22" y="300">14:00</text>
+      <text x="22" y="380">17:00</text>
+    </g>
+    <rect x="104" y="117" width="164" height="47" rx="10" fill="#E4EBDD"/>
+    <rect x="104" y="197" width="208" height="47" rx="10" fill="#E9E3EE"/>
+    <rect x="104" y="277" width="172" height="47" rx="10" fill="#F3DEE0"/>
+    <rect x="104" y="357" width="224" height="47" rx="10" fill="#E7EDF5"/>
+    <rect x="104" y="117" width="4" height="47" rx="2" fill="#60765A"/>
+    <rect x="104" y="197" width="4" height="47" rx="2" fill="#705783"/>
+    <rect x="104" y="277" width="4" height="47" rx="2" fill="#B23A48"/>
+    <rect x="104" y="357" width="4" height="47" rx="2" fill="#5877A6"/>
+    <circle cx="88" cy="140" r="7" fill="#60765A"/>
+    <circle cx="88" cy="220" r="7" fill="#705783"/>
+    <circle cx="88" cy="300" r="7" fill="#B23A48"/>
+    <circle cx="88" cy="380" r="7" fill="#5877A6"/>
+    <path d="M88 424h310" stroke="#DDE2DC" stroke-width="2"/>
+    <text x="104" y="440" fill="#426B68" font-size="17" font-weight="700" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">offline ready</text>
+    <path d="M330 424h47" stroke="#426B68" stroke-linecap="round" stroke-width="5"/>
+    <path d="m371 412 12 12-12 12" fill="none" stroke="#426B68" stroke-linecap="round" stroke-linejoin="round" stroke-width="5"/>
+  </g>
+
+  <path d="M820 534c87 0 112-87 194-87" fill="none" stroke="#426B68" stroke-linecap="round" stroke-width="6"/>
+  <circle cx="820" cy="534" r="10" fill="#B23A48"/>
+  <circle cx="1014" cy="447" r="10" fill="#426B68"/>
+  <text x="126" y="630" fill="#68716B" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="20">Flutter  ·  SQLite  ·  ICS  ·  self-hosted sync</text>
 </svg>

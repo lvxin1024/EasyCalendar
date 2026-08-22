@@ -1,14 +1,37 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
   <title id="title">EasyCalendar icon</title>
-  <desc id="desc">A blue calendar tile with a teal sync loop and coral due marker.</desc>
-  <rect width="512" height="512" rx="112" fill="#102A43"/>
-  <rect x="72" y="92" width="368" height="332" rx="48" fill="#2563EB"/>
-  <path d="M72 170h368" fill="none" stroke="#BFD7FF" stroke-width="18"/>
-  <path d="M148 62v72M364 62v72" fill="none" stroke="#F7FAFC" stroke-linecap="round" stroke-width="28"/>
-  <path d="M164 250c0-42 34-76 76-76 33 0 61 21 72 51" fill="none" stroke="#8DE1D1" stroke-linecap="round" stroke-width="24"/>
-  <path d="m307 206 8 39-39-5" fill="#8DE1D1"/>
-  <path d="M348 286c0 42-34 76-76 76-33 0-61-21-72-51" fill="none" stroke="#8DE1D1" stroke-linecap="round" stroke-width="24"/>
-  <path d="m205 330-8-39 39 5" fill="#8DE1D1"/>
-  <circle cx="358" cy="346" r="46" fill="#EA6A47" stroke="#102A43" stroke-width="14"/>
-  <path d="m337 346 14 14 29-34" fill="none" stroke="#FFF7F2" stroke-linecap="round" stroke-linejoin="round" stroke-width="15"/>
+  <desc id="desc">A river-teal calendar with ivory glass, a quiet time grid, and three small flower-color accents.</desc>
+
+  <rect width="512" height="512" rx="124" fill="#263C39"/>
+  <rect x="28" y="28" width="456" height="456" rx="108" fill="#426B68"/>
+
+  <!-- Ivory calendar sheet, kept simple enough to remain legible at 16px. -->
+  <rect x="78" y="104" width="356" height="318" rx="44" fill="#FAF9F5"/>
+  <rect x="78" y="104" width="356" height="92" rx="44" fill="#DDE9E4"/>
+  <rect x="78" y="152" width="356" height="44" fill="#DDE9E4"/>
+  <path d="M78 196h356" stroke="#AABDB5" stroke-width="8"/>
+
+  <!-- Calendar binding tabs. -->
+  <path d="M154 72v76M358 72v76" stroke="#FAF9F5" stroke-linecap="round" stroke-width="26"/>
+  <path d="M154 72v76M358 72v76" stroke="#B6D3CD" stroke-linecap="round" stroke-width="8"/>
+
+  <!-- Quiet grid, like a transparent pane over the schedule. -->
+  <g stroke="#DDE2DC" stroke-width="5" stroke-linecap="round">
+    <path d="M124 244h264M124 300h264M124 356h264"/>
+    <path d="M190 224v154M256 224v154M322 224v154"/>
+  </g>
+
+  <!-- Three asymmetrical flower-color marks. -->
+  <circle cx="143" cy="229" r="13" fill="#B23A48"/>
+  <circle cx="207" cy="285" r="13" fill="#705783"/>
+  <circle cx="341" cy="341" r="13" fill="#D0A33F"/>
+  <path d="M143 244c-2 20-10 30-24 42M207 300c4 18 13 28 27 39M341 356c-1 17 5 28 18 39" fill="none" stroke="#60765A" stroke-linecap="round" stroke-width="7"/>
+  <path d="m115 287 16-5-5 15M234 337l-4-16 15 6M356 394l-1-16 13 9" fill="#60765A"/>
+
+  <!-- Small red due marker, reserved as a single focal point. -->
+  <circle cx="393" cy="393" r="38" fill="#B23A48" stroke="#FAF9F5" stroke-width="10"/>
+  <path d="m376 393 12 12 24-29" fill="none" stroke="#FAF9F5" stroke-linecap="round" stroke-linejoin="round" stroke-width="11"/>
+
+  <!-- A restrained ivory highlight makes the material feel glassy without a gradient. -->
+  <path d="M110 124c58-35 199-38 276 1" fill="none" stroke="#FFFFFF" stroke-linecap="round" stroke-opacity=".72" stroke-width="7"/>
 </svg>
