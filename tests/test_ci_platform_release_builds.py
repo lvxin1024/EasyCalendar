@@ -12,7 +12,22 @@ CLIENT = ROOT / "client"
 def test_windows_release_suppresses_third_party_coroutine_header_deprecation():
     cmake = (CLIENT / "windows" / "CMakeLists.txt").read_text(encoding="utf-8")
 
-    assert "_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS" in cmake
+    assert (
+        "add_compile_definitions("
+        "_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)"
+    ) in cmake
+
+
+def test_macos_builds_use_xcode_26_compatible_runners():
+    workflow = (ROOT / ".github" / "workflows" / "tests.yml").read_text(
+        encoding="utf-8"
+    )
+    release_workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "runs-on: macos-26" in workflow
+    assert "runs-on: macos-26" in release_workflow
 
 
 def test_unsigned_macos_ci_builds_do_not_embed_the_widget_target():
