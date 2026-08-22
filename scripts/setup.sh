@@ -4,12 +4,12 @@ set -euo pipefail
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SERVER_DIR="${PROJECT_DIR}/server"
 
-command -v node >/dev/null 2>&1 || { echo "setup: Node.js 22 is required" >&2; exit 1; }
+command -v node >/dev/null 2>&1 || { echo "setup: Node.js 22-24 is required" >&2; exit 1; }
 command -v npm >/dev/null 2>&1 || { echo "setup: npm is required" >&2; exit 1; }
 
 NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
-if [[ "${NODE_MAJOR}" != "22" ]]; then
-    echo "setup: Node.js 22 is required (found $(node --version))" >&2
+if (( NODE_MAJOR < 22 || NODE_MAJOR >= 25 )); then
+    echo "setup: Node.js 22-24 is required (found $(node --version))" >&2
     exit 1
 fi
 

@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/lvxin1024/text2calendar/actions"><img src="https://github.com/lvxin1024/text2calendar/actions/workflows/tests.yml/badge.svg" alt="Tests" /></a>
+  <a href="https://github.com/lvxin1024/EasyCalendar/actions"><img src="https://github.com/lvxin1024/EasyCalendar/actions/workflows/tests.yml/badge.svg" alt="Tests" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License" /></a>
   <a href="https://flutter.dev"><img src="https://img.shields.io/badge/flutter-3.44.9-02569B?logo=flutter" alt="Flutter 3.44.9" /></a>
 </p>
@@ -62,7 +62,7 @@
 
 ## 🚀 下载与使用 / Getting Started
 
-普通用户只需下载对应平台的 [GitHub Release](https://github.com/lvxin1024/text2calendar/releases) 安装包，安装后选择“仅本地使用”即可进入 App。本地日历、Due、提醒、备份、ICS 导入导出、网址订阅和基础中文解析都在客户端内完成。
+普通用户只需下载对应平台的 [GitHub Release](https://github.com/lvxin1024/EasyCalendar/releases) 安装包，安装后选择“仅本地使用”即可进入 App。本地日历、Due、提醒、备份、ICS 导入导出、网址订阅和基础中文解析都在客户端内完成。
 
 **使用安装包不需要 Python、Flutter、Node.js，也不需要修改配置文件或环境变量。** 设备 ID 会在首次启动时自动生成，其他运行时选项都可以在 App 设置中管理。
 
@@ -89,9 +89,9 @@
 └──────────┘     └──────────────────┘     └──────────┘
 ```
 
-Cloudflare Worker + D1 是当前唯一实现的多设备同步服务器。配置和部署命令在一台装有本仓库、Node.js 22 的开发电脑上执行即可，Worker 和数据库最终运行在你的 Cloudflare 账户中，不需要把 Worker 部署到已有远程服务器。
+Cloudflare Worker + D1 是当前唯一实现的多设备同步服务器。配置和部署命令在一台装有本仓库、Node.js 22-24 的开发电脑上执行即可，Worker 和数据库最终运行在你的 Cloudflare 账户中，不需要自建 VPS，也不需要把 Worker 部署到别的服务器。
 
-**前提**：Node.js 22、Cloudflare 账号，以及一个准备使用的 `workers.dev` 地址或已接入 Cloudflare 的自定义域名。
+**前提**：Node.js 22-24、Cloudflare 账号，以及一个准备使用的 `workers.dev` 地址或已接入 Cloudflare 的自定义域名。
 
 先在仓库根目录创建不会提交到 Git 的本地配置：
 
@@ -195,8 +195,8 @@ cd ..
 Flutter 3.44.9 是开发环境依赖，不是普通用户的安装依赖。
 
 ```bash
-git clone https://github.com/lvxin1024/text2calendar.git
-cd text2calendar
+git clone https://github.com/lvxin1024/EasyCalendar.git
+cd EasyCalendar
 ./scripts/setup-client.sh
 ./scripts/run-client.sh
 ```

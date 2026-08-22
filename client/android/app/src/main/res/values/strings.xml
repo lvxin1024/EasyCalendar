@@ -5,4 +5,5 @@
     <string name="widget_due_description">显示最近的三个 Due</string>
     <string name="widget_week_name">本周日程</string>
     <string name="widget_week_description">显示本周七天的日程摘要</string>
+    <string name="widget_week_error_title">本周日程暂时无法加载</string>
 </resources>

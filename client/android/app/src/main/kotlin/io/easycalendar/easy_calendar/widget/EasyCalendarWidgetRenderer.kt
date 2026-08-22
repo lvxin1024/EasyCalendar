@@ -1,6 +1,12 @@
 package io.easycalendar.easy_calendar.widget
 
 import android.app.PendingIntent
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.RectF
+import android.graphics.Typeface
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
@@ -12,10 +18,21 @@ import io.easycalendar.easy_calendar.MainActivity
 import io.easycalendar.easy_calendar.R
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.temporal.TemporalAdjusters
 import java.util.Locale
+import android.text.SpannableString
+import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.style.StyleSpan
 import kotlin.math.ceil
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.roundToInt
+import android.text.style.BackgroundColorSpan
+import android.text.style.ForegroundColorSpan
 
 object EasyCalendarWidgetUpdater {
     fun updateAll(context: Context) {
@@ -49,15 +66,6 @@ internal object EasyCalendarWidgetRenderer {
     private val dueChecks = intArrayOf(R.id.due_check_1, R.id.due_check_2, R.id.due_check_3)
     private val dueDates = intArrayOf(R.id.due_date_1, R.id.due_date_2, R.id.due_date_3)
     private val dueTitles = intArrayOf(R.id.due_title_1, R.id.due_title_2, R.id.due_title_3)
-    private val weekDays = intArrayOf(
-        R.id.week_day_1, R.id.week_day_2, R.id.week_day_3, R.id.week_day_4,
-        R.id.week_day_5, R.id.week_day_6, R.id.week_day_7,
-    )
-    private val weekCells = intArrayOf(
-        R.id.week_cell_1, R.id.week_cell_2, R.id.week_cell_3, R.id.week_cell_4,
-        R.id.week_cell_5, R.id.week_cell_6, R.id.week_cell_7,
-    )
-
     fun due(context: Context, snapshot: WidgetSnapshot?, widgetId: Int): RemoteViews {
         val views = RemoteViews(context.packageName, R.layout.widget_due)
         val now = Instant.now()
@@ -67,13 +75,13 @@ internal object EasyCalendarWidgetRenderer {
             .sortedBy { it.dueAt }
             .take(3)
         val isEmpty = nearest.isEmpty()
-        views.setTextViewText(R.id.due_summary, if (isEmpty) "" else "do what you do")
+        views.setTextViewText(R.id.due_summary, if (isEmpty) "" else italic("do what you do"))
         views.setViewVisibility(R.id.due_empty, if (isEmpty) View.VISIBLE else View.GONE)
         views.setViewVisibility(R.id.due_refresh, if (isEmpty) View.VISIBLE else View.GONE)
         if (isEmpty) {
             val quotes = snapshot?.quotes.orEmpty().ifEmpty { defaultQuotes }
             val index = WidgetSnapshotStore.quoteIndex(context, widgetId) % quotes.size
-            views.setTextViewText(R.id.due_empty, quotes[index])
+            views.setTextViewText(R.id.due_empty, italic(quotes[index]))
             val shuffle = shuffleQuoteIntent(context, widgetId)
             views.setOnClickPendingIntent(R.id.due_empty, shuffle)
             views.setOnClickPendingIntent(R.id.due_refresh, shuffle)
@@ -86,11 +94,10 @@ internal object EasyCalendarWidgetRenderer {
                 views.setTextViewText(dueTitles[index], item.title)
                 views.setOnClickPendingIntent(
                     dueChecks[index],
-                    openAppIntent(context, "easycalendar://complete/${Uri.encode(item.id)}"),
+                    completeDueIntent(context, widgetId, item.id),
                 )
             }
         }
-        views.setOnClickPendingIntent(R.id.widget_due_root, openAppIntent(context, "easycalendar://due"))
         return views
     }
 
@@ -101,136 +108,266 @@ internal object EasyCalendarWidgetRenderer {
         minHeight: Int,
     ): RemoteViews {
         val views = RemoteViews(context.packageName, R.layout.widget_week)
-        val zoneId = snapshot?.zoneId ?: java.time.ZoneId.systemDefault()
-        val today = LocalDate.now(zoneId)
-        val weekStart = today.with(TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY))
-        val weekEnd = weekStart.plusDays(6)
-        val events = snapshot?.weekEvents.orEmpty()
-            .filter { it.type == "event" && it.startAt != null }
-        views.setTextViewText(
-            R.id.week_range,
-            "${weekStart.format(weekRangeDate)} - ${weekEnd.format(weekRangeDate)} · ${events.size} 项",
-        )
-        weekDays.indices.forEach { index ->
-            val date = weekStart.plusDays(index.toLong())
-            val name = if (minWidth < 330) weekDayNames[index].takeLast(1) else weekDayNames[index]
-            views.setTextViewText(weekDays[index], "$name\n${date.dayOfMonth}")
-            val isToday = date == today
-            views.setInt(
-                weekDays[index],
-                "setBackgroundResource",
-                if (isToday) R.drawable.widget_today_background else android.R.color.transparent,
-            )
-            views.setTextColor(
-                weekDays[index],
-                color(context, if (isToday) R.color.widget_today_text else R.color.widget_secondary_text),
-            )
-        }
-
-        views.removeAllViews(R.id.week_grid_rows)
-        val timedEvents = events.filter { !it.allDay }
-        val allDayEvents = events.filter { it.allDay }
-        val totalRows = ((minHeight - 72) / 30).coerceIn(4, 10)
-        var timedRows = totalRows
-        if (allDayEvents.isNotEmpty()) {
-            views.addView(
-                R.id.week_grid_rows,
-                gridRow(context, "全天", weekStart, allDayEvents, zoneId, minWidth),
-            )
-            timedRows = (timedRows - 1).coerceAtLeast(3)
-        }
-
-        val zonedStarts = timedEvents.mapNotNull { it.startAt?.atZone(zoneId) }
-        val zonedEnds = timedEvents.mapNotNull { (it.endAt ?: it.startAt)?.atZone(zoneId) }
-        val startHour = minOf(8, zonedStarts.minOfOrNull { it.hour } ?: 8)
-        val latestStartHour = zonedStarts.maxOfOrNull { it.hour + 1 } ?: 20
-        val latestEndHour = zonedEnds.maxOfOrNull {
-            it.hour + if (it.minute > 0 || it.second > 0) 1 else 0
-        } ?: 20
-        val endHour = minOf(
-            24,
-            maxOf(20, latestStartHour, latestEndHour, startHour + timedRows),
-        )
-        val stepHours = ceil((endHour - startHour).toDouble() / timedRows).toInt().coerceAtLeast(1)
-        val actualRows = ceil((endHour - startHour).toDouble() / stepHours)
-            .toInt()
-            .coerceIn(1, timedRows)
-        repeat(actualRows) { rowIndex ->
-            val rowStart = startHour + rowIndex * stepHours
-            val rowEnd = minOf(24, rowStart + stepHours)
-            views.addView(
-                R.id.week_grid_rows,
-                gridRow(
-                    context,
-                    "%02d:00".format(rowStart),
-                    weekStart,
-                    timedEvents,
-                    zoneId,
-                    minWidth,
-                    rowStart,
-                    rowEnd,
-                ),
-            )
-        }
+        val bitmap = buildWeekSnapshot(context, snapshot, minWidth, minHeight)
+        views.setImageViewBitmap(R.id.week_snapshot, bitmap)
         views.setOnClickPendingIntent(R.id.widget_week_root, openAppIntent(context, "easycalendar://today"))
+        views.setOnClickPendingIntent(R.id.week_snapshot, openAppIntent(context, "easycalendar://today"))
         return views
     }
 
-    private fun gridRow(
+    private fun buildWeekSnapshot(
         context: Context,
-        label: String,
-        weekStart: LocalDate,
-        events: List<WidgetItem>,
-        zoneId: java.time.ZoneId,
+        snapshot: WidgetSnapshot?,
         minWidth: Int,
-        startHour: Int? = null,
-        endHour: Int? = null,
-    ): RemoteViews {
-        val row = RemoteViews(context.packageName, R.layout.widget_week_time_row)
-        row.setTextViewText(R.id.week_time_label, label)
-        weekCells.indices.forEach { dayIndex ->
-            val date = weekStart.plusDays(dayIndex.toLong())
-            val dayEvents = events
-                .filter { event ->
-                    val eventStart = event.startAt?.atZone(zoneId) ?: return@filter false
-                    if (startHour == null || endHour == null) {
-                        return@filter eventStart.toLocalDate() == date
-                    }
-                    val slotStart = date.atStartOfDay(zoneId).plusHours(startHour.toLong())
-                    val slotEnd = date.atStartOfDay(zoneId).plusHours(endHour.toLong())
-                    val eventEnd = (event.endAt ?: event.startAt)
-                        ?.atZone(zoneId)
-                        ?.takeIf { it.isAfter(eventStart) }
-                        ?: eventStart.plusMinutes(1)
-                    eventStart.isBefore(slotEnd) && eventEnd.isAfter(slotStart)
-                }
-                .sortedBy(WidgetItem::startAt)
-            val displayEvents = dayEvents.filter { event ->
-                if (startHour == null || endHour == null) {
-                    true
-                } else {
-                    val hour = event.startAt?.atZone(zoneId)?.hour ?: return@filter false
-                    hour in startHour until endHour
-                }
-            }
-            val text = displayEvents.joinToString("\n") { event ->
-                if (event.allDay || minWidth < 380) event.title
-                else "${event.startAt!!.atZone(zoneId).format(timeOnly)} ${event.title}"
-            }
-            row.setTextViewText(weekCells[dayIndex], text)
-            row.setInt(
-                weekCells[dayIndex],
-                "setBackgroundResource",
-                if (dayEvents.isEmpty()) R.drawable.widget_grid_cell else R.drawable.widget_grid_event,
+        minHeight: Int,
+    ): Bitmap {
+        val density = context.resources.displayMetrics.density
+        val width = max(360, (minWidth * density).roundToInt())
+        val height = max(260, (minHeight * density).roundToInt())
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+
+        val zoneId = snapshot?.zoneId ?: ZoneId.systemDefault()
+        val today = LocalDate.now(zoneId)
+        val weekStart = today.with(TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY))
+        val weekEnd = weekStart.plusDays(6)
+        val events = (snapshot?.calendarEvents.orEmpty().ifEmpty { snapshot?.weekEvents.orEmpty() })
+            .filter { it.startAt != null }
+        val timedEvents = events.filter { !it.allDay }
+        val allDayEvents = events.filter { it.allDay }
+
+        val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
+        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bg)
+
+        val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = color(context, R.color.widget_primary_text)
+            textSize = 15f * density
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+        val rangePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = color(context, R.color.widget_secondary_text)
+            textSize = 11f * density
+        }
+        val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = color(context, R.color.widget_secondary_text)
+            textSize = 11f * density
+        }
+        val dayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = color(context, R.color.widget_primary_text)
+            textSize = 12f * density
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+        val eventPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            textSize = 10f * density
+            color = Color.WHITE
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+        val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 1f * density
+            color = color(context, R.color.widget_border)
+        }
+        val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 1f * density
+            color = color(context, R.color.widget_border)
+        }
+        val todayFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = color(context, R.color.widget_today_surface)
+        }
+        val eventBackgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+        val currentLinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = color(context, R.color.widget_coral)
+            strokeWidth = 2f * density
+        }
+        val currentLabelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = color(context, R.color.widget_coral)
+            textSize = 10f * density
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+
+        val pad = (10f * density)
+        val titleTop = 20f * density
+        val headerBottom = 62f * density
+        val allDayTop = 68f * density
+        val gridTop = if (allDayEvents.isNotEmpty()) 88f * density else 72f * density
+        val bottomPad = 12f * density
+        val leftGutter = 52f * density
+        val rightPad = 8f * density
+        val gridLeft = leftGutter
+        val gridRight = width.toFloat() - rightPad
+        val gridWidth = max(1f, gridRight - gridLeft)
+        val gridHeight = max(1f, height.toFloat() - gridTop - bottomPad)
+        val dayWidth = gridWidth / 7f
+
+        canvas.drawText("周日程", pad, titleTop, titlePaint)
+        val range = "${weekStart.format(weekRangeDate)} - ${weekEnd.format(weekRangeDate)} · ${events.size} 项"
+        val rangeWidth = rangePaint.measureText(range)
+        canvas.drawText(range, width - rightPad - rangeWidth, titleTop, rangePaint)
+
+        drawDayHeaders(
+            canvas = canvas,
+            today = today,
+            weekStart = weekStart,
+            gridLeft = gridLeft,
+            dayWidth = dayWidth,
+            headerBottom = headerBottom,
+            dayPaint = dayPaint,
+            todayFillPaint = todayFillPaint,
+        )
+
+        if (allDayEvents.isNotEmpty()) {
+            drawAllDaySummary(
+                canvas = canvas,
+                events = allDayEvents,
+                left = gridLeft,
+                top = allDayTop,
+                right = gridRight,
+                paint = labelPaint,
+                eventPaint = eventPaint,
+                eventBackgroundPaint = eventBackgroundPaint,
+                context = context,
             )
-            dayEvents.firstOrNull()?.let { event ->
-                row.setOnClickPendingIntent(
-                    weekCells[dayIndex],
-                    openAppIntent(context, "easycalendar://item/${Uri.encode(event.id)}"),
-                )
+        }
+
+        val rowCount = 24
+        val slotHeight = gridHeight / rowCount
+
+        for (rowIndex in 0..rowCount) {
+            val y = gridTop + slotHeight * rowIndex
+            canvas.drawLine(gridLeft, y, gridRight, y, gridPaint)
+            if (rowIndex < rowCount) {
+                val hour = rowIndex
+                val timeLabel = "%02d:00".format(hour)
+                val baseline = y + slotHeight * 0.62f
+                canvas.drawText(timeLabel, pad, baseline, labelPaint)
             }
         }
-        return row
+        canvas.drawText("24:00", pad, height.toFloat() - 2f * density, labelPaint)
+
+        for (dayIndex in 0 until 8) {
+            val x = gridLeft + dayWidth * dayIndex
+            canvas.drawLine(x, gridTop, x, gridTop + gridHeight, gridPaint)
+        }
+
+        for (dayIndex in 0 until 7) {
+            val date = weekStart.plusDays(dayIndex.toLong())
+            val dayStart = date.atStartOfDay(zoneId)
+            val dayEnd = dayStart.plusDays(1)
+            val cellLeft = gridLeft + dayWidth * dayIndex + 3f * density
+            val cellRight = gridLeft + dayWidth * (dayIndex + 1) - 3f * density
+            for (event in timedEvents) {
+                val start = event.startAt?.atZone(zoneId) ?: continue
+                val end = (event.endAt ?: event.startAt)
+                    ?.atZone(zoneId)
+                    ?.takeIf { it.isAfter(start) }
+                    ?: start.plusMinutes(30)
+                val overlapStart = maxOf(start, dayStart)
+                val overlapEnd = minOf(end, dayEnd)
+                if (!overlapEnd.isAfter(overlapStart)) continue
+                val startMinutes = overlapStart.hour * 60 + overlapStart.minute
+                val endMinutes = overlapEnd.hour * 60 + overlapEnd.minute
+                val y0 = gridTop + (startMinutes / 60f) * slotHeight
+                val y1 = gridTop + (endMinutes / 60f) * slotHeight
+                val top = min(y0, y1)
+                val bottom = max(top + 12f * density, y1)
+                val block = RectF(cellLeft, top + 1f, cellRight, min(bottom - 1f, gridTop + gridHeight - 1f))
+                eventBackgroundPaint.color = eventColor(event)
+                canvas.drawRoundRect(block, 6f * density, 6f * density, eventBackgroundPaint)
+                canvas.drawRoundRect(block, 6f * density, 6f * density, borderPaint)
+                drawTextInside(canvas, event.title, block, eventPaint)
+            }
+        }
+
+        val now = Instant.now().atZone(zoneId)
+        val nowMinutes = now.hour * 60 + now.minute
+        if (nowMinutes in 0..(24 * 60)) {
+            val y = gridTop + (nowMinutes / 60f) * slotHeight
+            canvas.drawLine(gridLeft, y, gridRight, y, currentLinePaint)
+            canvas.drawCircle(gridLeft + 6f * density, y, 3f * density, currentLinePaint)
+            canvas.drawText("现在", gridLeft + 12f * density, y - 4f * density, currentLabelPaint)
+        }
+
+        return bitmap
+    }
+
+    private fun drawDayHeaders(
+        canvas: Canvas,
+        today: LocalDate,
+        weekStart: LocalDate,
+        gridLeft: Float,
+        dayWidth: Float,
+        headerBottom: Float,
+        dayPaint: Paint,
+        todayFillPaint: Paint,
+    ) {
+        for (dayIndex in 0 until 7) {
+            val date = weekStart.plusDays(dayIndex.toLong())
+            val left = gridLeft + dayWidth * dayIndex
+            val right = left + dayWidth
+            if (date == today) {
+                canvas.drawRect(left, 16f * dayPaint.textSize / 12f, right, headerBottom, todayFillPaint)
+            }
+            val label = "${weekDayNames[dayIndex].takeLast(1)}${date.dayOfMonth}"
+            val textWidth = dayPaint.measureText(label)
+            val x = left + (dayWidth - textWidth) / 2f
+            canvas.drawText(label, x, headerBottom - 14f, dayPaint)
+        }
+    }
+
+    private fun drawAllDaySummary(
+        canvas: Canvas,
+        events: List<WidgetItem>,
+        left: Float,
+        top: Float,
+        right: Float,
+        paint: Paint,
+        eventPaint: Paint,
+        eventBackgroundPaint: Paint,
+        context: Context,
+    ) {
+        val text = events.take(3).joinToString(" / ") { it.title }
+        val label = if (events.size > 3) "$text +${events.size - 3}" else text
+        val block = RectF(left, top, right, top + 16f * context.resources.displayMetrics.density)
+        canvas.drawRoundRect(block, 6f * context.resources.displayMetrics.density, 6f * context.resources.displayMetrics.density, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = color(context, R.color.widget_today_surface)
+        })
+        canvas.drawText("全天", left + 6f * context.resources.displayMetrics.density, top + 12f * context.resources.displayMetrics.density, paint)
+        val chips = events.take(3)
+        var cursorX = left + 34f * context.resources.displayMetrics.density
+        val baseline = top + 12f * context.resources.displayMetrics.density
+        for (event in chips) {
+            val chipText = "■ ${event.title}"
+            val chipWidth = eventPaint.measureText(chipText) + 14f * context.resources.displayMetrics.density
+            if (cursorX + chipWidth > right) break
+            val chipRect = RectF(cursorX, top + 2f * context.resources.displayMetrics.density, cursorX + chipWidth, top + 14f * context.resources.displayMetrics.density)
+            eventBackgroundPaint.color = eventColor(event)
+            canvas.drawRoundRect(chipRect, 6f * context.resources.displayMetrics.density, 6f * context.resources.displayMetrics.density, eventBackgroundPaint)
+            canvas.drawText(chipText, cursorX + 6f * context.resources.displayMetrics.density, baseline, eventPaint)
+            cursorX += chipWidth + 6f * context.resources.displayMetrics.density
+        }
+        if (events.size > 3) {
+            canvas.drawText("+${events.size - 3}", cursorX, baseline, paint)
+        }
+    }
+
+    private fun drawTextInside(canvas: Canvas, text: String, block: RectF, paint: Paint) {
+        val maxWidth = block.width() - 8f
+        if (maxWidth <= 0f) return
+        val displayText = ellipsize(text, paint, maxWidth)
+        val textHeight = paint.fontMetrics.run { descent - ascent }
+        val x = block.left + 4f
+        val y = block.top + (block.height() + textHeight) / 2f - paint.fontMetrics.descent
+        canvas.drawText(displayText, x, y, paint)
+    }
+
+    private fun ellipsize(text: String, paint: Paint, maxWidth: Float): String {
+        if (paint.measureText(text) <= maxWidth) return text
+        var end = text.length
+        while (end > 1 && paint.measureText(text.substring(0, end) + "…") > maxWidth) {
+            end--
+        }
+        return text.substring(0, end) + "…"
     }
 
     private fun formatDue(item: WidgetItem, now: Instant, zoneId: java.time.ZoneId): String {
@@ -276,6 +413,40 @@ internal object EasyCalendarWidgetRenderer {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
     }
+
+    private fun completeDueIntent(
+        context: Context,
+        widgetId: Int,
+        itemId: String,
+    ): PendingIntent {
+        val intent = Intent(context, DueWidgetProvider::class.java).apply {
+            action = DueWidgetProvider.ACTION_COMPLETE_DUE
+            putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
+            putExtra(DueWidgetProvider.EXTRA_ITEM_ID, itemId)
+        }
+        return PendingIntent.getBroadcast(
+            context,
+            itemId.hashCode() xor widgetId,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
+
+    private fun italic(text: String): CharSequence =
+        SpannableString(text).apply {
+            setSpan(StyleSpan(Typeface.ITALIC), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+
+    private fun rowsForHeight(minHeight: Int): Int =
+        ((minHeight - 56) / 34).coerceIn(5, 8)
+
+    private fun eventColor(event: WidgetItem): Int =
+        when (abs(event.id.hashCode()) % 4) {
+            0 -> 0xFF426B68.toInt()
+            1 -> 0xFFB23A48.toInt()
+            2 -> 0xFF6A5ACD.toInt()
+            else -> 0xFFCC7A00.toInt()
+        }
 
     @Suppress("DEPRECATION")
     private fun color(context: Context, colorId: Int): Int =

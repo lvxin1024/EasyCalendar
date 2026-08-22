@@ -3,6 +3,7 @@ package io.easycalendar.easy_calendar.widget
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
+import org.json.JSONException
 import java.time.Instant
 import java.time.ZoneId
 
@@ -21,6 +22,7 @@ internal data class WidgetSnapshot(
     val zoneId: ZoneId,
     val dueItems: List<WidgetItem>,
     val weekEvents: List<WidgetItem>,
+    val calendarEvents: List<WidgetItem>,
     val quotes: List<String>,
 ) {
     companion object {
@@ -43,6 +45,7 @@ internal data class WidgetSnapshot(
                 zoneId = zoneId,
                 dueItems = decodeItems(root.optJSONArray("due_items")),
                 weekEvents = decodeItems(weekEvents),
+                calendarEvents = decodeItems(root.optJSONArray("calendar_events")),
                 quotes = decodeStrings(root.optJSONArray("quotes")),
             )
         }
@@ -124,4 +127,31 @@ object WidgetSnapshotStore {
             .putInt("quote_index_$widgetId", next)
             .apply()
     }
+
+    internal fun removeDueItem(context: Context, itemId: String, widgetId: Int? = null): Boolean {
+        val prefs = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+        val json = prefs.getString(SNAPSHOT_KEY, null) ?: return false
+        return runCatching {
+            val root = JSONObject(json)
+            val source = root.optJSONArray("due_items") ?: return false
+            val filtered = JSONArray()
+            var changed = false
+            for (index in 0 until source.length()) {
+                val value = source.optJSONObject(index)
+                val id = value?.stringOrNull("source_id")
+                    ?: value?.stringOrNull("id")
+                if (id == itemId) {
+                    changed = true
+                    continue
+                }
+                filtered.put(source.opt(index))
+            }
+            if (!changed) return false
+            root.put("due_items", filtered)
+            prefs.edit().putString(SNAPSHOT_KEY, root.toString()).commit()
+        }.getOrDefault(false)
+    }
+
+    private fun JSONObject.stringOrNull(name: String): String? =
+        if (isNull(name)) null else optString(name).trim().takeIf(String::isNotEmpty)
 }

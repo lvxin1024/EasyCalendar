@@ -32,7 +32,7 @@ void main() {
         client: MockClient((request) async {
           expect(
             request.url.toString(),
-            'https://api.github.com/repos/lvxin1024/text2calendar/releases/latest',
+            'https://api.github.com/repos/lvxin1024/EasyCalendar/releases/latest',
           );
           return http.Response(
             jsonEncode(_releaseJson(assets: [platformAsset.value])),
@@ -50,7 +50,7 @@ void main() {
       expect(update.assetName, platformAsset.value);
       expect(
         update.assetUri.toString(),
-        'https://github.com/lvxin1024/text2calendar/releases/download/v1.2.0/${platformAsset.value}',
+        'https://github.com/lvxin1024/EasyCalendar/releases/download/v1.2.0/${platformAsset.value}',
       );
       service.close();
     });
@@ -76,7 +76,7 @@ void main() {
       expect(update.assetName, platformAsset.value);
       expect(
         update.assetUri.toString(),
-        'https://github.com/lvxin1024/text2calendar/releases/download/v1.2.0/${platformAsset.value}',
+        'https://github.com/lvxin1024/EasyCalendar/releases/download/v1.2.0/${platformAsset.value}',
       );
       service.close();
     });
@@ -166,13 +166,13 @@ Map<String, Object> _releaseJson({required List<String> assets}) => {
   'tag_name': 'v1.2.0',
   'name': 'EasyCalendar 1.2.0',
   'body': 'Release notes',
-  'html_url': 'https://github.com/lvxin1024/text2calendar/releases/tag/v1.2.0',
+  'html_url': 'https://github.com/lvxin1024/EasyCalendar/releases/tag/v1.2.0',
   'assets': [
     for (final name in assets)
       <String, Object>{
         'name': name,
         'browser_download_url':
-            'https://github.com/lvxin1024/text2calendar/releases/download/v1.2.0/$name',
+            'https://github.com/lvxin1024/EasyCalendar/releases/download/v1.2.0/$name',
       },
   ],
 };

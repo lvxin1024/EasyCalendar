@@ -4,9 +4,14 @@ set -euo pipefail
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CLIENT_DIR="${PROJECT_DIR}/client"
 EXPECTED_VERSION="$(sed -n 's/.*"flutter"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "${CLIENT_DIR}/.fvmrc")"
+LOCAL_FLUTTER_BIN="${PROJECT_DIR}/.tools/flutter/bin/flutter.bat"
+
+export FLUTTER_SUPPRESS_ANALYTICS=true
 
 if [[ -n "${FLUTTER_BIN:-}" ]]; then
     :
+elif [[ -x "${LOCAL_FLUTTER_BIN}" ]]; then
+    FLUTTER_BIN="${LOCAL_FLUTTER_BIN}"
 elif command -v flutter >/dev/null 2>&1; then
     FLUTTER_BIN="$(command -v flutter)"
 elif [[ -x "${HOME}/flutter/bin/flutter" ]]; then

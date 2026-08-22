@@ -92,6 +92,7 @@ jobs:
           CODE_SIGN_STYLE=Manual
           DEVELOPMENT_TEAM=
           PROVISIONING_PROFILE_SPECIFIER=
+          CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO
           REGISTER_APP_GROUPS=NO
           build
         working-directory: client
@@ -116,7 +117,7 @@ jobs:
           foreach ($installationPath in $installationPaths) {
             $atlHeader = Get-ChildItem (Join-Path $installationPath 'VC\Tools\MSVC') -Filter atlstr.h -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
             if ($null -eq $atlHeader) {
-              & $installer modify --installPath $installationPath --add Microsoft.VisualStudio.Component.VC.ATL --quiet --norestart --wait
+              & $installer modify --installPath $installationPath --add Microsoft.VisualStudio.Component.VC.ATLMFC --quiet --norestart --wait
               if ($LASTEXITCODE -ne 0) { throw "Visual Studio ATL installation failed with exit code $LASTEXITCODE for $installationPath" }
             }
             if ($null -eq (Get-ChildItem (Join-Path $installationPath 'VC\Tools\MSVC') -Filter atlstr.h -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1)) { throw "atlstr.h is unavailable in $installationPath after installing the ATL component" }

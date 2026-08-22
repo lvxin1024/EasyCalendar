@@ -3,6 +3,7 @@ package io.easycalendar.easy_calendar.widget
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
+import android.util.Log
 
 class WeekWidgetProvider : AppWidgetProvider() {
     override fun onUpdate(
@@ -30,17 +31,38 @@ class WeekWidgetProvider : AppWidgetProvider() {
         ) {
             val snapshot = WidgetSnapshotStore.read(context)
             widgetIds.forEach { id ->
-                val options = manager.getAppWidgetOptions(id)
-                manager.updateAppWidget(
-                    id,
-                    EasyCalendarWidgetRenderer.week(
-                        context,
-                        snapshot,
-                        options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 250),
-                        options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 250),
-                    ),
-                )
+                try {
+                    val options = manager.getAppWidgetOptions(id)
+                    val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 250)
+                    val maxWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, minWidth)
+                    val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 250)
+                    val maxHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, minHeight)
+                    manager.updateAppWidget(
+                        id,
+                        EasyCalendarWidgetRenderer.week(
+                            context,
+                            snapshot,
+                            maxOf(minWidth, maxWidth),
+                            maxOf(minHeight, maxHeight),
+                        ),
+                    )
+                } catch (error: Throwable) {
+                    Log.e("WeekWidgetProvider", "Week widget update failed", error)
+                    manager.updateAppWidget(id, WeekWidgetFallback.views(context))
+                }
             }
+            WeekWidgetRefreshScheduler.schedule(context)
+        }
+
+        fun updateAll(context: Context) {
+            val manager = AppWidgetManager.getInstance(context)
+            update(
+                context,
+                manager,
+                manager.getAppWidgetIds(
+                    android.content.ComponentName(context, WeekWidgetProvider::class.java),
+                ),
+            )
         }
     }
 }

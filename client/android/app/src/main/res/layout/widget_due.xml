@@ -4,7 +4,6 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/widget_background"
-    android:clickable="true"
     android:contentDescription="@string/widget_due_description"
     android:gravity="center_vertical"
     android:orientation="vertical"

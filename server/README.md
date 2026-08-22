@@ -1,15 +1,16 @@
 # EasyCalendar Cloudflare server
 
 `server/` contains the single-instance Cloudflare Worker and D1 sync service.
-It provides public system endpoints, Bearer authentication, CORS enforcement,
-the common error envelope, idempotent push/pull with cursor pagination,
-deterministic last-write-wins conflict recovery, D1 migrations, and the
-deployment entry point. Authenticated conflict history is available at
+It is the only deployment target needed for sync: no separate VPS or container
+host is required. It provides public system endpoints, Bearer authentication,
+CORS enforcement, the common error envelope, idempotent push/pull with cursor
+pagination, deterministic last-write-wins conflict recovery, D1 migrations, and
+the deployment entry point. Authenticated conflict history is available at
 `GET /v1/sync/conflicts`.
 
 ## Prerequisites
 
-- Node.js 22
+- Node.js 22-24
 - A Cloudflare account authenticated with `npx wrangler login`
 - A Cloudflare-hosted custom domain or the final `workers.dev` URL
 

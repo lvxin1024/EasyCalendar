@@ -57,7 +57,7 @@ class AppUpdateService {
     http.Client? client,
     this.repository = const String.fromEnvironment(
       'EASYCALENDAR_GITHUB_REPOSITORY',
-      defaultValue: 'lvxin1024/text2calendar',
+      defaultValue: 'lvxin1024/EasyCalendar',
     ),
     String? platform,
   }) : _client = client ?? http.Client(),

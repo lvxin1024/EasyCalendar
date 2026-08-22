@@ -103,7 +103,9 @@ class _SubscriptionsPageState extends State<SubscriptionsPage> {
   Future<void> _showCreateDialog() async {
     final draft = await showDialog<_SubscriptionDraft>(
       context: context,
-      builder: (_) => const _SubscriptionDialog(),
+      builder: (_) => _SubscriptionDialog(
+        tagSuggestions: _subscriptionTagSuggestions,
+      ),
     );
     if (draft == null) return;
     try {
@@ -122,7 +124,10 @@ class _SubscriptionsPageState extends State<SubscriptionsPage> {
   Future<void> _showEditDialog(CalendarSubscription current) async {
     final draft = await showDialog<_SubscriptionDraft>(
       context: context,
-      builder: (_) => _SubscriptionDialog(initial: current),
+      builder: (_) => _SubscriptionDialog(
+        initial: current,
+        tagSuggestions: _subscriptionTagSuggestions,
+      ),
     );
     if (draft == null) return;
     try {
@@ -237,6 +242,23 @@ class _SubscriptionsPageState extends State<SubscriptionsPage> {
 
   static String _short(String value) =>
       value.length <= 18 ? value : '${value.substring(0, 18)}…';
+
+  List<String> get _subscriptionTagSuggestions {
+    final tags = <String>{};
+    for (final item in widget.controller.items) {
+      tags.addAll(
+        item.tags.map((tag) => tag.trim()).where((tag) => tag.isNotEmpty),
+      );
+    }
+    for (final subscription in _subscriptions) {
+      tags.addAll(
+        subscription.tags
+            .map((tag) => tag.trim())
+            .where((tag) => tag.isNotEmpty),
+      );
+    }
+    return tags.toList()..sort();
+  }
 }
 
 class _SubscriptionTile extends StatelessWidget {
@@ -357,9 +379,13 @@ class _SubscriptionDraft {
 }
 
 class _SubscriptionDialog extends StatefulWidget {
-  const _SubscriptionDialog({this.initial});
+  const _SubscriptionDialog({
+    this.initial,
+    this.tagSuggestions = const [],
+  });
 
   final CalendarSubscription? initial;
+  final List<String> tagSuggestions;
 
   @override
   State<_SubscriptionDialog> createState() => _SubscriptionDialogState();
@@ -427,9 +453,37 @@ class _SubscriptionDialogState extends State<_SubscriptionDialog> {
               controller: _tags,
               decoration: const InputDecoration(
                 labelText: '标签',
-                helperText: '多个标签请用逗号分隔；订阅中的日程都会带上这些标签',
+                helperText: '可点已有标签，也可以继续手动输入新标签',
+                prefixIcon: Icon(Icons.sell_outlined),
               ),
             ),
+            if (_availableTags.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '已有标签',
+                  style: Theme.of(context).textTheme.labelMedium,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (final tag in _availableTags)
+                        FilterChip(
+                          label: Text(tag),
+                          selected: _enteredTags.contains(tag),
+                          onSelected: (_) => _toggleTag(tag),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             TextFormField(
               controller: _url,
@@ -482,6 +536,38 @@ class _SubscriptionDialogState extends State<_SubscriptionDialog> {
       ),
     ],
   );
+  
+  List<String> get _availableTags {
+    final tags = <String>{};
+    for (final tag in widget.tagSuggestions) {
+      final value = tag.trim();
+      if (value.isNotEmpty) tags.add(value);
+    }
+    for (final tag in _enteredTags) {
+      tags.add(tag);
+    }
+    return tags.toList()..sort();
+  }
+
+  List<String> get _enteredTags => _tags.text
+      .split(RegExp(r'[,，]'))
+      .map((tag) => tag.trim())
+      .where((tag) => tag.isNotEmpty)
+      .toList(growable: false);
+
+  void _toggleTag(String tag) {
+    final tags = [..._enteredTags];
+    if (tags.contains(tag)) {
+      tags.remove(tag);
+    } else {
+      tags.add(tag);
+    }
+    _tags.text = tags.join(', ');
+    _tags.selection = TextSelection.fromPosition(
+      TextPosition(offset: _tags.text.length),
+    );
+    setState(() {});
+  }
 }
 
 const _intervalOptions = [15, 30, 60, 180, 360, 720, 1440];

@@ -8,14 +8,36 @@ import android.content.Intent
 class DueWidgetProvider : AppWidgetProvider() {
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
-        if (intent.action != ACTION_SHUFFLE_QUOTE) return
-        val widgetId = intent.getIntExtra(
-            AppWidgetManager.EXTRA_APPWIDGET_ID,
-            AppWidgetManager.INVALID_APPWIDGET_ID,
-        )
-        if (widgetId == AppWidgetManager.INVALID_APPWIDGET_ID) return
-        WidgetSnapshotStore.advanceQuote(context, widgetId)
-        update(context, AppWidgetManager.getInstance(context), intArrayOf(widgetId))
+        when (intent.action) {
+            ACTION_SHUFFLE_QUOTE -> {
+                val widgetId = intent.getIntExtra(
+                    AppWidgetManager.EXTRA_APPWIDGET_ID,
+                    AppWidgetManager.INVALID_APPWIDGET_ID,
+                )
+                if (widgetId == AppWidgetManager.INVALID_APPWIDGET_ID) return
+                WidgetSnapshotStore.advanceQuote(context, widgetId)
+                update(context, AppWidgetManager.getInstance(context), intArrayOf(widgetId))
+            }
+
+            ACTION_COMPLETE_DUE -> {
+                val widgetId = intent.getIntExtra(
+                    AppWidgetManager.EXTRA_APPWIDGET_ID,
+                    AppWidgetManager.INVALID_APPWIDGET_ID,
+                )
+                val itemId = intent.getStringExtra(EXTRA_ITEM_ID)?.takeIf { it.isNotBlank() }
+                    ?: return
+                if (widgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
+                    DueWidgetActions.completeDue(
+                        context,
+                        itemId,
+                        widgetId = widgetId,
+                    )
+                } else {
+                    DueWidgetActions.completeDue(context, itemId)
+                }
+                updateAll(context)
+            }
+        }
     }
 
     override fun onUpdate(
@@ -47,7 +69,21 @@ class DueWidgetProvider : AppWidgetProvider() {
             }
         }
 
+        fun updateAll(context: Context) {
+            val manager = AppWidgetManager.getInstance(context)
+            update(
+                context,
+                manager,
+                manager.getAppWidgetIds(
+                    android.content.ComponentName(context, DueWidgetProvider::class.java),
+                ),
+            )
+        }
+
         const val ACTION_SHUFFLE_QUOTE =
             "io.easycalendar.easy_calendar.widget.SHUFFLE_QUOTE"
+        const val ACTION_COMPLETE_DUE =
+            "io.easycalendar.easy_calendar.widget.COMPLETE_DUE"
+        const val EXTRA_ITEM_ID = "extra_item_id"
     }
 }
