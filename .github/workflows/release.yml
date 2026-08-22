@@ -291,6 +291,7 @@ jobs:
           register_app_groups=YES
           if test "${{ steps.signing.outputs.enabled }}" = "false"; then
             register_app_groups=NO
+            python3 ../scripts/strip_macos_widget_for_unsigned_ci.py
           fi
           xcodebuild \
             -workspace macos/Runner.xcworkspace \

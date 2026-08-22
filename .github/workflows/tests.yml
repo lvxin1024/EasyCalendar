@@ -79,6 +79,9 @@ jobs:
       - name: Configure macOS release build
         run: flutter build macos --release --config-only --no-pub
         working-directory: client
+      - name: Remove Widget target from unsigned CI build
+        run: python3 ../scripts/strip_macos_widget_for_unsigned_ci.py
+        working-directory: client
       - name: Build unsigned macOS release application
         run: >-
           xcodebuild
