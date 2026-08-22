@@ -3,11 +3,15 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-enum WidgetDeepLinkKind { today, item }
+enum WidgetDeepLinkKind { today, due, item }
 
 class WidgetDeepLinkTarget {
   const WidgetDeepLinkTarget.today()
     : kind = WidgetDeepLinkKind.today,
+      itemId = null;
+
+  const WidgetDeepLinkTarget.due()
+    : kind = WidgetDeepLinkKind.due,
       itemId = null;
 
   const WidgetDeepLinkTarget.item(this.itemId) : kind = WidgetDeepLinkKind.item;
@@ -24,7 +28,7 @@ class WidgetDeepLinkController extends ChangeNotifier {
   WidgetDeepLinkTarget? _pendingTarget;
 
   Future<void> start() async {
-    if (!Platform.isMacOS) return;
+    if (!Platform.isMacOS && !Platform.isAndroid) return;
     _channel.setMethodCallHandler((call) async {
       if (call.method == 'openWidgetTarget') {
         handleUrl(call.arguments as String?);
@@ -55,6 +59,9 @@ WidgetDeepLinkTarget? parseWidgetDeepLink(String? value) {
   if (uri == null || uri.scheme != 'easycalendar') return null;
   if (uri.host == 'today' && uri.pathSegments.isEmpty) {
     return const WidgetDeepLinkTarget.today();
+  }
+  if (uri.host == 'due' && uri.pathSegments.isEmpty) {
+    return const WidgetDeepLinkTarget.due();
   }
   if (uri.host == 'item' && uri.pathSegments.length == 1) {
     final itemId = uri.pathSegments.single;

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 
 import '../domain/item.dart';
+import '../domain/recurrence.dart';
 import '../utils/configured_time.dart';
 
 abstract interface class WidgetSnapshotWriter {
@@ -23,29 +24,49 @@ class PlatformWidgetSnapshotWriter implements WidgetSnapshotWriter {
     required List<CalendarItem> items,
     required String timezone,
   }) async {
-    if (!Platform.isMacOS) return;
-    final payload = _buildSnapshot(items, timezone: timezone);
+    if (!Platform.isMacOS && !Platform.isAndroid) return;
+    final payload = WidgetSnapshotBuilder.build(items, timezone: timezone);
     await _channel.invokeMethod<void>('writeSnapshot', <String, dynamic>{
       'json': jsonEncode(payload),
     });
   }
+}
 
-  Map<String, dynamic> _buildSnapshot(
+class WidgetSnapshotBuilder {
+  const WidgetSnapshotBuilder._();
+
+  static Map<String, dynamic> build(
     List<CalendarItem> items, {
     required String timezone,
+    DateTime? now,
   }) {
-    final now = configuredNow();
-    final todayStart = DateTime(now.year, now.month, now.day);
+    final effectiveNow = now ?? configuredNow();
+    final localNow = inConfiguredTimezone(effectiveNow);
+    final todayStart = configuredDateTime(
+      year: localNow.year,
+      month: localNow.month,
+      day: localNow.day,
+    );
     final tomorrow = todayStart.add(const Duration(days: 1));
     final upcomingEnd = todayStart.add(const Duration(days: 8));
+    final weekStart = todayStart.subtract(
+      Duration(days: todayStart.weekday - DateTime.monday),
+    );
+    final weekEnd = weekStart.add(const Duration(days: 7));
+    final calendarWindowEnd = weekEnd.add(const Duration(days: 7));
     final todayEvents = <CalendarItem>[];
     final upcomingEvents = <CalendarItem>[];
+    final weekEvents = <CalendarItem>[];
     final dueItems = <CalendarItem>[];
     for (final item in items) {
       final schedule = item.scheduleAt;
       if (schedule == null) continue;
       final localSchedule = inConfiguredTimezone(schedule);
       if (item.type == ItemType.event && item.status != ItemStatus.cancelled) {
+        if (!localSchedule.isBefore(weekStart) &&
+            localSchedule.isBefore(weekEnd)) {
+          weekEvents.add(item);
+        }
         if (!localSchedule.isBefore(todayStart) &&
             localSchedule.isBefore(tomorrow)) {
           todayEvents.add(item);
@@ -62,6 +83,27 @@ class PlatformWidgetSnapshotWriter implements WidgetSnapshotWriter {
     }
     todayEvents.sort(_compareItems);
     upcomingEvents.sort(_compareItems);
+    weekEvents.sort(_compareItems);
+    final calendarEvents =
+        expandCalendarItems(
+              items.where(
+                (item) =>
+                    item.type == ItemType.event &&
+                    item.status != ItemStatus.cancelled &&
+                    !item.isDeleted,
+              ),
+              weekStart,
+              calendarWindowEnd,
+            )
+            .where((item) {
+              final startAt = item.startAt;
+              if (startAt == null) return false;
+              final localStart = inConfiguredTimezone(startAt);
+              return !localStart.isBefore(weekStart) &&
+                  localStart.isBefore(calendarWindowEnd);
+            })
+            .toList(growable: false);
+    calendarEvents.sort(_compareItems);
     dueItems.sort(_compareItems);
     final included = <CalendarItem>[
       ...todayEvents,
@@ -70,7 +112,7 @@ class PlatformWidgetSnapshotWriter implements WidgetSnapshotWriter {
     ];
     return <String, dynamic>{
       'schema_version': 1,
-      'generated_at': now.toUtc().toIso8601String(),
+      'generated_at': effectiveNow.toUtc().toIso8601String(),
       'timezone': timezone,
       'version': items.fold<int>(
         0,
@@ -79,6 +121,10 @@ class PlatformWidgetSnapshotWriter implements WidgetSnapshotWriter {
       'today_events': todayEvents.map(_serializeItem).toList(growable: false),
       'upcoming_events': upcomingEvents
           .map(_serializeItem)
+          .toList(growable: false),
+      'week_events': weekEvents.map(_serializeItem).toList(growable: false),
+      'calendar_events': calendarEvents
+          .map(_serializeOccurrence)
           .toList(growable: false),
       'due_items': dueItems.map(_serializeItem).toList(growable: false),
       'items': included.map(_serializeItem).toList(growable: false),
@@ -110,4 +156,11 @@ class PlatformWidgetSnapshotWriter implements WidgetSnapshotWriter {
         'priority': item.priority,
         'version': item.version,
       };
+
+  static Map<String, dynamic> _serializeOccurrence(CalendarItem item) {
+    final serialized = _serializeItem(item);
+    serialized['source_id'] = item.id;
+    serialized['id'] = '${item.id}@${item.startAt!.toUtc().toIso8601String()}';
+    return serialized;
+  }
 }

@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">EasyCalendar</string>
+    <string name="widget_due_name">最近 Due</string>
+    <string name="widget_due_description">显示最近的三个 Due</string>
+    <string name="widget_week_name">本周日程</string>
+    <string name="widget_week_description">显示本周七天的日程摘要</string>
 </resources>

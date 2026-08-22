@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="widget_surface">#202622</color>
+    <color name="widget_border">#46514B</color>
+    <color name="widget_primary_text">#F1F4F1</color>
+    <color name="widget_secondary_text">#B7C1BA</color>
+    <color name="widget_teal">#8BBAB4</color>
+    <color name="widget_coral">#F29AA3</color>
+    <color name="widget_today_surface">#36534F</color>
+    <color name="widget_today_text">#E7F4EF</color>
+</resources>

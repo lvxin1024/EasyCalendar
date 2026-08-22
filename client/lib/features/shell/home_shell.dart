@@ -295,6 +295,10 @@ class _HomeShellState extends State<HomeShell> {
       setState(() => _selectedIndex = 0);
       return;
     }
+    if (target.kind == WidgetDeepLinkKind.due) {
+      setState(() => _selectedIndex = 2);
+      return;
+    }
     CalendarItem? item;
     for (final candidate in widget.controller.items) {
       if (candidate.id == target.itemId) {

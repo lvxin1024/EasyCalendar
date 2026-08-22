@@ -2,12 +2,15 @@ import 'package:easy_calendar/widget/widget_deep_link_controller.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('parses widget today and item links', () {
+  test('parses widget today, due, and item links', () {
     final today = parseWidgetDeepLink('easycalendar://today');
+    final due = parseWidgetDeepLink('easycalendar://due');
     final item = parseWidgetDeepLink('easycalendar://item/item_123');
 
     expect(today?.kind, WidgetDeepLinkKind.today);
     expect(today?.itemId, isNull);
+    expect(due?.kind, WidgetDeepLinkKind.due);
+    expect(due?.itemId, isNull);
     expect(item?.kind, WidgetDeepLinkKind.item);
     expect(item?.itemId, 'item_123');
   });
