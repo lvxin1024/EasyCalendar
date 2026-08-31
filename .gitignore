@@ -65,7 +65,8 @@ client/windows/flutter/ephemeral/
 Thumbs.db
 
 # Internal development docs (not for public repo)
-docs/
+docs/*
+!docs/MENSTRUAL_CYCLE_TRACKING_PLAN.md
 .codex-docs-cache/
 .codex-log/
 
