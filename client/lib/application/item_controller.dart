@@ -25,6 +25,8 @@ import '../sync/token_store.dart';
 import '../utils/configured_time.dart';
 import '../widget/widget_snapshot_writer.dart';
 import '../window/desktop_window_controller.dart';
+import 'service_connection_service.dart';
+import 'subscription_service.dart';
 
 class ItemController extends ChangeNotifier {
   ItemController({
@@ -47,10 +49,18 @@ class ItemController extends ChangeNotifier {
       connectionTester: aiProviderConnectionTester,
     );
     _deviceIdentity = deviceIdentity ?? DeviceIdentity();
-    this.featureTokenStore = featureTokenStore ?? SecureFeatureTokenStore();
-    _serviceProbeClient = serviceProbeClient ?? ServiceProbeClient();
-    _subscriptionFetchClient =
-        subscriptionFetchClient ?? SubscriptionFetchClient();
+    _serviceConnectionService = ServiceConnectionService(
+      syncCoordinator: syncCoordinator,
+      featureTokenStore: featureTokenStore,
+      probeClient: serviceProbeClient,
+    );
+    _subscriptionService = SubscriptionService(
+      repository: repository,
+      localIcsService: _localIcsService,
+      activeTimezone: () => activeTimezone,
+      runMutation: _mutate,
+      fetchClient: subscriptionFetchClient,
+    );
   }
 
   final ItemRepository repository;
@@ -61,9 +71,8 @@ class ItemController extends ChangeNotifier {
   final NotificationService? notificationService;
   late final AiProviderService _aiProviderService;
   late final DeviceIdentity _deviceIdentity;
-  late final SyncTokenStore featureTokenStore;
-  late final ServiceProbeClient _serviceProbeClient;
-  late final SubscriptionFetchClient _subscriptionFetchClient;
+  late final ServiceConnectionService _serviceConnectionService;
+  late final SubscriptionService _subscriptionService;
   final LocalIcsService _localIcsService = const LocalIcsService();
 
   List<CalendarItem> _items = const [];
@@ -200,12 +209,8 @@ class ItemController extends ChangeNotifier {
     try {
       await repository.initialize();
       _initialized = true;
-      try {
-        _featureTokenConfigured =
-            (await featureTokenStore.read())?.isNotEmpty == true;
-      } catch (_) {
-        _featureTokenConfigured = false;
-      }
+      _featureTokenConfigured = await _serviceConnectionService
+          .hasFeatureToken();
       final loadedPreferences = await repository.loadPreferences(
         _defaultPreferences,
       );
@@ -462,25 +467,19 @@ class ItemController extends ChangeNotifier {
   }
 
   Future<List<CalendarSubscription>> listSubscriptions() =>
-      repository.listSubscriptions();
+      _subscriptionService.list();
 
   Future<CalendarSubscription> createSubscription({
     required String title,
     required String url,
     required int refreshIntervalMinutes,
     required List<String> tags,
-  }) async {
-    late CalendarSubscription result;
-    await _mutate(() async {
-      result = await repository.createSubscription(
-        title: title,
-        url: url,
-        refreshIntervalMinutes: refreshIntervalMinutes,
-        tags: tags,
-      );
-    });
-    return result;
-  }
+  }) => _subscriptionService.create(
+    title: title,
+    url: url,
+    refreshIntervalMinutes: refreshIntervalMinutes,
+    tags: tags,
+  );
 
   Future<CalendarSubscription> updateSubscription(
     CalendarSubscription current, {
@@ -489,79 +488,25 @@ class ItemController extends ChangeNotifier {
     required bool enabled,
     required int refreshIntervalMinutes,
     required List<String> tags,
-  }) async {
-    late CalendarSubscription result;
-    await _mutate(() async {
-      result = await repository.updateSubscription(
-        current,
-        title: title,
-        url: url,
-        enabled: enabled,
-        refreshIntervalMinutes: refreshIntervalMinutes,
-        tags: tags,
-      );
-    });
-    return result;
-  }
+  }) => _subscriptionService.update(
+    current,
+    title: title,
+    url: url,
+    enabled: enabled,
+    refreshIntervalMinutes: refreshIntervalMinutes,
+    tags: tags,
+  );
 
   Future<void> deleteSubscription(CalendarSubscription current) =>
-      _mutate(() => repository.deleteSubscription(current));
+      _subscriptionService.delete(current);
 
   Future<SubscriptionFetchLog> refreshSubscription(
     CalendarSubscription current,
-  ) async {
-    final fetchedAt = DateTime.now();
-    try {
-      final response = await _subscriptionFetchClient.fetch(current);
-      var events = const <LocalIcsEvent>[];
-      if (!response.notModified) {
-        final plan = _localIcsService.planImport(
-          response.content,
-          defaultTimezone: activeTimezone,
-          deduplicate: false,
-        );
-        if (!plan.result.accepted) {
-          throw FormatException('订阅文件包含 ${plan.result.issues.length} 个无效日程。');
-        }
-        events = plan.events;
-      }
-      late SubscriptionFetchLog result;
-      await _mutate(() async {
-        result = await repository.applySubscriptionRefresh(
-          current,
-          events: events,
-          notModified: response.notModified,
-          httpStatus: response.statusCode,
-          fetchedAt: fetchedAt,
-          etag: response.etag,
-          lastModified: response.lastModified,
-          sourceHash: response.sourceHash,
-        );
-      });
-      return result;
-    } catch (error) {
-      try {
-        await _mutate(
-          () => repository.recordSubscriptionRefreshFailure(
-            current,
-            fetchedAt: fetchedAt,
-            error: '$error',
-            httpStatus: error is SubscriptionFetchException
-                ? error.statusCode
-                : null,
-          ),
-          reloadItems: false,
-        );
-      } catch (_) {
-        // Preserve the original fetch or parse error if failure logging races.
-      }
-      rethrow;
-    }
-  }
+  ) => _subscriptionService.refresh(current);
 
   Future<List<SubscriptionFetchLog>> listSubscriptionFetchLogs(
     String subscriptionId,
-  ) => repository.listSubscriptionFetchLogs(subscriptionId);
+  ) => _subscriptionService.listLogs(subscriptionId);
 
   Future<void> setTaskCompleted(CalendarItem item, {required bool completed}) =>
       _mutate(() async {
@@ -685,28 +630,26 @@ class ItemController extends ChangeNotifier {
   }
 
   Future<void> saveSyncToken(String token) async {
-    await syncCoordinator?.saveToken(token);
+    await _serviceConnectionService.saveSyncToken(token);
     _syncServiceProbe = null;
     notifyListeners();
   }
 
   Future<void> clearSyncToken() async {
-    await syncCoordinator?.clearToken();
+    await _serviceConnectionService.clearSyncToken();
     _syncServiceProbe = null;
     notifyListeners();
   }
 
   Future<void> saveFeatureToken(String token) async {
-    final normalized = token.trim();
-    if (normalized.isEmpty) return;
-    await featureTokenStore.write(normalized);
+    if (!await _serviceConnectionService.saveFeatureToken(token)) return;
     _featureTokenConfigured = true;
     _featureServiceProbe = null;
     notifyListeners();
   }
 
   Future<void> clearFeatureToken() async {
-    await featureTokenStore.clear();
+    await _serviceConnectionService.clearFeatureToken();
     _featureTokenConfigured = false;
     _featureServiceProbe = null;
     notifyListeners();
@@ -717,21 +660,10 @@ class ItemController extends ChangeNotifier {
     required String serverUrl,
     String pendingToken = '',
   }) async {
-    var token = pendingToken.trim();
-    if (token.isEmpty) {
-      final store = kind == ServiceKind.sync
-          ? syncCoordinator?.tokenStore
-          : featureTokenStore;
-      try {
-        token = (await store?.read())?.trim() ?? '';
-      } catch (_) {
-        token = '';
-      }
-    }
-    final result = await _serviceProbeClient.probe(
-      serverUrl: Uri.parse(serverUrl.trim()),
+    final result = await _serviceConnectionService.probe(
       kind: kind,
-      token: token,
+      serverUrl: serverUrl,
+      pendingToken: pendingToken,
     );
     if (kind == ServiceKind.sync) {
       _syncServiceProbe = result;
@@ -766,8 +698,8 @@ class ItemController extends ChangeNotifier {
     syncCoordinator?.dispose();
     unawaited(repository.close());
     _aiProviderService.close();
-    _serviceProbeClient.close();
-    _subscriptionFetchClient.close();
+    _serviceConnectionService.close();
+    _subscriptionService.close();
     super.dispose();
   }
 
