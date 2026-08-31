@@ -34,6 +34,7 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int _selectedIndex = 0;
   late final CalendarNavigationController _calendarNavigation;
+  final _calendarDestinationTaps = CalendarDestinationTapTracker();
 
   @override
   void initState() {
@@ -204,22 +205,14 @@ class _HomeShellState extends State<HomeShell> {
             ),
             bottomNavigationBar: wide
                 ? null
-                : LayoutBuilder(
-                    builder: (context, navigationConstraints) => Listener(
-                      onPointerUp: (event) => _handleBottomNavigationTap(
-                        event,
-                        navigationConstraints.maxWidth,
-                      ),
-                      child: GlassSurface(
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(24),
-                        ),
-                        child: NavigationBar(
-                          selectedIndex: _selectedIndex,
-                          destinations: _destinations,
-                          onDestinationSelected: _selectDestination,
-                        ),
-                      ),
+                : GlassSurface(
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(24),
+                    ),
+                    child: NavigationBar(
+                      selectedIndex: _selectedIndex,
+                      destinations: _destinations,
+                      onDestinationSelected: _selectDestination,
                     ),
                   ),
             floatingActionButton: _selectedIndex >= 3
@@ -264,26 +257,17 @@ class _HomeShellState extends State<HomeShell> {
     _ => SettingsPage(config: widget.config, controller: widget.controller),
   };
 
-  void _selectDestination(int value) => setState(() => _selectedIndex = value);
-
-  DateTime? _lastCalendarNavigationTap;
-
-  void _handleBottomNavigationTap(PointerUpEvent event, double width) {
-    final itemWidth = width / _destinations.length;
-    if (event.localPosition.dx < 0 || event.localPosition.dx >= itemWidth) {
-      _lastCalendarNavigationTap = null;
-      return;
-    }
-    final now = DateTime.now();
-    final previous = _lastCalendarNavigationTap;
-    if (_selectedIndex == 0 &&
-        previous != null &&
-        now.difference(previous) <= const Duration(milliseconds: 360)) {
-      _lastCalendarNavigationTap = null;
+  void _selectDestination(int value) {
+    if (_calendarDestinationTaps.register(
+      value,
+      selectedIndex: _selectedIndex,
+      now: DateTime.now(),
+    )) {
       _calendarNavigation.goToToday();
       return;
     }
-    _lastCalendarNavigationTap = now;
+    if (_selectedIndex == value) return;
+    setState(() => _selectedIndex = value);
   }
 
   Future<void> _handleWidgetDeepLink() async {
@@ -417,6 +401,34 @@ class _ColoredNavGlyph extends StatelessWidget {
     ),
     child: Icon(icon, size: 21, color: selected ? color : color.withAlpha(150)),
   );
+}
+
+class CalendarDestinationTapTracker {
+  CalendarDestinationTapTracker({
+    this.destinationIndex = 0,
+    this.doubleTapWindow = const Duration(milliseconds: 360),
+  });
+
+  final int destinationIndex;
+  final Duration doubleTapWindow;
+  DateTime? _lastTapAt;
+
+  bool register(
+    int value, {
+    required int selectedIndex,
+    required DateTime now,
+  }) {
+    final previous = _lastTapAt;
+    if (value == destinationIndex &&
+        selectedIndex == destinationIndex &&
+        previous != null &&
+        now.difference(previous) <= doubleTapWindow) {
+      _lastTapAt = null;
+      return true;
+    }
+    _lastTapAt = value == destinationIndex ? now : null;
+    return false;
+  }
 }
 
 class _StartupError extends StatefulWidget {

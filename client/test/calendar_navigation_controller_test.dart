@@ -38,6 +38,21 @@ void main() {
     expect(navigation.selectedDate, DateTime(2026, 2, 28));
   });
 
+  test('go to today keeps the active calendar view mode', () {
+    for (final mode in CalendarViewMode.values) {
+      final navigation = CalendarNavigationController(
+        selectedDate: DateTime(2026, 7, 8),
+        initialMode: mode,
+        clock: () => DateTime(2026, 8, 24, 9),
+      );
+
+      navigation.goToToday();
+
+      expect(navigation.selectedDate, DateTime(2026, 8, 24));
+      expect(navigation.mode, mode);
+    }
+  });
+
   test('custom first day changes week and month ranges', () {
     final navigation = CalendarNavigationController(
       selectedDate: DateTime(2026, 8, 12),
