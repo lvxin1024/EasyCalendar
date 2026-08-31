@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../domain/cycle_prediction.dart';
 import '../../domain/item.dart';
 import '../../utils/configured_time.dart';
 import '../../utils/date_formatters.dart';
 import '../../utils/tag_colors.dart';
 import 'calendar_navigation_controller.dart';
+import 'cycle_day_marker.dart';
 
 class CalendarMonthGrid extends StatelessWidget {
   const CalendarMonthGrid({
@@ -15,6 +17,8 @@ class CalendarMonthGrid extends StatelessWidget {
     required this.onDateSelected,
     this.tagColors = const {},
     this.collectionColors = const {},
+    this.cycleStates = const {},
+    this.showCycleMarkers = false,
   });
 
   final CalendarNavigationController navigation;
@@ -23,6 +27,8 @@ class CalendarMonthGrid extends StatelessWidget {
   final ValueChanged<DateTime> onDateSelected;
   final Map<String, int> tagColors;
   final Map<String, int> collectionColors;
+  final Map<DateTime, CycleDayState> cycleStates;
+  final bool showCycleMarkers;
 
   @override
   Widget build(BuildContext context) {
@@ -64,6 +70,8 @@ class CalendarMonthGrid extends StatelessWidget {
                       onDateSelected: onDateSelected,
                       tagColors: tagColors,
                       collectionColors: collectionColors,
+                      cycleStates: cycleStates,
+                      showCycleMarkers: showCycleMarkers,
                     ),
                 ],
               ),
@@ -111,6 +119,8 @@ class _MonthWeekRow extends StatelessWidget {
     required this.onDateSelected,
     required this.tagColors,
     required this.collectionColors,
+    required this.cycleStates,
+    required this.showCycleMarkers,
   });
 
   final List<DateTime> week;
@@ -122,6 +132,8 @@ class _MonthWeekRow extends StatelessWidget {
   final ValueChanged<DateTime> onDateSelected;
   final Map<String, int> tagColors;
   final Map<String, int> collectionColors;
+  final Map<DateTime, CycleDayState> cycleStates;
+  final bool showCycleMarkers;
 
   @override
   Widget build(BuildContext context) {
@@ -163,6 +175,9 @@ class _MonthWeekRow extends StatelessWidget {
                 onEdit: onEdit,
                 tagColors: tagColors,
                 collectionColors: collectionColors,
+                cycleState:
+                    cycleStates[DateTime(date.year, date.month, date.day)],
+                showCycleMarker: showCycleMarkers,
               ),
             ),
         ],
@@ -181,6 +196,8 @@ class _MonthDayCell extends StatelessWidget {
     required this.onEdit,
     required this.tagColors,
     required this.collectionColors,
+    required this.cycleState,
+    required this.showCycleMarker,
   });
 
   final DateTime date;
@@ -191,6 +208,8 @@ class _MonthDayCell extends StatelessWidget {
   final ValueChanged<CalendarItem> onEdit;
   final Map<String, int> tagColors;
   final Map<String, int> collectionColors;
+  final CycleDayState? cycleState;
+  final bool showCycleMarker;
 
   @override
   Widget build(BuildContext context) {
@@ -249,6 +268,8 @@ class _MonthDayCell extends StatelessWidget {
                     isToday: isToday,
                     isCurrentMonth: isCurrentMonth,
                     isSelected: isSelected,
+                    cycleState: cycleState,
+                    showCycleMarker: showCycleMarker,
                   ),
                 ],
               ),
@@ -332,12 +353,16 @@ class _DayNumber extends StatelessWidget {
     required this.isToday,
     required this.isCurrentMonth,
     required this.isSelected,
+    required this.cycleState,
+    required this.showCycleMarker,
   });
 
   final int day;
   final bool isToday;
   final bool isCurrentMonth;
   final bool isSelected;
+  final CycleDayState? cycleState;
+  final bool showCycleMarker;
 
   @override
   Widget build(BuildContext context) {
@@ -347,22 +372,38 @@ class _DayNumber extends StatelessWidget {
       fontWeight: FontWeight.w600,
     );
     final highlighted = isToday || isSelected;
-    if (!highlighted) return Text('$day', style: style);
-    return Container(
-      width: 24,
-      height: 24,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: isToday ? colorScheme.tertiary : colorScheme.primary,
-        shape: BoxShape.circle,
-      ),
-      child: Text(
-        '$day',
-        style: style?.copyWith(
-          color: isToday ? colorScheme.onTertiary : colorScheme.onPrimary,
-          fontWeight: FontWeight.w700,
+    final number = highlighted
+        ? Container(
+            width: 24,
+            height: 24,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: isToday ? colorScheme.tertiary : colorScheme.primary,
+              shape: BoxShape.circle,
+            ),
+            child: Text(
+              '$day',
+              style: style?.copyWith(
+                color: isToday ? colorScheme.onTertiary : colorScheme.onPrimary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          )
+        : SizedBox(
+            height: 24,
+            child: Center(child: Text('$day', style: style)),
+          );
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        number,
+        SizedBox(
+          height: showCycleMarker ? 4 : 0,
+          child: cycleState == null
+              ? null
+              : CycleDayMarker(state: cycleState!, height: 4),
         ),
-      ),
+      ],
     );
   }
 }

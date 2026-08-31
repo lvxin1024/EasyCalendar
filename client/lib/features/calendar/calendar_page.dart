@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../application/cycle_controller.dart';
 import '../../application/item_controller.dart';
+import '../../domain/cycle_prediction.dart';
 import '../../domain/item.dart';
 import '../../utils/configured_time.dart';
 import '../../utils/date_formatters.dart';
@@ -8,11 +10,15 @@ import '../../widgets/glass_surface.dart';
 import 'calendar_navigation_controller.dart';
 import 'calendar_month_grid.dart';
 import 'calendar_time_grid.dart';
+import 'cycle_day_marker.dart';
+import '../cycle/cycle_record_sheet.dart';
+import '../cycle/cycle_summary_page.dart';
 
 class CalendarPage extends StatefulWidget {
   const CalendarPage({
     super.key,
     required this.controller,
+    required this.cycleController,
     required this.navigation,
     required this.onEdit,
     required this.onDelete,
@@ -21,6 +27,7 @@ class CalendarPage extends StatefulWidget {
   });
 
   final ItemController controller;
+  final CycleController cycleController;
   final CalendarNavigationController navigation;
   final ValueChanged<CalendarItem> onEdit;
   final ValueChanged<CalendarItem> onDelete;
@@ -43,7 +50,7 @@ class _CalendarPageState extends State<CalendarPage> {
       notify: false,
     );
     return AnimatedBuilder(
-      animation: widget.navigation,
+      animation: Listenable.merge([widget.navigation, widget.cycleController]),
       builder: (context, _) {
         final events = widget.navigation.eventsInRange(widget.controller.items);
         final collectionColors = <String, int>{
@@ -65,7 +72,32 @@ class _CalendarPageState extends State<CalendarPage> {
             _CalendarViewModeBar(
               navigation: widget.navigation,
               onSync: widget.onSync,
+              cycleEnabled: widget.cycleController.enabled,
+              onRecordCycle: () => showCycleRecordEditor(
+                context,
+                controller: widget.cycleController,
+                initialDate: widget.navigation.selectedDate,
+              ),
+              onOpenCycleSummary: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (context) =>
+                      CycleSummaryPage(controller: widget.cycleController),
+                ),
+              ),
             ),
+            if (widget.cycleController.enabled)
+              const Padding(
+                padding: EdgeInsets.fromLTRB(20, 0, 20, 6),
+                child: CycleMarkerLegend(),
+              ),
+            if (widget.cycleController.enabled &&
+                widget.navigation.mode == CalendarViewMode.day)
+              _CycleDaySummary(
+                state: widget.cycleController.stateForDate(
+                  widget.navigation.selectedDate,
+                ),
+                prediction: widget.cycleController.prediction,
+              ),
             if (dues.isNotEmpty)
               _PinnedDueStrip(items: dues, onEdit: widget.onEdit),
             Expanded(
@@ -112,6 +144,15 @@ class _CalendarPageState extends State<CalendarPage> {
                               tagColors:
                                   widget.controller.preferences.tagColors,
                               collectionColors: collectionColors,
+                              cycleStates: widget.cycleController.enabled
+                                  ? widget.cycleController.statesBetween(
+                                      widget.navigation.monthGridStart,
+                                      widget.navigation.monthGridEnd.subtract(
+                                        const Duration(days: 1),
+                                      ),
+                                    )
+                                  : const {},
+                              showCycleMarkers: widget.cycleController.enabled,
                             )
                           : CalendarTimeGrid(
                               dates: widget.navigation.visibleDates,
@@ -132,6 +173,13 @@ class _CalendarPageState extends State<CalendarPage> {
                                   : widget.navigation.selectDate(date),
                               onEdit: widget.onEdit,
                               onCreateTimedEvent: widget.onCreateTimedEvent,
+                              cycleStates: widget.cycleController.enabled
+                                  ? widget.cycleController.statesBetween(
+                                      widget.navigation.visibleDates.first,
+                                      widget.navigation.visibleDates.last,
+                                    )
+                                  : const {},
+                              showCycleMarkers: widget.cycleController.enabled,
                             ),
                     ),
                   ),
@@ -200,10 +248,19 @@ class _CalendarPageState extends State<CalendarPage> {
 }
 
 class _CalendarViewModeBar extends StatelessWidget {
-  const _CalendarViewModeBar({required this.navigation, required this.onSync});
+  const _CalendarViewModeBar({
+    required this.navigation,
+    required this.onSync,
+    required this.cycleEnabled,
+    required this.onRecordCycle,
+    required this.onOpenCycleSummary,
+  });
 
   final CalendarNavigationController navigation;
   final VoidCallback onSync;
+  final bool cycleEnabled;
+  final VoidCallback onRecordCycle;
+  final VoidCallback onOpenCycleSummary;
 
   @override
   Widget build(BuildContext context) {
@@ -224,7 +281,12 @@ class _CalendarViewModeBar extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Row(
-                    children: [_modeSelector(), const Spacer(), _syncButton()],
+                    children: [
+                      _modeSelector(),
+                      const Spacer(),
+                      if (cycleEnabled) ..._cycleButtons(),
+                      _syncButton(),
+                    ],
                   ),
                   _periodNavigator(context),
                 ],
@@ -235,6 +297,7 @@ class _CalendarViewModeBar extends StatelessWidget {
                 _modeSelector(),
                 const Spacer(),
                 _periodNavigator(context, labelWidth: 220),
+                if (cycleEnabled) ..._cycleButtons(),
                 _syncButton(),
               ],
             );
@@ -305,6 +368,61 @@ class _CalendarViewModeBar extends StatelessWidget {
     onPressed: onSync,
     icon: const Icon(Icons.sync),
   );
+
+  List<Widget> _cycleButtons() => [
+    IconButton(
+      tooltip: '记录经期',
+      onPressed: onRecordCycle,
+      icon: const Icon(Icons.water_drop_outlined),
+    ),
+    IconButton(
+      tooltip: '周期概览',
+      onPressed: onOpenCycleSummary,
+      icon: const Icon(Icons.monitor_heart_outlined),
+    ),
+  ];
+}
+
+class _CycleDaySummary extends StatelessWidget {
+  const _CycleDaySummary({required this.state, required this.prediction});
+
+  final CycleDayState? state;
+  final CyclePrediction? prediction;
+
+  @override
+  Widget build(BuildContext context) {
+    final value = state;
+    final text = switch (value?.kind) {
+      CycleDayKind.recorded =>
+        '已记录经期${value?.dayNumber == null ? '' : ' · 第 ${value!.dayNumber} 天'}'
+            '${value?.excludedFromPrediction == true ? ' · 不参与预测' : ''}',
+      CycleDayKind.predicted => value?.isCenter == true ? '预计经期开始' : '预测经期',
+      null => _predictionRangeText(prediction),
+    };
+    if (text == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
+      child: Row(
+        children: [
+          if (value != null) ...[
+            CycleDayMarker(state: value),
+            const SizedBox(width: 8),
+          ],
+          Expanded(
+            child: Text(text, style: Theme.of(context).textTheme.bodySmall),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String? _predictionRangeText(CyclePrediction? prediction) {
+    if (prediction == null) return null;
+    return '预计下次开始：${prediction.predictedStart.month}月'
+        '${prediction.predictedStart.day}日；可能范围 '
+        '${prediction.possibleStart.month}月${prediction.possibleStart.day}日 - '
+        '${prediction.possibleEnd.month}月${prediction.possibleEnd.day}日';
+  }
 }
 
 String _calendarPeriodLabel(

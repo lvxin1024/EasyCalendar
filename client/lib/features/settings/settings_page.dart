@@ -7,6 +7,7 @@ import 'package:timezone/timezone.dart' as tz;
 
 import '../../ai/ai_provider.dart';
 import '../../ai/ai_provider_connection_tester.dart';
+import '../../application/cycle_controller.dart';
 import '../../application/item_controller.dart';
 import '../../config/app_config.dart';
 import '../../data/calendar_connection_code.dart';
@@ -18,6 +19,8 @@ import '../../sync/sync_models.dart';
 import '../../utils/tag_colors.dart';
 import '../../widgets/tag_filter_bar.dart';
 import '../recycle_bin/recycle_bin_page.dart';
+import '../cycle/cycle_settings_section.dart';
+import '../cycle/cycle_summary_page.dart';
 import '../transfer/transfer_page.dart';
 import 'about_page.dart';
 
@@ -50,10 +53,12 @@ class SettingsPage extends StatefulWidget {
     super.key,
     required this.config,
     required this.controller,
+    required this.cycleController,
   });
 
   final AppConfig config;
   final ItemController controller;
+  final CycleController cycleController;
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -152,6 +157,11 @@ class _SettingsPageState extends State<SettingsPage> {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(20, 4, 20, 96),
             children: [
+              CycleSettingsSection(
+                controller: widget.cycleController,
+                onOpenSummary: _openCycleSummary,
+              ),
+              const SizedBox(height: 24),
               _SectionLabel(label: '连接'),
               TextFormField(
                 controller: _apiUrlController,
@@ -614,7 +624,10 @@ class _SettingsPageState extends State<SettingsPage> {
                     MaterialPageRoute(
                       builder: (_) => Scaffold(
                         appBar: AppBar(title: const Text('导入导出')),
-                        body: TransferPage(controller: widget.controller),
+                        body: TransferPage(
+                          controller: widget.controller,
+                          cycleController: widget.cycleController,
+                        ),
                       ),
                     ),
                   );
@@ -696,6 +709,13 @@ class _SettingsPageState extends State<SettingsPage> {
     }
     return null;
   }
+
+  Future<void> _openCycleSummary() => Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (context) =>
+          CycleSummaryPage(controller: widget.cycleController),
+    ),
+  );
 
   Future<void> _save() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../application/cycle_controller.dart';
 import '../../application/item_controller.dart';
 import '../../config/app_config.dart';
 import '../../data/transfer_models.dart';
@@ -35,11 +36,13 @@ class HomeShell extends StatefulWidget {
     super.key,
     required this.config,
     required this.controller,
+    required this.cycleController,
     required this.widgetDeepLinks,
   });
 
   final AppConfig config;
   final ItemController controller;
+  final CycleController cycleController;
   final WidgetDeepLinkController widgetDeepLinks;
 
   @override
@@ -253,6 +256,7 @@ class _HomeShellState extends State<HomeShell> {
   Widget _currentPage() => switch (_selectedIndex) {
     0 => CalendarPage(
       controller: widget.controller,
+      cycleController: widget.cycleController,
       navigation: _calendarNavigation,
       onEdit: _openEditor,
       onDelete: _confirmDelete,
@@ -270,7 +274,11 @@ class _HomeShellState extends State<HomeShell> {
     ),
     2 => SubscriptionsPage(controller: widget.controller),
     3 => AssistantPage(config: widget.config, controller: widget.controller),
-    _ => SettingsPage(config: widget.config, controller: widget.controller),
+    _ => SettingsPage(
+      config: widget.config,
+      controller: widget.controller,
+      cycleController: widget.cycleController,
+    ),
   };
 
   void _selectDestination(int value) {

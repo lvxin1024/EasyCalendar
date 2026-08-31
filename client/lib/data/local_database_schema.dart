@@ -1,7 +1,7 @@
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 abstract final class LocalDatabaseSchema {
-  static const version = 4;
+  static const version = 5;
 
   static Future<void> create(Database database, int version) async {
     await database.execute('''
@@ -87,6 +87,7 @@ abstract final class LocalDatabaseSchema {
       )
     ''');
     await _createConflictSchema(database);
+    await _createCycleSchema(database);
   }
 
   static Future<void> upgrade(
@@ -153,6 +154,55 @@ abstract final class LocalDatabaseSchema {
         'ALTER TABLE items ADD COLUMN recurrence_json TEXT',
       );
     }
+    if (oldVersion < 5) {
+      await _createCycleSchema(database);
+    }
+  }
+
+  static Future<void> _createCycleSchema(DatabaseExecutor database) async {
+    await database.execute('''
+      CREATE TABLE IF NOT EXISTS cycle_periods (
+        id TEXT PRIMARY KEY,
+        start_date TEXT NOT NULL,
+        end_date TEXT,
+        excluded_from_prediction INTEGER NOT NULL DEFAULT 0,
+        context TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    ''');
+    await database.execute('''
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_cycle_periods_start_date
+      ON cycle_periods(start_date)
+    ''');
+    await database.execute('''
+      CREATE TABLE IF NOT EXISTS cycle_daily_logs (
+        date TEXT PRIMARY KEY,
+        period_id TEXT NOT NULL REFERENCES cycle_periods(id) ON DELETE CASCADE,
+        bleeding_level TEXT,
+        spotting INTEGER NOT NULL DEFAULT 0,
+        symptoms_json TEXT NOT NULL DEFAULT '[]',
+        updated_at TEXT NOT NULL
+      )
+    ''');
+    await database.execute('''
+      CREATE INDEX IF NOT EXISTS idx_cycle_daily_logs_period
+      ON cycle_daily_logs(period_id, date)
+    ''');
+    await database.execute('''
+      CREATE TABLE IF NOT EXISTS cycle_settings (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        enabled INTEGER NOT NULL DEFAULT 0,
+        forecast_horizon INTEGER NOT NULL DEFAULT 1,
+        updated_at TEXT NOT NULL
+      )
+    ''');
+    await database.insert('cycle_settings', {
+      'id': 1,
+      'enabled': 0,
+      'forecast_horizon': 1,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
   }
 
   static Future<void> _createConflictSchema(DatabaseExecutor database) async {

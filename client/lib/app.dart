@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
+import 'application/cycle_controller.dart';
 import 'application/item_controller.dart';
 import 'config/app_config.dart';
 import 'features/shell/home_shell.dart';
@@ -13,11 +14,13 @@ class EasyCalendarApp extends StatelessWidget {
     super.key,
     required this.config,
     required this.controller,
+    required this.cycleController,
     required this.widgetDeepLinks,
   });
 
   final AppConfig config;
   final ItemController controller;
+  final CycleController cycleController;
   final WidgetDeepLinkController widgetDeepLinks;
 
   @override
@@ -271,6 +274,7 @@ class EasyCalendarApp extends StatelessWidget {
             ? HomeShell(
                 config: config,
                 controller: controller,
+                cycleController: cycleController,
                 widgetDeepLinks: widgetDeepLinks,
               )
             : FirstRunPage(config: config, controller: controller),

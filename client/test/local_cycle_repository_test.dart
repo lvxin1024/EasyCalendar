@@ -1,0 +1,102 @@
+import 'package:easy_calendar/data/local_cycle_repository.dart';
+import 'package:easy_calendar/data/local_database_schema.dart';
+import 'package:easy_calendar/domain/cycle_record.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+
+void main() {
+  late Database database;
+  late LocalCycleRepository repository;
+  final clock = DateTime.utc(2026, 8, 31, 12);
+
+  setUp(() async {
+    sqfliteFfiInit();
+    database = await databaseFactoryFfi.openDatabase(
+      inMemoryDatabasePath,
+      options: OpenDatabaseOptions(
+        version: LocalDatabaseSchema.version,
+        onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
+        onCreate: LocalDatabaseSchema.create,
+      ),
+    );
+    repository = LocalCycleRepository(
+      databaseProvider: () async => database,
+      clock: () => clock,
+    );
+  });
+
+  tearDown(() => database.close());
+
+  test('settings default to disabled and persist locally', () async {
+    final initial = await repository.loadSettings();
+    expect(initial.enabled, isFalse);
+
+    await repository.saveSettings(initial.copyWith(enabled: true));
+
+    expect((await repository.loadSettings()).enabled, isTrue);
+  });
+
+  test('creates periods and replaces optional daily logs atomically', () async {
+    final period = await repository.createPeriod(
+      CyclePeriodDraft(
+        startDate: DateTime(2026, 8, 1),
+        endDate: DateTime(2026, 8, 5),
+      ),
+      dailyLogs: [
+        CycleDailyLogDraft(
+          date: DateTime(2026, 8, 1),
+          bleedingLevel: CycleFlowLevel.medium,
+          symptoms: const {CycleSymptom.cramps},
+        ),
+      ],
+    );
+
+    expect((await repository.listPeriods()).single.id, period.id);
+    final logs = await repository.listDailyLogs(periodId: period.id);
+    expect(logs.single.bleedingLevel, CycleFlowLevel.medium);
+    expect(logs.single.symptoms, {CycleSymptom.cramps});
+
+    await repository.updatePeriod(
+      period,
+      CyclePeriodDraft(
+        startDate: DateTime(2026, 8, 1),
+        endDate: DateTime(2026, 8, 4),
+      ),
+      dailyLogs: [
+        CycleDailyLogDraft(date: DateTime(2026, 8, 2), spotting: true),
+      ],
+    );
+
+    final updatedLogs = await repository.listDailyLogs(periodId: period.id);
+    expect(updatedLogs.single.date, DateTime(2026, 8, 2));
+    expect(updatedLogs.single.spotting, isTrue);
+  });
+
+  test('rejects overlapping periods and cascades daily log deletion', () async {
+    final period = await repository.createPeriod(
+      CyclePeriodDraft(
+        startDate: DateTime(2026, 8, 1),
+        endDate: DateTime(2026, 8, 5),
+      ),
+      dailyLogs: [
+        CycleDailyLogDraft(
+          date: DateTime(2026, 8, 1),
+          bleedingLevel: CycleFlowLevel.light,
+        ),
+      ],
+    );
+
+    expect(
+      () => repository.createPeriod(
+        CyclePeriodDraft(
+          startDate: DateTime(2026, 8, 4),
+          endDate: DateTime(2026, 8, 8),
+        ),
+      ),
+      throwsA(isA<Exception>()),
+    );
+
+    await repository.deletePeriod(period.id);
+    expect(await repository.listDailyLogs(periodId: period.id), isEmpty);
+  });
+}

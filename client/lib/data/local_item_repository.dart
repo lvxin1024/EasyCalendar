@@ -81,6 +81,11 @@ class LocalItemRepository
     return value;
   }
 
+  Future<Database> openSharedDatabase() async {
+    await initialize();
+    return _db;
+  }
+
   @override
   Future<void> initialize() async {
     if (_database != null) {

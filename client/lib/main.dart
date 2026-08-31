@@ -7,8 +7,10 @@ import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
 import 'app.dart';
+import 'application/cycle_controller.dart';
 import 'application/item_controller.dart';
 import 'config/app_config.dart';
+import 'data/local_cycle_repository.dart';
 import 'data/local_item_repository.dart';
 import 'notification/platform_notification_adapter.dart';
 import 'notification/notification_service.dart';
@@ -40,6 +42,11 @@ Future<void> main() async {
   tz.setLocalLocation(tz.getLocation(config.timezone));
   await initializeDateFormatting('zh_CN');
   final repository = LocalItemRepository(config);
+  final cycleController = CycleController(
+    repository: LocalCycleRepository(
+      databaseProvider: repository.openSharedDatabase,
+    ),
+  );
   final desktopWindowController = DesktopWindowController();
   final notificationAdapter = PlatformNotificationAdapter();
   final notificationService = NotificationService(adapter: notificationAdapter);
@@ -60,6 +67,7 @@ Future<void> main() async {
     notificationService: notificationService,
   );
   await controller.initialize();
+  await cycleController.initialize();
   await notificationService.initialize();
   if (controller.preferences.notificationsEnabled) {
     unawaited(notificationService.reconcileAll(controller.items));
@@ -70,6 +78,7 @@ Future<void> main() async {
     EasyCalendarApp(
       config: config,
       controller: controller,
+      cycleController: cycleController,
       widgetDeepLinks: widgetDeepLinks,
     ),
   );

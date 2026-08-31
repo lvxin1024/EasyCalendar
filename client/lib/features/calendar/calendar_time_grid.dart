@@ -5,11 +5,13 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../domain/cycle_prediction.dart';
 import '../../domain/item.dart';
 import '../../utils/configured_time.dart';
 import '../../utils/date_formatters.dart';
 import '../../utils/tag_colors.dart';
 import 'calendar_navigation_controller.dart';
+import 'cycle_day_marker.dart';
 
 class CalendarEventPlacement {
   const CalendarEventPlacement({
@@ -142,6 +144,8 @@ class CalendarTimeGrid extends StatefulWidget {
     required this.onDateSelected,
     required this.onEdit,
     required this.onCreateTimedEvent,
+    this.cycleStates = const {},
+    this.showCycleMarkers = false,
   });
 
   final List<DateTime> dates;
@@ -155,6 +159,8 @@ class CalendarTimeGrid extends StatefulWidget {
   final ValueChanged<DateTime> onDateSelected;
   final ValueChanged<CalendarItem> onEdit;
   final Future<void> Function(DateTime) onCreateTimedEvent;
+  final Map<DateTime, CycleDayState> cycleStates;
+  final bool showCycleMarkers;
 
   @override
   State<CalendarTimeGrid> createState() => _CalendarTimeGridState();
@@ -215,6 +221,8 @@ class _CalendarTimeGridState extends State<CalendarTimeGrid> {
                         dates: widget.dates,
                         selectedDate: widget.selectedDate,
                         onDateSelected: widget.onDateSelected,
+                        cycleStates: widget.cycleStates,
+                        showCycleMarkers: widget.showCycleMarkers,
                       ),
                       _AllDayRow(
                         dates: widget.dates,
@@ -429,15 +437,19 @@ class _DateHeader extends StatelessWidget {
     required this.dates,
     required this.selectedDate,
     required this.onDateSelected,
+    required this.cycleStates,
+    required this.showCycleMarkers,
   });
 
   final List<DateTime> dates;
   final DateTime selectedDate;
   final ValueChanged<DateTime> onDateSelected;
+  final Map<DateTime, CycleDayState> cycleStates;
+  final bool showCycleMarkers;
 
   @override
   Widget build(BuildContext context) => SizedBox(
-    height: 30,
+    height: showCycleMarkers ? 34 : 30,
     child: Row(
       children: [
         const SizedBox(width: 48),
@@ -457,12 +469,38 @@ class _DateHeader extends StatelessWidget {
                   ),
                 ),
                 child: Center(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      formatCompactDateWithWeekday(context, date),
-                      style: Theme.of(context).textTheme.labelSmall,
-                    ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          formatCompactDateWithWeekday(context, date),
+                          style: Theme.of(context).textTheme.labelSmall,
+                        ),
+                      ),
+                      if (showCycleMarkers)
+                        SizedBox(
+                          height: 4,
+                          child:
+                              cycleStates[DateTime(
+                                    date.year,
+                                    date.month,
+                                    date.day,
+                                  )] ==
+                                  null
+                              ? null
+                              : CycleDayMarker(
+                                  state:
+                                      cycleStates[DateTime(
+                                        date.year,
+                                        date.month,
+                                        date.day,
+                                      )]!,
+                                  height: 4,
+                                ),
+                        ),
+                    ],
                   ),
                 ),
               ),

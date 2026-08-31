@@ -5,13 +5,19 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../application/cycle_controller.dart';
 import '../../application/item_controller.dart';
 import '../../data/transfer_models.dart';
 
 class TransferPage extends StatefulWidget {
-  const TransferPage({super.key, required this.controller});
+  const TransferPage({
+    super.key,
+    required this.controller,
+    this.cycleController,
+  });
 
   final ItemController controller;
+  final CycleController? cycleController;
 
   @override
   State<TransferPage> createState() => _TransferPageState();
@@ -47,7 +53,9 @@ class _TransferPageState extends State<TransferPage> {
             _SectionLabel(label: '本地恢复点'),
             const SizedBox(height: 8),
             Text(
-              '数据库升级前会自动创建恢复点，也可以随时手动创建。恢复前会再保留当前状态。',
+              widget.cycleController?.enabled == true
+                  ? '数据库恢复点包含经期等健康记录，请妥善保管。恢复前会再保留当前状态。'
+                  : '数据库升级前会自动创建恢复点，也可以随时手动创建。恢复前会再保留当前状态。',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
@@ -128,8 +136,7 @@ class _TransferPageState extends State<TransferPage> {
             _SectionLabel(label: 'JSON 备份'),
             const SizedBox(height: 8),
             Text(
-              '导出所有数据为 JSON 文件，可用于完整备份和恢复。'
-              '包含 Collections、事项、订阅和同步状态。',
+              '导出 Collections、事项、订阅和同步状态。普通 JSON 不包含经期等健康记录。',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
@@ -155,7 +162,7 @@ class _TransferPageState extends State<TransferPage> {
             const SizedBox(height: 8),
             Text(
               '导入外部日历应用的 .ics 文件，或导出 Event 为 ICS 格式。'
-              '所有处理均在本机完成。',
+              '所有处理均在本机完成，且不包含经期等健康记录。',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
@@ -272,6 +279,7 @@ class _TransferPageState extends State<TransferPage> {
     setState(() => _busy = true);
     try {
       await widget.controller.restoreLocalDatabaseBackup(backup.path);
+      await widget.cycleController?.refresh();
       await _loadBackups();
       if (mounted) _showStatus('数据库已恢复，恢复前状态也已保留');
     } catch (error) {
