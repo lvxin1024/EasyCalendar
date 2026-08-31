@@ -6,6 +6,7 @@ import '../../widgets/empty_state.dart';
 import '../../widgets/item_tile.dart';
 import '../../widgets/tag_filter_bar.dart';
 import '../../utils/configured_time.dart';
+import '../due/due_page.dart';
 
 enum ItemTypeFilter { all, event, task, note }
 
@@ -16,12 +17,14 @@ class ItemsPage extends StatefulWidget {
     required this.onEdit,
     required this.onDelete,
     required this.onToggleCompleted,
+    this.initialFilter = ItemTypeFilter.all,
   });
 
   final ItemController controller;
   final ValueChanged<CalendarItem> onEdit;
   final ValueChanged<CalendarItem> onDelete;
   final void Function(CalendarItem item, bool completed) onToggleCompleted;
+  final ItemTypeFilter initialFilter;
 
   @override
   State<ItemsPage> createState() => _ItemsPageState();
@@ -29,8 +32,14 @@ class ItemsPage extends StatefulWidget {
 
 class _ItemsPageState extends State<ItemsPage> {
   final _searchController = TextEditingController();
-  ItemTypeFilter _filter = ItemTypeFilter.all;
+  late ItemTypeFilter _filter;
   Set<String> _selectedTags = const {};
+
+  @override
+  void initState() {
+    super.initState();
+    _filter = widget.initialFilter;
+  }
 
   @override
   void dispose() {
@@ -49,15 +58,13 @@ class _ItemsPageState extends State<ItemsPage> {
         .where((item) {
           final matchesType =
               _filter == ItemTypeFilter.all || item.type.name == _filter.name;
-          final matchesQuery =
-              query.isEmpty ||
-              item.title.toLowerCase().contains(query) ||
-              (item.body?.toLowerCase().contains(query) ?? false) ||
-              item.tags.any((tag) => tag.toLowerCase().contains(query));
           return matchesType &&
-              matchesQuery &&
+              _matchesQuery(item, query) &&
               matchesTagFilter(item, _selectedTags);
         })
+        .toList(growable: false);
+    final dueItems = widget.controller.dueItems
+        .where((item) => _matchesQuery(item, query))
         .toList(growable: false);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -111,43 +118,64 @@ class _ItemsPageState extends State<ItemsPage> {
                 setState(() => _filter = value.first),
           ),
         ),
-        TagFilterBar(
-          tags: tagsFromItems(currentItems),
-          selectedTags: _selectedTags,
-          colors: widget.controller.preferences.tagColors,
-          onChanged: (value) => setState(() => _selectedTags = value),
-        ),
-        Expanded(
-          child: items.isEmpty
-              ? const EmptyState(
-                  icon: Icons.inbox_outlined,
-                  title: '没有匹配的事项',
-                  message: '调整搜索或筛选条件。',
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 96),
-                  itemCount: items.length,
-                  itemBuilder: (context, index) {
-                    final item = items[index];
-                    return ItemTile(
-                      item: item,
-                      onEdit: () => widget.onEdit(item),
-                      onDelete: () => widget.onDelete(item),
-                      onToggleCompleted: item.type == ItemType.task
-                          ? (value) => widget.onToggleCompleted(item, value)
-                          : null,
-                      tagColors: widget.controller.preferences.tagColors,
-                    );
-                  },
-                ),
-        ),
+        if (_filter == ItemTypeFilter.task)
+          Expanded(
+            child: DueItemsSection(
+              items: dueItems,
+              tagColors: widget.controller.preferences.tagColors,
+              onEdit: widget.onEdit,
+              onDelete: widget.onDelete,
+              onToggleCompleted: widget.onToggleCompleted,
+            ),
+          )
+        else ...[
+          TagFilterBar(
+            tags: tagsFromItems(currentItems),
+            selectedTags: _selectedTags,
+            colors: widget.controller.preferences.tagColors,
+            onChanged: (value) => setState(() => _selectedTags = value),
+          ),
+          Expanded(
+            child: items.isEmpty
+                ? const EmptyState(
+                    icon: Icons.inbox_outlined,
+                    title: '没有匹配的事项',
+                    message: '调整搜索或筛选条件。',
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 96),
+                    itemCount: items.length,
+                    itemBuilder: (context, index) {
+                      final item = items[index];
+                      return ItemTile(
+                        item: item,
+                        onEdit: () => widget.onEdit(item),
+                        onDelete: () => widget.onDelete(item),
+                        onToggleCompleted: item.type == ItemType.task
+                            ? (value) => widget.onToggleCompleted(item, value)
+                            : null,
+                        tagColors: widget.controller.preferences.tagColors,
+                      );
+                    },
+                  ),
+          ),
+        ],
       ],
     );
   }
 }
 
+bool _matchesQuery(CalendarItem item, String query) =>
+    query.isEmpty ||
+    item.title.toLowerCase().contains(query) ||
+    (item.body?.toLowerCase().contains(query) ?? false) ||
+    item.tags.any((tag) => tag.toLowerCase().contains(query));
+
 @visibleForTesting
 bool isVisibleInAllItems(CalendarItem item, DateTime now) {
+  if (item.type == ItemType.task && item.status == ItemStatus.done) {
+    return false;
+  }
   if (item.type != ItemType.event || item.recurrence != null) return true;
   final startAt = item.startAt;
   if (startAt == null) return true;

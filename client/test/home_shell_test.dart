@@ -3,13 +3,13 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('mobile navigation maps primary destinations and more pages', () {
-    expect(mobilePrimaryDestinationIndexes, [0, 1, 2, 4]);
+    expect(mobilePrimaryDestinationIndexes, [0, 1, 3]);
     expect(mobileNavigationIndexForDestination(0), 0);
+    expect(mobileNavigationIndexForDestination(3), 2);
+    expect(mobileNavigationIndexForDestination(2), 3);
     expect(mobileNavigationIndexForDestination(4), 3);
-    expect(mobileNavigationIndexForDestination(3), 4);
-    expect(mobileNavigationIndexForDestination(5), 4);
-    expect(destinationIndexForMobileNavigation(3), 4);
-    expect(destinationIndexForMobileNavigation(4), isNull);
+    expect(destinationIndexForMobileNavigation(2), 3);
+    expect(destinationIndexForMobileNavigation(3), isNull);
   });
 
   test(

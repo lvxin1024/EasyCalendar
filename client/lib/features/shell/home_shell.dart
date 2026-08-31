@@ -8,7 +8,6 @@ import '../../widget/widget_deep_link_controller.dart';
 import '../../widgets/glass_surface.dart';
 import '../calendar/calendar_navigation_controller.dart';
 import '../calendar/calendar_page.dart';
-import '../due/due_page.dart';
 import '../assistant/assistant_page.dart';
 import '../editor/item_editor_page.dart';
 import '../items/items_page.dart';
@@ -16,7 +15,7 @@ import '../settings/settings_page.dart';
 import '../subscriptions/subscriptions_page.dart';
 
 @visibleForTesting
-const mobilePrimaryDestinationIndexes = <int>[0, 1, 2, 4];
+const mobilePrimaryDestinationIndexes = <int>[0, 1, 3];
 
 @visibleForTesting
 int mobileNavigationIndexForDestination(int destinationIndex) {
@@ -49,6 +48,8 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> {
   int _selectedIndex = 0;
+  int _itemsPageVersion = 0;
+  ItemTypeFilter _itemsInitialFilter = ItemTypeFilter.all;
   late final CalendarNavigationController _calendarNavigation;
   final _calendarDestinationTaps = CalendarDestinationTapTracker();
 
@@ -87,11 +88,6 @@ class _HomeShellState extends State<HomeShell> {
       icon: Icons.view_list_outlined,
       selectedIcon: Icons.view_list,
       label: '全部',
-    ),
-    (
-      icon: Icons.check_circle_outline,
-      selectedIcon: Icons.check_circle,
-      label: 'Due',
     ),
     (icon: Icons.link_outlined, selectedIcon: Icons.link, label: '订阅'),
     (
@@ -239,7 +235,7 @@ class _HomeShellState extends State<HomeShell> {
                       onDestinationSelected: _selectMobileDestination,
                     ),
                   ),
-            floatingActionButton: _selectedIndex >= 3
+            floatingActionButton: _selectedIndex > 1
                 ? null
                 : FloatingActionButton(
                     tooltip: '新建事项',
@@ -265,19 +261,15 @@ class _HomeShellState extends State<HomeShell> {
       onSync: _syncNow,
     ),
     1 => ItemsPage(
+      key: ValueKey(_itemsPageVersion),
       controller: widget.controller,
       onEdit: _openEditor,
       onDelete: _confirmDelete,
       onToggleCompleted: _toggleCompleted,
+      initialFilter: _itemsInitialFilter,
     ),
-    2 => DuePage(
-      controller: widget.controller,
-      onEdit: _openEditor,
-      onDelete: _confirmDelete,
-      onToggleCompleted: _toggleCompleted,
-    ),
-    3 => SubscriptionsPage(controller: widget.controller),
-    4 => AssistantPage(config: widget.config, controller: widget.controller),
+    2 => SubscriptionsPage(controller: widget.controller),
+    3 => AssistantPage(config: widget.config, controller: widget.controller),
     _ => SettingsPage(config: widget.config, controller: widget.controller),
   };
 
@@ -291,7 +283,13 @@ class _HomeShellState extends State<HomeShell> {
       return;
     }
     if (_selectedIndex == value) return;
-    setState(() => _selectedIndex = value);
+    setState(() {
+      if (value == 1) {
+        _itemsInitialFilter = ItemTypeFilter.all;
+        _itemsPageVersion += 1;
+      }
+      _selectedIndex = value;
+    });
   }
 
   Future<void> _selectMobileDestination(int navigationIndex) async {
@@ -322,14 +320,14 @@ class _HomeShellState extends State<HomeShell> {
               ListTile(
                 leading: const Icon(Icons.link_outlined),
                 title: const Text('订阅'),
-                selected: _selectedIndex == 3,
-                onTap: () => Navigator.pop(context, 3),
+                selected: _selectedIndex == 2,
+                onTap: () => Navigator.pop(context, 2),
               ),
               ListTile(
                 leading: const Icon(Icons.settings_outlined),
                 title: const Text('设置'),
-                selected: _selectedIndex == 5,
-                onTap: () => Navigator.pop(context, 5),
+                selected: _selectedIndex == 4,
+                onTap: () => Navigator.pop(context, 4),
               ),
             ],
           ),
@@ -349,7 +347,11 @@ class _HomeShellState extends State<HomeShell> {
       return;
     }
     if (target.kind == WidgetDeepLinkKind.due) {
-      setState(() => _selectedIndex = 2);
+      setState(() {
+        _itemsInitialFilter = ItemTypeFilter.task;
+        _itemsPageVersion += 1;
+        _selectedIndex = 1;
+      });
       return;
     }
     CalendarItem? item;
@@ -360,7 +362,11 @@ class _HomeShellState extends State<HomeShell> {
       }
     }
     if (item == null) {
-      setState(() => _selectedIndex = 1);
+      setState(() {
+        _itemsInitialFilter = ItemTypeFilter.all;
+        _itemsPageVersion += 1;
+        _selectedIndex = 1;
+      });
       _showError('该事项已不存在。');
       return;
     }

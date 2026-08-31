@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../application/item_controller.dart';
 import '../../domain/item.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/item_tile.dart';
@@ -9,66 +8,45 @@ import '../../utils/configured_time.dart';
 
 enum DueFilter { open, overdue, completed }
 
-class DuePage extends StatefulWidget {
-  const DuePage({
+class DueItemsSection extends StatefulWidget {
+  const DueItemsSection({
     super.key,
-    required this.controller,
+    required this.items,
+    required this.tagColors,
     required this.onEdit,
     required this.onDelete,
     required this.onToggleCompleted,
   });
 
-  final ItemController controller;
+  final List<CalendarItem> items;
+  final Map<String, int> tagColors;
   final ValueChanged<CalendarItem> onEdit;
   final ValueChanged<CalendarItem> onDelete;
   final void Function(CalendarItem item, bool completed) onToggleCompleted;
 
   @override
-  State<DuePage> createState() => _DuePageState();
+  State<DueItemsSection> createState() => _DueItemsSectionState();
 }
 
-class _DuePageState extends State<DuePage> {
+class _DueItemsSectionState extends State<DueItemsSection> {
   DueFilter _filter = DueFilter.open;
   Set<String> _selectedTags = const {};
 
   @override
   Widget build(BuildContext context) {
     final now = configuredNow();
-    final items = widget.controller.dueItems
+    final items = widget.items
         .where((item) {
-          final completed = item.status == ItemStatus.done;
-          final overdue = !completed && item.dueAt!.isBefore(now);
-          final matchesStatus = switch (_filter) {
-            DueFilter.open => !completed,
-            DueFilter.overdue => overdue,
-            DueFilter.completed => completed,
-          };
-          return matchesStatus && matchesTagFilter(item, _selectedTags);
+          return dueMatchesFilter(item, _filter, now) &&
+              matchesTagFilter(item, _selectedTags);
         })
         .toList(growable: false);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 14),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Due',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-              ),
-              Text(
-                '${items.length} 项',
-                style: Theme.of(context).textTheme.labelLarge,
-              ),
-            ],
-          ),
-        ),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+          padding: const EdgeInsets.fromLTRB(20, 2, 20, 12),
           child: SegmentedButton<DueFilter>(
             showSelectedIcon: false,
             segments: const [
@@ -90,9 +68,9 @@ class _DuePageState extends State<DuePage> {
           ),
         ),
         TagFilterBar(
-          tags: tagsFromItems(widget.controller.dueItems),
+          tags: tagsFromItems(widget.items),
           selectedTags: _selectedTags,
-          colors: widget.controller.preferences.tagColors,
+          colors: widget.tagColors,
           onChanged: (value) => setState(() => _selectedTags = value),
         ),
         Expanded(
@@ -120,7 +98,7 @@ class _DuePageState extends State<DuePage> {
                       onDelete: () => widget.onDelete(item),
                       onToggleCompleted: (value) =>
                           widget.onToggleCompleted(item, value),
-                      tagColors: widget.controller.preferences.tagColors,
+                      tagColors: widget.tagColors,
                     );
                   },
                 ),
@@ -128,4 +106,15 @@ class _DuePageState extends State<DuePage> {
       ],
     );
   }
+}
+
+@visibleForTesting
+bool dueMatchesFilter(CalendarItem item, DueFilter filter, DateTime now) {
+  final completed = item.status == ItemStatus.done;
+  final overdue = !completed && item.dueAt!.isBefore(now);
+  return switch (filter) {
+    DueFilter.open => !completed,
+    DueFilter.overdue => overdue,
+    DueFilter.completed => completed,
+  };
 }

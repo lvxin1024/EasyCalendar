@@ -60,6 +60,12 @@ void main() {
       expect(isVisibleInAllItems(_item(ItemType.task), now), isTrue);
       expect(isVisibleInAllItems(_item(ItemType.note), now), isTrue);
     });
+
+    test('hides completed due tasks', () {
+      final task = _item(ItemType.task, status: ItemStatus.done);
+
+      expect(isVisibleInAllItems(task, now), isFalse);
+    });
   });
 }
 
@@ -87,19 +93,20 @@ CalendarItem _event({
   version: 1,
 );
 
-CalendarItem _item(ItemType type) => CalendarItem(
-  id: type.name,
-  collectionId: 'collection_local',
-  type: type,
-  title: type.name,
-  dueAt: DateTime.utc(2025),
-  timezone: 'Asia/Shanghai',
-  allDay: false,
-  status: ItemStatus.todo,
-  reminderEnabled: false,
-  reminderMinutes: 30,
-  tags: const [],
-  createdAt: DateTime.utc(2025),
-  updatedAt: DateTime.utc(2025),
-  version: 1,
-);
+CalendarItem _item(ItemType type, {ItemStatus status = ItemStatus.todo}) =>
+    CalendarItem(
+      id: type.name,
+      collectionId: 'collection_local',
+      type: type,
+      title: type.name,
+      dueAt: DateTime.utc(2025),
+      timezone: 'Asia/Shanghai',
+      allDay: false,
+      status: status,
+      reminderEnabled: false,
+      reminderMinutes: 30,
+      tags: const [],
+      createdAt: DateTime.utc(2025),
+      updatedAt: DateTime.utc(2025),
+      version: 1,
+    );
