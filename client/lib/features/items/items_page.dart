@@ -5,6 +5,7 @@ import '../../domain/item.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/item_tile.dart';
 import '../../widgets/tag_filter_bar.dart';
+import '../../utils/configured_time.dart';
 
 enum ItemTypeFilter { all, event, task, note }
 
@@ -39,8 +40,12 @@ class _ItemsPageState extends State<ItemsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final now = configuredNow();
     final query = _searchController.text.trim().toLowerCase();
-    final items = widget.controller.items
+    final currentItems = widget.controller.items
+        .where((item) => isVisibleInAllItems(item, now))
+        .toList(growable: false);
+    final items = currentItems
         .where((item) {
           final matchesType =
               _filter == ItemTypeFilter.all || item.type.name == _filter.name;
@@ -107,7 +112,7 @@ class _ItemsPageState extends State<ItemsPage> {
           ),
         ),
         TagFilterBar(
-          tags: tagsFromItems(widget.controller.items),
+          tags: tagsFromItems(currentItems),
           selectedTags: _selectedTags,
           colors: widget.controller.preferences.tagColors,
           onChanged: (value) => setState(() => _selectedTags = value),
@@ -139,4 +144,24 @@ class _ItemsPageState extends State<ItemsPage> {
       ],
     );
   }
+}
+
+@visibleForTesting
+bool isVisibleInAllItems(CalendarItem item, DateTime now) {
+  if (item.type != ItemType.event || item.recurrence != null) return true;
+  final startAt = item.startAt;
+  if (startAt == null) return true;
+
+  final localStart = inConfiguredTimezone(startAt);
+  final rawEnd = item.endAt;
+  final effectiveEnd = rawEnd != null && rawEnd.isAfter(startAt)
+      ? inConfiguredTimezone(rawEnd)
+      : item.allDay
+      ? configuredDateTime(
+          year: localStart.year,
+          month: localStart.month,
+          day: localStart.day + 1,
+        )
+      : localStart;
+  return effectiveEnd.isAfter(inConfiguredTimezone(now));
 }

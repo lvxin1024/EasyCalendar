@@ -216,42 +216,110 @@ class _CalendarViewModeBar extends StatelessWidget {
         borderColor: colorScheme.outlineVariant.withAlpha(175),
         blur: 16,
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        child: Row(
-          children: [
-            SegmentedButton<CalendarViewMode>(
-              showSelectedIcon: false,
-              segments: const [
-                ButtonSegment(
-                  value: CalendarViewMode.day,
-                  icon: Icon(Icons.view_day_outlined),
-                  label: Text('日'),
-                ),
-                ButtonSegment(
-                  value: CalendarViewMode.week,
-                  icon: Icon(Icons.view_week_outlined),
-                  label: Text('周'),
-                ),
-                ButtonSegment(
-                  value: CalendarViewMode.month,
-                  icon: Icon(Icons.calendar_view_month_outlined),
-                  label: Text('月'),
-                ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxWidth < 620;
+            if (compact) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [_modeSelector(), const Spacer(), _syncButton()],
+                  ),
+                  _periodNavigator(context),
+                ],
+              );
+            }
+            return Row(
+              children: [
+                _modeSelector(),
+                const Spacer(),
+                _periodNavigator(context, labelWidth: 220),
+                _syncButton(),
               ],
-              selected: {navigation.mode},
-              onSelectionChanged: (value) => navigation.setMode(value.first),
-            ),
-            const Spacer(),
-            IconButton(
-              tooltip: '同步刷新',
-              onPressed: onSync,
-              icon: const Icon(Icons.sync),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
   }
+
+  Widget _modeSelector() => SegmentedButton<CalendarViewMode>(
+    showSelectedIcon: false,
+    segments: const [
+      ButtonSegment(
+        value: CalendarViewMode.day,
+        icon: Icon(Icons.view_day_outlined),
+        label: Text('日'),
+      ),
+      ButtonSegment(
+        value: CalendarViewMode.week,
+        icon: Icon(Icons.view_week_outlined),
+        label: Text('周'),
+      ),
+      ButtonSegment(
+        value: CalendarViewMode.month,
+        icon: Icon(Icons.calendar_view_month_outlined),
+        label: Text('月'),
+      ),
+    ],
+    selected: {navigation.mode},
+    onSelectionChanged: (value) => navigation.setMode(value.first),
+  );
+
+  Widget _periodNavigator(BuildContext context, {double? labelWidth}) => Row(
+    mainAxisSize: labelWidth == null ? MainAxisSize.max : MainAxisSize.min,
+    children: [
+      IconButton(
+        tooltip: '上一周期',
+        onPressed: navigation.previous,
+        icon: const Icon(Icons.chevron_left),
+      ),
+      if (labelWidth == null)
+        Expanded(child: _periodLabel(context))
+      else
+        SizedBox(width: labelWidth, child: _periodLabel(context)),
+      IconButton(
+        tooltip: '今天',
+        onPressed: navigation.goToToday,
+        icon: const Icon(Icons.today_outlined),
+      ),
+      IconButton(
+        tooltip: '下一周期',
+        onPressed: navigation.next,
+        icon: const Icon(Icons.chevron_right),
+      ),
+    ],
+  );
+
+  Widget _periodLabel(BuildContext context) => Text(
+    _calendarPeriodLabel(context, navigation),
+    textAlign: TextAlign.center,
+    maxLines: 1,
+    overflow: TextOverflow.ellipsis,
+    style: Theme.of(context).textTheme.titleSmall,
+  );
+
+  Widget _syncButton() => IconButton(
+    tooltip: '同步刷新',
+    onPressed: onSync,
+    icon: const Icon(Icons.sync),
+  );
 }
+
+String _calendarPeriodLabel(
+  BuildContext context,
+  CalendarNavigationController navigation,
+) => switch (navigation.mode) {
+  CalendarViewMode.day => formatDateWithWeekday(
+    context,
+    navigation.selectedDate,
+  ),
+  CalendarViewMode.week =>
+    '${formatMonthDay(context, navigation.rangeStart)} - '
+        '${formatMonthDay(context, navigation.rangeEnd.subtract(const Duration(days: 1)))}',
+  CalendarViewMode.month => formatMonth(context, navigation.selectedDate),
+};
 
 class _PinnedDueStrip extends StatelessWidget {
   const _PinnedDueStrip({required this.items, required this.onEdit});

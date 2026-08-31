@@ -15,6 +15,22 @@ import '../items/items_page.dart';
 import '../settings/settings_page.dart';
 import '../subscriptions/subscriptions_page.dart';
 
+@visibleForTesting
+const mobilePrimaryDestinationIndexes = <int>[0, 1, 2, 4];
+
+@visibleForTesting
+int mobileNavigationIndexForDestination(int destinationIndex) {
+  final index = mobilePrimaryDestinationIndexes.indexOf(destinationIndex);
+  return index >= 0 ? index : mobilePrimaryDestinationIndexes.length;
+}
+
+@visibleForTesting
+int? destinationIndexForMobileNavigation(int navigationIndex) =>
+    navigationIndex >= 0 &&
+        navigationIndex < mobilePrimaryDestinationIndexes.length
+    ? mobilePrimaryDestinationIndexes[navigationIndex]
+    : null;
+
 class HomeShell extends StatefulWidget {
   const HomeShell({
     super.key,
@@ -61,15 +77,6 @@ class _HomeShellState extends State<HomeShell> {
     super.dispose();
   }
 
-  static const _navAccents = [
-    (color: Color(0xFF426B68), background: Color(0xFFDDE9E4)),
-    (color: Color(0xFF60765A), background: Color(0xFFE4EBDD)),
-    (color: Color(0xFFB23A48), background: Color(0xFFF3DEE0)),
-    (color: Color(0xFF5877A6), background: Color(0xFFE7EDF5)),
-    (color: Color(0xFF705783), background: Color(0xFFE9E3EE)),
-    (color: Color(0xFFA37B25), background: Color(0xFFF3E8C8)),
-  ];
-
   static const _destinationData = [
     (
       icon: Icons.calendar_view_week_outlined,
@@ -95,22 +102,37 @@ class _HomeShellState extends State<HomeShell> {
     (icon: Icons.settings_outlined, selectedIcon: Icons.settings, label: '设置'),
   ];
 
-  List<NavigationDestination> get _destinations => [
-    for (var index = 0; index < _destinationData.length; index++)
+  List<NavigationDestination> get _mobileDestinations => [
+    for (final index in mobilePrimaryDestinationIndexes)
       NavigationDestination(
         icon: _navGlyph(index, selected: false),
         selectedIcon: _navGlyph(index, selected: true),
         label: _destinationData[index].label,
       ),
+    NavigationDestination(
+      icon: _moreNavGlyph(selected: false),
+      selectedIcon: _moreNavGlyph(selected: true),
+      label: '更多',
+    ),
   ];
 
   Widget _navGlyph(int index, {required bool selected}) {
     final data = _destinationData[index];
-    final accent = _navAccents[index];
+    final colorScheme = Theme.of(context).colorScheme;
     return _ColoredNavGlyph(
       icon: selected ? data.selectedIcon : data.icon,
-      color: accent.color,
-      background: accent.background,
+      color: selected ? colorScheme.primary : colorScheme.onSurfaceVariant,
+      background: colorScheme.primaryContainer,
+      selected: selected,
+    );
+  }
+
+  Widget _moreNavGlyph({required bool selected}) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return _ColoredNavGlyph(
+      icon: selected ? Icons.more_horiz : Icons.more_horiz_outlined,
+      color: selected ? colorScheme.primary : colorScheme.onSurfaceVariant,
+      background: colorScheme.primaryContainer,
       selected: selected,
     );
   }
@@ -210,9 +232,11 @@ class _HomeShellState extends State<HomeShell> {
                       top: Radius.circular(24),
                     ),
                     child: NavigationBar(
-                      selectedIndex: _selectedIndex,
-                      destinations: _destinations,
-                      onDestinationSelected: _selectDestination,
+                      selectedIndex: mobileNavigationIndexForDestination(
+                        _selectedIndex,
+                      ),
+                      destinations: _mobileDestinations,
+                      onDestinationSelected: _selectMobileDestination,
                     ),
                   ),
             floatingActionButton: _selectedIndex >= 3
@@ -268,6 +292,51 @@ class _HomeShellState extends State<HomeShell> {
     }
     if (_selectedIndex == value) return;
     setState(() => _selectedIndex = value);
+  }
+
+  Future<void> _selectMobileDestination(int navigationIndex) async {
+    final destinationIndex = destinationIndexForMobileNavigation(
+      navigationIndex,
+    );
+    if (destinationIndex != null) {
+      _selectDestination(destinationIndex);
+      return;
+    }
+    final selected = await showModalBottomSheet<int>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Text(
+                  '更多',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.link_outlined),
+                title: const Text('订阅'),
+                selected: _selectedIndex == 3,
+                onTap: () => Navigator.pop(context, 3),
+              ),
+              ListTile(
+                leading: const Icon(Icons.settings_outlined),
+                title: const Text('设置'),
+                selected: _selectedIndex == 5,
+                onTap: () => Navigator.pop(context, 5),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (selected != null && mounted) _selectDestination(selected);
   }
 
   Future<void> _handleWidgetDeepLink() async {
@@ -399,7 +468,7 @@ class _ColoredNavGlyph extends StatelessWidget {
       color: selected ? background : Colors.transparent,
       borderRadius: BorderRadius.circular(10),
     ),
-    child: Icon(icon, size: 21, color: selected ? color : color.withAlpha(150)),
+    child: Icon(icon, size: 21, color: color),
   );
 }
 
