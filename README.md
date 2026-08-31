@@ -426,7 +426,7 @@ cd server && npm test      # Worker 测试
 
 | 层 | 技术 |
 |---|---|
-| 客户端 | Flutter 3.44.9, Dart, SQLite (drift), platform channels |
+| 客户端 | Flutter 3.44.9, Dart, SQLite (sqflite), platform channels |
 | 可选兼容 API | Python 3.11+, FastAPI, SQLite, icalendar, RRULE 展开引擎 |
 | 同步服务 | TypeScript, Cloudflare Workers, D1, Hono, outbox/cursor 协议 |
 | AI | OpenAI-compatible / Ollama Provider, Candidate 确认流程 |

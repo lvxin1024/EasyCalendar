@@ -6,6 +6,7 @@ import 'package:timezone/timezone.dart' as tz;
 import '../ai/ai_key_store.dart';
 import '../ai/ai_provider.dart';
 import '../ai/ai_provider_connection_tester.dart';
+import '../ai/ai_provider_service.dart';
 import '../config/app_config.dart';
 import '../data/item_repository.dart';
 import '../data/calendar_connection_code.dart';
@@ -41,9 +42,10 @@ class ItemController extends ChangeNotifier {
     SubscriptionFetchClient? subscriptionFetchClient,
   }) {
     syncCoordinator?.addListener(_syncChanged);
-    _aiApiKeyStore = aiApiKeyStore ?? SecureAiApiKeyStore();
-    _aiProviderConnectionTester =
-        aiProviderConnectionTester ?? AiProviderConnectionTester();
+    _aiProviderService = AiProviderService(
+      keyStore: aiApiKeyStore,
+      connectionTester: aiProviderConnectionTester,
+    );
     _deviceIdentity = deviceIdentity ?? DeviceIdentity();
     this.featureTokenStore = featureTokenStore ?? SecureFeatureTokenStore();
     _serviceProbeClient = serviceProbeClient ?? ServiceProbeClient();
@@ -57,8 +59,7 @@ class ItemController extends ChangeNotifier {
   final WidgetSnapshotWriter? widgetSnapshotWriter;
   final DesktopWindowController? desktopWindowController;
   final NotificationService? notificationService;
-  late final AiApiKeyStore _aiApiKeyStore;
-  late final AiProviderConnectionTester _aiProviderConnectionTester;
+  late final AiProviderService _aiProviderService;
   late final DeviceIdentity _deviceIdentity;
   late final SyncTokenStore featureTokenStore;
   late final ServiceProbeClient _serviceProbeClient;
@@ -108,17 +109,7 @@ class ItemController extends ChangeNotifier {
 
   Future<List<AiProviderConfig>> refreshAiProviderKeyStatus() async {
     final providers = preferences.aiProviders;
-    final refreshed = <AiProviderConfig>[];
-    for (final provider in providers) {
-      bool configured = false;
-      try {
-        configured =
-            (await _aiApiKeyStore.read(provider.id))?.isNotEmpty == true;
-      } catch (_) {
-        // Secure storage is optional while running on unsupported test targets.
-      }
-      refreshed.add(provider.copyWith(keyConfigured: configured));
-    }
+    final refreshed = await _aiProviderService.refreshKeyStatus(providers);
     if (!_sameProviders(refreshed, preferences.aiProviders)) {
       _preferences = preferences.copyWith(aiProviders: refreshed);
       notifyListeners();
@@ -131,27 +122,17 @@ class ItemController extends ChangeNotifier {
     String? apiKey,
     bool clearApiKey = false,
   }) async {
-    if (clearApiKey && apiKey?.trim().isNotEmpty == true) {
-      throw ArgumentError('Cannot replace and clear an AI API key together.');
-    }
     final providers = [...preferences.aiProviders];
     final index = providers.indexWhere((value) => value.id == provider.id);
-    final stored = provider.copyWith(
-      keyConfigured: clearApiKey
-          ? false
-          : apiKey?.trim().isNotEmpty == true
-          ? true
-          : provider.keyConfigured,
+    final stored = await _aiProviderService.saveKey(
+      provider,
+      apiKey: apiKey,
+      clearApiKey: clearApiKey,
     );
     if (index < 0) {
       providers.add(stored);
     } else {
       providers[index] = stored;
-    }
-    if (clearApiKey) {
-      await _aiApiKeyStore.clear(provider.id);
-    } else if (apiKey?.trim().isNotEmpty == true) {
-      await _aiApiKeyStore.write(provider.id, apiKey!.trim());
     }
     await savePreferences(
       preferences.copyWith(assistantEnabled: true, aiProviders: providers),
@@ -159,7 +140,7 @@ class ItemController extends ChangeNotifier {
   }
 
   Future<void> deleteAiProvider(String providerId) async {
-    await _aiApiKeyStore.clear(providerId);
+    await _aiProviderService.clearKey(providerId);
     await savePreferences(
       preferences.copyWith(
         aiProviders: preferences.aiProviders
@@ -170,7 +151,7 @@ class ItemController extends ChangeNotifier {
   }
 
   Future<void> clearAiProviderKey(String providerId) async {
-    await _aiApiKeyStore.clear(providerId);
+    await _aiProviderService.clearKey(providerId);
     final providers = preferences.aiProviders
         .map(
           (provider) => provider.id == providerId
@@ -185,32 +166,13 @@ class ItemController extends ChangeNotifier {
   Future<void> testAiProvider(
     AiProviderConfig provider, {
     String pendingApiKey = '',
-  }) async {
-    String? key = pendingApiKey.trim();
-    if (key.isEmpty) {
-      try {
-        key = await _aiApiKeyStore.read(provider.id);
-      } catch (_) {
-        // Connection testing can still validate local Ollama endpoints without a key.
-      }
-    }
-    await _aiProviderConnectionTester.test(provider, apiKey: key);
-  }
+  }) => _aiProviderService.test(provider, pendingApiKey: pendingApiKey);
 
   Future<List<String>> discoverAiModels(
     AiProviderConfig provider, {
     String pendingApiKey = '',
-  }) async {
-    String? key = pendingApiKey.trim();
-    if (key.isEmpty) {
-      try {
-        key = await _aiApiKeyStore.read(provider.id);
-      } catch (_) {
-        // Local Ollama discovery and keyless endpoints remain usable.
-      }
-    }
-    return _aiProviderConnectionTester.discoverModels(provider, apiKey: key);
-  }
+  }) =>
+      _aiProviderService.discoverModels(provider, pendingApiKey: pendingApiKey);
 
   List<CalendarItem> get todayItems {
     final now = configuredNow();
@@ -803,7 +765,7 @@ class ItemController extends ChangeNotifier {
     syncCoordinator?.removeListener(_syncChanged);
     syncCoordinator?.dispose();
     unawaited(repository.close());
-    _aiProviderConnectionTester.close();
+    _aiProviderService.close();
     _serviceProbeClient.close();
     _subscriptionFetchClient.close();
     super.dispose();

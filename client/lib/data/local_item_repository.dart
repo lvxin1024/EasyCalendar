@@ -15,7 +15,10 @@ import '../domain/subscription.dart';
 import '../sync/sync_models.dart';
 import '../sync/sync_repository.dart';
 import 'item_repository.dart';
+import 'local_database_backup_store.dart';
+import 'local_database_schema.dart';
 import 'local_ics_service.dart';
+import 'local_json_transfer_service.dart';
 import 'transfer_models.dart';
 
 class LocalItemRepository
@@ -42,7 +45,7 @@ class LocalItemRepository
   late String _runtimeDefaultCollectionId = config.defaultCollectionId;
   late String _runtimeDefaultCollectionName = config.defaultCollectionName;
 
-  static const schemaVersion = 4;
+  static const schemaVersion = LocalDatabaseSchema.version;
 
   @override
   String? databasePath;
@@ -92,7 +95,7 @@ class LocalItemRepository
       databasePath = configuredPath;
     }
     final factory = _databaseFactoryOverride ?? _databaseFactory();
-    await _backupBeforeMigrationIfNeeded(factory);
+    await _backupStore(factory).backupBeforeMigrationIfNeeded();
     try {
       _database = await factory.openDatabase(
         databasePath!,
@@ -101,8 +104,8 @@ class LocalItemRepository
           onConfigure: (database) async {
             await database.execute('PRAGMA foreign_keys = ON');
           },
-          onCreate: _createSchema,
-          onUpgrade: _upgradeSchema,
+          onCreate: LocalDatabaseSchema.create,
+          onUpgrade: LocalDatabaseSchema.upgrade,
         ),
       );
       await _ensureDefaultCollection();
@@ -116,192 +119,49 @@ class LocalItemRepository
     }
   }
 
-  Future<void> _backupBeforeMigrationIfNeeded(DatabaseFactory factory) async {
-    // Android's sqflite implementation owns the database singleton and WAL
-    // lifecycle. Opening a second, non-singleton connection here can leave a
-    // lock behind when the app is relaunched, making the second launch fail.
-    // SQLite's onUpgrade callback still performs the actual migration.
-    if (Platform.isAndroid || Platform.isIOS) return;
-    final source = File(databasePath!);
-    if (_isMemoryDatabase(databasePath!) || !await source.exists()) return;
-    Database? probe;
-    try {
-      probe = await factory.openDatabase(
-        databasePath!,
-        options: OpenDatabaseOptions(singleInstance: false),
-      );
-      await probe.rawQuery('PRAGMA wal_checkpoint(FULL)');
-      final rows = await probe.rawQuery('PRAGMA user_version');
-      final existingVersion = _firstInteger(rows) ?? 0;
-      await probe.close();
-      probe = null;
-      if (existingVersion > 0 && existingVersion < schemaVersion) {
-        await _copyDatabaseBackup(
-          reason: LocalBackupReason.migration,
-          sourceSchemaVersion: existingVersion,
-        );
-      }
-    } finally {
-      await probe?.close();
-    }
-  }
-
   @override
-  Future<List<LocalDatabaseBackup>> listLocalDatabaseBackups() async {
-    final directory = _backupDirectory();
-    if (!await directory.exists()) return const [];
-    final backups = <LocalDatabaseBackup>[];
-    await for (final entity in directory.list(followLinks: false)) {
-      if (entity is! File) continue;
-      final match = RegExp(
-        r'^easycalendar_(migration|manual|preRestore)_v(\d+)_(\d+)\.sqlite3$',
-      ).firstMatch(path.basename(entity.path));
-      if (match == null) continue;
-      final reason = switch (match.group(1)) {
-        'migration' => LocalBackupReason.migration,
-        'preRestore' => LocalBackupReason.preRestore,
-        _ => LocalBackupReason.manual,
-      };
-      final stat = await entity.stat();
-      backups.add(
-        LocalDatabaseBackup(
-          path: entity.path,
-          createdAt: DateTime.fromMicrosecondsSinceEpoch(
-            int.parse(match.group(3)!),
-            isUtc: true,
-          ),
-          byteSize: stat.size,
-          reason: reason,
-          schemaVersion: int.parse(match.group(2)!),
-        ),
-      );
-    }
-    backups.sort((left, right) => right.createdAt.compareTo(left.createdAt));
-    return backups;
-  }
+  Future<List<LocalDatabaseBackup>> listLocalDatabaseBackups() =>
+      _backupStore().listBackups();
 
   @override
   Future<LocalDatabaseBackup> createLocalDatabaseBackup({
     LocalBackupReason reason = LocalBackupReason.manual,
-  }) async {
-    if (_isMemoryDatabase(databasePath ?? '')) {
-      throw UnsupportedError('内存数据库不支持本地快照');
-    }
-    await _db.rawQuery('PRAGMA wal_checkpoint(FULL)');
-    final rows = await _db.rawQuery('PRAGMA user_version');
-    return _copyDatabaseBackup(
-      reason: reason,
-      sourceSchemaVersion: _firstInteger(rows) ?? schemaVersion,
-    );
-  }
-
-  Future<LocalDatabaseBackup> _copyDatabaseBackup({
-    required LocalBackupReason reason,
-    required int sourceSchemaVersion,
-  }) async {
-    final source = File(databasePath!);
-    if (!await source.exists()) throw StateError('本地数据库文件不存在');
-    final directory = _backupDirectory();
-    await directory.create(recursive: true);
-    final timestamp = DateTime.now().toUtc().microsecondsSinceEpoch;
-    final target = File(
-      path.join(
-        directory.path,
-        'easycalendar_${reason.name}_v${sourceSchemaVersion}_$timestamp.sqlite3',
-      ),
-    );
-    await source.copy(target.path);
-    final stat = await target.stat();
-    return LocalDatabaseBackup(
-      path: target.path,
-      createdAt: DateTime.fromMicrosecondsSinceEpoch(timestamp, isUtc: true),
-      byteSize: stat.size,
-      reason: reason,
-      schemaVersion: sourceSchemaVersion,
-    );
-  }
+  }) => _backupStore().createBackup(_db, reason: reason);
 
   @override
   Future<void> restoreLocalDatabaseBackup(String backupPath) async {
-    final selected = await _validatedBackupFile(backupPath);
+    final backupStore = _backupStore();
+    final selected = await backupStore.validatedBackupFile(backupPath);
     final safety = _database == null
-        ? await _copyDatabaseBackup(
+        ? await backupStore.copyBackup(
             reason: LocalBackupReason.preRestore,
-            sourceSchemaVersion: await _closedDatabaseSchemaVersion(),
+            sourceSchemaVersion: await backupStore
+                .closedDatabaseSchemaVersion(),
           )
         : await createLocalDatabaseBackup(reason: LocalBackupReason.preRestore);
     await close();
     try {
-      await _replaceDatabaseWith(selected);
+      await backupStore.replaceDatabaseWith(selected.path);
       await initialize();
     } catch (error) {
       await close();
-      await _replaceDatabaseWith(File(safety.path));
+      await backupStore.replaceDatabaseWith(safety.path);
       await initialize();
       throw RepositoryConflict('恢复失败，已回滚到恢复前状态：$error');
     }
   }
 
-  Future<int> _closedDatabaseSchemaVersion() async {
-    final factory = _databaseFactoryOverride ?? _databaseFactory();
-    Database? probe;
-    try {
-      probe = await factory.openDatabase(
-        databasePath!,
-        options: OpenDatabaseOptions(singleInstance: false),
-      );
-      final rows = await probe.rawQuery('PRAGMA user_version');
-      return _firstInteger(rows) ?? 0;
-    } finally {
-      await probe?.close();
-    }
-  }
-
   @override
-  Future<void> deleteLocalDatabaseBackup(String backupPath) async {
-    final backup = await _validatedBackupFile(backupPath);
-    await backup.delete();
-  }
+  Future<void> deleteLocalDatabaseBackup(String backupPath) =>
+      _backupStore().deleteBackup(backupPath);
 
-  Future<File> _validatedBackupFile(String backupPath) async {
-    final directory = path.normalize(path.absolute(_backupDirectory().path));
-    final candidate = path.normalize(path.absolute(backupPath));
-    if (path.dirname(candidate) != directory ||
-        !RegExp(
-          r'^easycalendar_(migration|manual|preRestore)_v\d+_\d+\.sqlite3$',
-        ).hasMatch(path.basename(candidate))) {
-      throw const FormatException('备份文件不在 EasyCalendar 恢复目录中');
-    }
-    final file = File(candidate);
-    if (!await file.exists()) throw const FormatException('备份文件不存在');
-    return file;
-  }
-
-  Future<void> _replaceDatabaseWith(File source) async {
-    final targetPath = databasePath!;
-    for (final suffix in const ['', '-wal', '-shm', '-journal']) {
-      final file = File('$targetPath$suffix');
-      if (await file.exists()) await file.delete();
-    }
-    await source.copy(targetPath);
-  }
-
-  Directory _backupDirectory() {
-    final value = databasePath;
-    if (value == null || _isMemoryDatabase(value)) {
-      throw StateError('本地数据库路径不可用于备份');
-    }
-    return Directory(path.join(path.dirname(value), 'backups'));
-  }
-
-  static bool _isMemoryDatabase(String value) =>
-      value.isEmpty || value == inMemoryDatabasePath || value == ':memory:';
-
-  static int? _firstInteger(List<Map<String, Object?>> rows) {
-    if (rows.isEmpty || rows.first.isEmpty) return null;
-    final value = rows.first.values.first;
-    return value is int ? value : null;
-  }
+  LocalDatabaseBackupStore _backupStore([DatabaseFactory? factory]) =>
+      LocalDatabaseBackupStore(
+        databasePath: databasePath!,
+        databaseFactory:
+            factory ?? _databaseFactoryOverride ?? _databaseFactory(),
+        currentSchemaVersion: schemaVersion,
+      );
 
   DatabaseFactory _databaseFactory() {
     if (Platform.isAndroid || Platform.isIOS) {
@@ -312,191 +172,6 @@ class LocalItemRepository
       return databaseFactoryFfi;
     }
     throw UnsupportedError('EasyCalendar requires Android, macOS, or Windows');
-  }
-
-  Future<void> _createSchema(Database database, int version) async {
-    await database.execute('''
-      CREATE TABLE collections (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        kind TEXT NOT NULL DEFAULT 'local',
-        color TEXT,
-        readonly INTEGER NOT NULL DEFAULT 0,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        deleted_at TEXT,
-        version INTEGER NOT NULL DEFAULT 1
-      )
-    ''');
-    await database.execute('''
-      CREATE TABLE items (
-        id TEXT PRIMARY KEY,
-        collection_id TEXT NOT NULL REFERENCES collections(id),
-        item_type TEXT NOT NULL,
-        title TEXT NOT NULL,
-        body TEXT,
-        start_at TEXT,
-        end_at TEXT,
-        due_at TEXT,
-        timezone TEXT NOT NULL,
-        all_day INTEGER NOT NULL DEFAULT 0,
-        location TEXT,
-        status TEXT NOT NULL,
-        priority INTEGER,
-        reminder_enabled INTEGER NOT NULL DEFAULT 0,
-        reminder_minutes INTEGER NOT NULL DEFAULT 30,
-        recurrence_json TEXT,
-        tags_json TEXT NOT NULL DEFAULT '[]',
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        deleted_at TEXT,
-        version INTEGER NOT NULL DEFAULT 1
-      )
-    ''');
-    await database.execute('''
-      CREATE INDEX idx_client_items_schedule
-      ON items(deleted_at, start_at, due_at, id)
-    ''');
-    await database.execute('''
-      CREATE TABLE outbox (
-        change_id TEXT PRIMARY KEY,
-        device_id TEXT NOT NULL,
-        entity_type TEXT NOT NULL,
-        entity_id TEXT NOT NULL,
-        operation TEXT NOT NULL,
-        entity_version INTEGER NOT NULL,
-        payload_json TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        retry_count INTEGER NOT NULL DEFAULT 0,
-        last_error TEXT,
-        next_attempt_at TEXT,
-        permanent_failure INTEGER NOT NULL DEFAULT 0,
-        sent_at TEXT
-      )
-    ''');
-    await database.execute('''
-      CREATE TABLE app_settings (
-        key TEXT PRIMARY KEY,
-        value TEXT NOT NULL
-      )
-    ''');
-    await database.execute('''
-      CREATE TABLE sync_state (
-        key TEXT PRIMARY KEY,
-        value TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      )
-    ''');
-    await database.execute('''
-      CREATE TABLE subscriptions (
-        id TEXT PRIMARY KEY,
-        collection_id TEXT NOT NULL,
-        payload_json TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        deleted_at TEXT,
-        version INTEGER NOT NULL
-      )
-    ''');
-    await _createConflictSchema(database);
-  }
-
-  Future<void> _upgradeSchema(
-    Database database,
-    int oldVersion,
-    int newVersion,
-  ) async {
-    if (oldVersion < 2) {
-      await database.execute(
-        'ALTER TABLE outbox ADD COLUMN next_attempt_at TEXT',
-      );
-      await database.execute(
-        'ALTER TABLE outbox ADD COLUMN permanent_failure INTEGER NOT NULL DEFAULT 0',
-      );
-      await database.execute('''
-        CREATE TABLE sync_state (
-          key TEXT PRIMARY KEY,
-          value TEXT NOT NULL,
-          updated_at TEXT NOT NULL
-        )
-      ''');
-      await database.execute('''
-        CREATE TABLE subscriptions (
-          id TEXT PRIMARY KEY,
-          collection_id TEXT NOT NULL,
-          payload_json TEXT NOT NULL,
-          updated_at TEXT NOT NULL,
-          deleted_at TEXT,
-          version INTEGER NOT NULL
-        )
-      ''');
-    }
-    if (oldVersion < 3) {
-      await _createConflictSchema(database);
-      await database.execute('''
-        INSERT INTO sync_entity_heads (
-          entity_type, entity_id, change_id, device_id, operation,
-          entity_version, updated_at, payload_json
-        )
-        SELECT entity_type, entity_id, change_id, device_id, operation,
-               entity_version, created_at, payload_json
-        FROM outbox AS candidate
-        WHERE NOT EXISTS (
-          SELECT 1 FROM outbox AS other
-          WHERE other.entity_type = candidate.entity_type
-            AND other.entity_id = candidate.entity_id
-            AND (
-              other.created_at > candidate.created_at
-              OR (
-                other.created_at = candidate.created_at
-                AND other.entity_version > candidate.entity_version
-              )
-              OR (
-                other.created_at = candidate.created_at
-                AND other.entity_version = candidate.entity_version
-                AND other.change_id > candidate.change_id
-              )
-            )
-        )
-      ''');
-    }
-    if (oldVersion < 4) {
-      await database.execute(
-        'ALTER TABLE items ADD COLUMN recurrence_json TEXT',
-      );
-    }
-  }
-
-  static Future<void> _createConflictSchema(DatabaseExecutor database) async {
-    await database.execute('''
-      CREATE TABLE sync_entity_heads (
-        entity_type TEXT NOT NULL,
-        entity_id TEXT NOT NULL,
-        change_id TEXT NOT NULL,
-        device_id TEXT NOT NULL,
-        operation TEXT NOT NULL,
-        entity_version INTEGER NOT NULL,
-        updated_at TEXT NOT NULL,
-        payload_json TEXT NOT NULL,
-        PRIMARY KEY (entity_type, entity_id)
-      )
-    ''');
-    await database.execute('''
-      CREATE TABLE sync_conflicts (
-        conflict_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        entity_type TEXT NOT NULL,
-        entity_id TEXT NOT NULL,
-        winner_change_id TEXT NOT NULL,
-        loser_change_id TEXT NOT NULL,
-        winner_json TEXT NOT NULL,
-        loser_json TEXT NOT NULL,
-        recorded_at TEXT NOT NULL,
-        UNIQUE (entity_type, entity_id, winner_change_id, loser_change_id)
-      )
-    ''');
-    await database.execute('''
-      CREATE INDEX idx_client_sync_conflicts
-      ON sync_conflicts (conflict_id DESC)
-    ''');
   }
 
   Future<void> _ensureDefaultCollection() async {
@@ -1004,180 +679,16 @@ class LocalItemRepository
   }
 
   @override
-  Future<String> exportLocalJsonBackup() async {
-    final collections = await _db.query('collections');
-    final items = await _db.query('items');
-    final subscriptions = await _db.query('subscriptions');
-    final outbox = await _db.query('outbox');
-    final syncState = await _db.query('sync_state');
-    final now = DateTime.now().toUtc().toIso8601String();
-    final payload = {
-      'schema_version': 1,
-      'exported_at': now,
-      'collections': collections,
-      'items': items,
-      'subscriptions': subscriptions,
-      'outbox': outbox,
-      'sync_state': syncState,
-    };
-    return jsonEncode(payload);
-  }
+  Future<String> exportLocalJsonBackup() =>
+      LocalJsonTransferService(_db).exportBackup();
 
   @override
-  Future<TransferResult> previewLocalJsonImport(String content) async {
-    final decoded = jsonDecode(content);
-    if (decoded is! Map<String, dynamic>) {
-      throw const FormatException('备份文件根节点必须是 JSON object');
-    }
-    final schemaVersion = decoded['schema_version'];
-    if (schemaVersion != 1) {
-      throw FormatException('不支持的备份版本：$schemaVersion');
-    }
-    final created = <String, int>{};
-    final skipped = <String, int>{};
-    final conflicts = <String, int>{};
-    final issues = <TransferIssue>[];
-
-    final backupCollectionIds = <String>{};
-    for (final key in [
-      'collections',
-      'items',
-      'subscriptions',
-      'outbox',
-      'sync_state',
-    ]) {
-      final values = decoded[key];
-      if (values is! List) {
-        issues.add(
-          TransferIssue(resourceType: key, index: 0, message: '$key 必须是数组'),
-        );
-        continue;
-      }
-      if (key == 'collections') {
-        for (final entry in values) {
-          if (entry is Map) {
-            final id = entry['id'];
-            if (id is String && id.isNotEmpty) backupCollectionIds.add(id);
-          }
-        }
-      }
-      final existingRows = await _db.query(_tableForBackupKey(key));
-      final existingIds = existingRows.map((r) => r['id'] as String).toSet();
-      for (var i = 0; i < values.length; i++) {
-        final entry = values[i];
-        if (entry is! Map) {
-          issues.add(
-            TransferIssue(resourceType: key, index: i, message: '条目必须是对象'),
-          );
-          continue;
-        }
-        final id = entry['id'];
-        if (id is! String || id.isEmpty) {
-          issues.add(
-            TransferIssue(resourceType: key, index: i, message: '缺少有效 ID'),
-          );
-          continue;
-        }
-        if (existingIds.contains(id)) {
-          skipped[key] = (skipped[key] ?? 0) + 1;
-        } else {
-          created[key] = (created[key] ?? 0) + 1;
-        }
-      }
-    }
-    // Validate foreign keys: items and subscriptions must reference known collections
-    final allCollectionIds = {
-      ...backupCollectionIds,
-      ...(await _db.query('collections')).map((r) => r['id'] as String),
-    };
-    final items = decoded['items'];
-    if (items is List) {
-      for (var i = 0; i < items.length; i++) {
-        final entry = items[i];
-        if (entry is! Map) continue;
-        final collectionId = entry['collection_id'];
-        if (collectionId is String &&
-            collectionId.isNotEmpty &&
-            !allCollectionIds.contains(collectionId)) {
-          final itemId = entry['id'];
-          issues.add(
-            TransferIssue(
-              resourceType: 'items',
-              index: i,
-              message: 'Collection $collectionId 不存在',
-              resourceId: itemId is String ? itemId : null,
-            ),
-          );
-          conflicts['items'] = (conflicts['items'] ?? 0) + 1;
-        }
-      }
-    }
-    final subscriptions = decoded['subscriptions'];
-    if (subscriptions is List) {
-      for (var i = 0; i < subscriptions.length; i++) {
-        final entry = subscriptions[i];
-        if (entry is! Map) continue;
-        final collectionId = entry['collection_id'];
-        if (collectionId is String &&
-            collectionId.isNotEmpty &&
-            !allCollectionIds.contains(collectionId)) {
-          final subId = entry['id'];
-          issues.add(
-            TransferIssue(
-              resourceType: 'subscriptions',
-              index: i,
-              message: 'Collection $collectionId 不存在',
-              resourceId: subId is String ? subId : null,
-            ),
-          );
-          conflicts['subscriptions'] = (conflicts['subscriptions'] ?? 0) + 1;
-        }
-      }
-    }
-
-    return TransferResult(
-      accepted: issues.isEmpty,
-      committed: false,
-      format: 'json',
-      created: created,
-      skipped: skipped,
-      conflicts: conflicts,
-      issues: issues,
-    );
-  }
+  Future<TransferResult> previewLocalJsonImport(String content) =>
+      LocalJsonTransferService(_db).previewImport(content);
 
   @override
-  Future<void> commitLocalJsonImport(String content) async {
-    final decoded = jsonDecode(content);
-    if (decoded is! Map<String, dynamic>) {
-      throw const FormatException('备份文件根节点必须是 JSON object');
-    }
-    await _db.transaction((transaction) async {
-      for (final key in [
-        'collections',
-        'items',
-        'subscriptions',
-        'outbox',
-        'sync_state',
-      ]) {
-        final values = decoded[key];
-        if (values is! List) continue;
-        final table = _tableForBackupKey(key);
-        final existingRows = await transaction.query(table);
-        final existingIds = existingRows.map((r) => r['id'] as String).toSet();
-        for (final entry in values) {
-          if (entry is! Map) continue;
-          final id = entry['id'];
-          if (id is! String || id.isEmpty) continue;
-          if (existingIds.contains(id)) continue;
-          final row = Map<String, Object?>.from(
-            entry.map((k, v) => MapEntry(k, v)),
-          );
-          await transaction.insert(table, row);
-        }
-      }
-    });
-  }
+  Future<void> commitLocalJsonImport(String content) =>
+      LocalJsonTransferService(_db).commitImport(content);
 
   @override
   Future<List<CalendarSubscription>> listSubscriptions() async {
@@ -1696,15 +1207,6 @@ class LocalItemRepository
         )
         .toList(growable: false);
   }
-
-  static String _tableForBackupKey(String key) => switch (key) {
-    'collections' => 'collections',
-    'items' => 'items',
-    'subscriptions' => 'subscriptions',
-    'outbox' => 'outbox',
-    'sync_state' => 'sync_state',
-    _ => throw FormatException('Unknown backup key: $key'),
-  };
 
   static CalendarSubscription _subscriptionFromRow(Map<String, Object?> row) =>
       CalendarSubscription.fromJson(_subscriptionPayloadFromRow(row));
