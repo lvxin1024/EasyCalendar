@@ -24,7 +24,6 @@ class CycleSettingsSection extends StatelessWidget {
           contentPadding: EdgeInsets.zero,
           secondary: const Icon(Icons.water_drop_outlined),
           title: const Text('经期跟踪'),
-          subtitle: const Text('记录仅保存在本机，不进入同步、ICS 或普通 JSON'),
           value: controller.enabled,
           onChanged: controller.mutating
               ? null

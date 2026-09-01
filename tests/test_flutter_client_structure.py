@@ -105,6 +105,9 @@ def test_local_mutations_are_versioned_soft_deleted_and_write_outbox():
 
 
 def test_t23_sync_state_and_credentials_have_explicit_storage_boundaries():
+    schema = (CLIENT / "lib" / "data" / "local_database_schema.dart").read_text(
+        encoding="utf-8"
+    )
     repository = (CLIENT / "lib" / "data" / "local_item_repository.dart").read_text(
         encoding="utf-8"
     )
@@ -112,9 +115,9 @@ def test_t23_sync_state_and_credentials_have_explicit_storage_boundaries():
         encoding="utf-8"
     )
 
-    assert "CREATE TABLE sync_state" in repository
-    assert "next_attempt_at" in repository
-    assert "permanent_failure" in repository
+    assert "CREATE TABLE sync_state" in schema
+    assert "next_attempt_at" in schema
+    assert "permanent_failure" in schema
     assert "applyRemoteBatch" in repository
     assert "FlutterSecureStorage" in token_store
     assert "easycalendar_feature_api_token" in token_store
@@ -122,6 +125,9 @@ def test_t23_sync_state_and_credentials_have_explicit_storage_boundaries():
 
 
 def test_t24_conflict_heads_and_recovery_history_are_persisted():
+    schema = (CLIENT / "lib" / "data" / "local_database_schema.dart").read_text(
+        encoding="utf-8"
+    )
     repository = (CLIENT / "lib" / "data" / "local_item_repository.dart").read_text(
         encoding="utf-8"
     )
@@ -129,10 +135,11 @@ def test_t24_conflict_heads_and_recovery_history_are_persisted():
         encoding="utf-8"
     )
 
-    assert "static const schemaVersion = 4;" in repository
+    assert "static const version = 7;" in schema
+    assert "static const schemaVersion = LocalDatabaseSchema.version;" in repository
     assert "version: schemaVersion" in repository
-    assert "CREATE TABLE sync_entity_heads" in repository
-    assert "CREATE TABLE sync_conflicts" in repository
+    assert "CREATE TABLE sync_entity_heads" in schema
+    assert "CREATE TABLE sync_conflicts" in schema
     assert "listSyncConflicts" in repository
     assert "compareSyncChanges" in models
 

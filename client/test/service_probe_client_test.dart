@@ -39,7 +39,7 @@ void main() {
       '/v1/auth-check',
     ]);
     expect(result.serviceVersion, '0.1.0');
-    expect(result.schemaVersion, 3);
+    expect(result.schemaVersion, 4);
     expect(result.capabilities.supports('sync'), isTrue);
   });
 
@@ -145,6 +145,32 @@ void main() {
     },
   );
 
+  test('requires cycle-capable schema for sync services', () async {
+    final client = ServiceProbeClient(
+      client: MockClient(
+        (request) async =>
+            http.Response(jsonEncode(_health(schemaVersion: 3)), 200),
+      ),
+    );
+
+    await expectLater(
+      client.probe(
+        serverUrl: Uri.parse('https://sync.example.com'),
+        kind: ServiceKind.sync,
+        token: 'token',
+      ),
+      throwsA(
+        isA<ServiceProbeException>()
+            .having(
+              (error) => error.kind,
+              'kind',
+              ServiceProbeFailureKind.incompatibleVersion,
+            )
+            .having((error) => error.message, 'message', contains('升级服务端')),
+      ),
+    );
+  });
+
   test('distinguishes DNS, TLS, timeout, and server failures', () async {
     await _expectFailure(
       ServiceProbeClient(
@@ -204,7 +230,7 @@ Future<http.Response> _successfulDiscovery(http.Request request) async =>
       _ => http.Response('{}', 404),
     };
 
-Map<String, Object?> _health({int schemaVersion = 3}) => {
+Map<String, Object?> _health({int schemaVersion = 4}) => {
   'status': 'ok',
   'service': 'easycalendar',
   'version': '0.1.0',

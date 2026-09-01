@@ -675,7 +675,7 @@ class ItemController extends ChangeNotifier {
   }
 
   Future<void> synchronizeNow() async {
-    await syncCoordinator?.synchronize();
+    await syncCoordinator?.synchronize(retryPermanentFailures: true);
     await _reload();
   }
 
@@ -683,7 +683,7 @@ class ItemController extends ChangeNotifier {
       syncCoordinator?.loadConflictHistory() ?? const [];
 
   void _syncChanged() {
-    if (syncCoordinator?.snapshot.phase == SyncPhase.idle &&
+    if (syncCoordinator?.snapshot.localDataChanged == true &&
         _initialized &&
         !_mutating) {
       unawaited(_reload());

@@ -1727,6 +1727,34 @@ class LocalItemRepository
   }
 
   @override
+  Future<int> resetRetryablePermanentFailures() => _db.update(
+    'outbox',
+    {
+      'retry_count': 0,
+      'last_error': null,
+      'next_attempt_at': null,
+      'permanent_failure': 0,
+    },
+    where:
+        'sent_at IS NULL AND permanent_failure = 1 '
+        "AND entity_type IN ('cycle_period', 'cycle_settings') "
+        "AND last_error LIKE '%entity_type is invalid%'",
+  );
+
+  @override
+  Future<String?> loadPermanentFailureMessage() async {
+    final rows = await _db.query(
+      'outbox',
+      columns: ['last_error'],
+      where: 'sent_at IS NULL AND permanent_failure = 1',
+      orderBy: 'created_at DESC, change_id DESC',
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return rows.single['last_error'] as String? ?? '存在无法同步的数据。';
+  }
+
+  @override
   Future<void> resetTransientBackoff() => _db.update('outbox', {
     'next_attempt_at': null,
   }, where: 'sent_at IS NULL AND permanent_failure = 0');

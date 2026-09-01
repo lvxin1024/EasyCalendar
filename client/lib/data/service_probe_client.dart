@@ -124,6 +124,12 @@ class ServiceProbeClient {
         '健康检查响应不是有效的 EasyCalendar 服务。',
       );
     }
+    if (kind == ServiceKind.sync && schemaVersion < 4) {
+      throw const ServiceProbeException(
+        ServiceProbeFailureKind.incompatibleVersion,
+        '同步服务版本过旧，不支持经期数据同步，请升级服务端。',
+      );
+    }
 
     final capabilitiesResponse = await _get(
       serverUrl.resolve('/v1/capabilities'),

@@ -112,16 +112,16 @@ class SyncCoordinator extends ChangeNotifier {
     );
   }
 
-  Future<void> synchronize() {
+  Future<void> synchronize({bool retryPermanentFailures = false}) {
     if (!_enabled) return Future.value();
     final active = _activeSync;
     if (active != null) return active;
-    final future = _runSync();
+    final future = _runSync(retryPermanentFailures: retryPermanentFailures);
     _activeSync = future;
     return future.whenComplete(() => _activeSync = null);
   }
 
-  Future<void> _runSync() async {
+  Future<void> _runSync({required bool retryPermanentFailures}) async {
     final token = await tokenStore.read();
     final serverUrl = _serverUrl;
     if (token == null || token.isEmpty) {
@@ -137,6 +137,9 @@ class SyncCoordinator extends ChangeNotifier {
     }
 
     _retryTimer?.cancel();
+    if (retryPermanentFailures) {
+      await repository.resetRetryablePermanentFailures();
+    }
     _setSnapshot(
       SyncSnapshot(
         phase: SyncPhase.syncing,
@@ -144,6 +147,7 @@ class SyncCoordinator extends ChangeNotifier {
       ),
     );
     var attemptedChangeIds = <String>[];
+    var localDataChanged = false;
     try {
       while (true) {
         final pending = await repository.listPendingChanges(
@@ -164,6 +168,7 @@ class SyncCoordinator extends ChangeNotifier {
           changes: batch,
         );
         await repository.applyPushConflicts(result.conflicts);
+        localDataChanged = localDataChanged || result.conflicts.isNotEmpty;
         await repository.removeAcceptedChanges(result.accepted);
         await repository.recordPermanentFailures(result.rejected);
         if (result.accepted.isEmpty && result.rejected.isEmpty) {
@@ -179,10 +184,20 @@ class SyncCoordinator extends ChangeNotifier {
           cursor: cursor,
         );
         await repository.applyRemoteBatch(page.changes, page.cursor);
+        localDataChanged = localDataChanged || page.changes.isNotEmpty;
         cursor = page.cursor;
         if (!page.hasMore) break;
       }
-      _setSnapshot(SyncSnapshot(phase: SyncPhase.idle, lastSyncedAt: _clock()));
+      final completedAt = _clock();
+      final permanentFailure = await repository.loadPermanentFailureMessage();
+      _setSnapshot(
+        SyncSnapshot(
+          phase: permanentFailure == null ? SyncPhase.idle : SyncPhase.failed,
+          lastSyncedAt: completedAt,
+          message: permanentFailure,
+          localDataChanged: localDataChanged,
+        ),
+      );
     } on SyncAuthenticationException catch (error) {
       _setSnapshot(
         SyncSnapshot(

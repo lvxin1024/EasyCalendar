@@ -1,7 +1,7 @@
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 abstract final class LocalDatabaseSchema {
-  static const version = 6;
+  static const version = 7;
 
   static Future<void> create(Database database, int version) async {
     await database.execute('''
@@ -172,6 +172,21 @@ abstract final class LocalDatabaseSchema {
       );
       await database.execute(
         'ALTER TABLE cycle_settings ADD COLUMN version INTEGER NOT NULL DEFAULT 1',
+      );
+    }
+    if (oldVersion < 7) {
+      await database.update(
+        'outbox',
+        {
+          'retry_count': 0,
+          'last_error': null,
+          'next_attempt_at': null,
+          'permanent_failure': 0,
+        },
+        where:
+            'sent_at IS NULL AND permanent_failure = 1 '
+            "AND entity_type IN ('cycle_period', 'cycle_settings') "
+            "AND last_error LIKE '%entity_type is invalid%'",
       );
     }
   }

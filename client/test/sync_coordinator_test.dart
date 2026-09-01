@@ -62,28 +62,31 @@ void main() {
     expect(transport.pullCalls, 1);
   });
 
-  test('device id changes preserve and separately push older outbox batches', () async {
-    repository.pending.add(
-      PendingSyncChange(
-        changeId: 'change_02',
-        deviceId: 'renamed-device',
-        entityType: 'item',
-        entityId: 'item_02',
-        operation: 'create',
-        version: 1,
-        updatedAt: DateTime.utc(2026, 8, 11, 9),
-        payload: const {'id': 'item_02', 'version': 1},
-        retryCount: 0,
-      ),
-    );
-    transport.acceptAll = true;
-    coordinator.configureDeviceId('renamed-device');
+  test(
+    'device id changes preserve and separately push older outbox batches',
+    () async {
+      repository.pending.add(
+        PendingSyncChange(
+          changeId: 'change_02',
+          deviceId: 'renamed-device',
+          entityType: 'item',
+          entityId: 'item_02',
+          operation: 'create',
+          version: 1,
+          updatedAt: DateTime.utc(2026, 8, 11, 9),
+          payload: const {'id': 'item_02', 'version': 1},
+          retryCount: 0,
+        ),
+      );
+      transport.acceptAll = true;
+      coordinator.configureDeviceId('renamed-device');
 
-    await coordinator.synchronize();
+      await coordinator.synchronize();
 
-    expect(transport.pushedDeviceIds, ['test-device', 'renamed-device']);
-    expect(repository.pending, isEmpty);
-  });
+      expect(transport.pushedDeviceIds, ['test-device', 'renamed-device']);
+      expect(repository.pending, isEmpty);
+    },
+  );
 
   test(
     'records exponential backoff after a transient transport failure',
@@ -102,7 +105,7 @@ void main() {
     },
   );
 
-  test('marks rejected changes permanent and does not retry them', () async {
+  test('keeps rejected changes visible as a failed sync', () async {
     transport.pushResult = const PushSyncResult(
       accepted: [],
       rejected: [
@@ -119,8 +122,56 @@ void main() {
     expect(repository.pending, isEmpty);
     expect(repository.permanentFailures, ['change_01']);
     expect(transport.pushCalls, 1);
+    expect(coordinator.snapshot.phase, SyncPhase.failed);
+    expect(coordinator.snapshot.message, contains('invalid item'));
+  });
+
+  test('manual sync retries cycle failures after a server upgrade', () async {
+    repository.pending.clear();
+    repository.retryablePermanentChange = _pendingChange(
+      entityType: 'cycle_settings',
+    );
+    repository.permanentFailureMessage =
+        'transport_rejected: entity_type is invalid';
+    transport.acceptAll = true;
+
+    await coordinator.synchronize(retryPermanentFailures: true);
+
+    expect(repository.resetPermanentCalls, 1);
+    expect(repository.retryablePermanentChange, isNull);
+    expect(repository.pending, isEmpty);
+    expect(transport.pushCalls, 1);
     expect(coordinator.snapshot.phase, SyncPhase.idle);
   });
+
+  test(
+    'reports failures while exposing remotely applied local changes',
+    () async {
+      transport.pushResult = const PushSyncResult(
+        accepted: [],
+        rejected: [
+          SyncRejection(
+            changeId: 'change_01',
+            code: 'constraint_violation',
+            message: 'invalid item',
+          ),
+        ],
+      );
+      transport.pullPages.add(
+        PullSyncPage(
+          cursor: 'cur_2',
+          hasMore: false,
+          changes: [_remoteChange()],
+        ),
+      );
+
+      await coordinator.synchronize();
+
+      expect(coordinator.snapshot.phase, SyncPhase.failed);
+      expect(coordinator.snapshot.localDataChanged, isTrue);
+      expect(repository.applied.single.changeId, 'remote_01');
+    },
+  );
 
   test(
     'network recovery clears backoff and triggers synchronization',
@@ -160,10 +211,13 @@ void main() {
   });
 }
 
-PendingSyncChange _pendingChange({int retryCount = 0}) => PendingSyncChange(
+PendingSyncChange _pendingChange({
+  int retryCount = 0,
+  String entityType = 'item',
+}) => PendingSyncChange(
   changeId: 'change_01',
   deviceId: 'test-device',
-  entityType: 'item',
+  entityType: entityType,
   entityId: 'item_01',
   operation: 'create',
   version: 1,
@@ -198,6 +252,9 @@ class _MemorySyncRepository implements SyncRepository {
   String? cursor;
   int transientFailures = 0;
   int resetCalls = 0;
+  int resetPermanentCalls = 0;
+  PendingSyncChange? retryablePermanentChange;
+  String? permanentFailureMessage;
 
   @override
   Future<List<PendingSyncChange>> listPendingChanges({
@@ -213,10 +270,29 @@ class _MemorySyncRepository implements SyncRepository {
   @override
   Future<void> recordPermanentFailures(List<SyncRejection> rejections) async {
     permanentFailures.addAll(rejections.map((value) => value.changeId));
+    if (rejections.isNotEmpty) {
+      permanentFailureMessage =
+          '${rejections.first.code}: ${rejections.first.message}';
+    }
     pending.removeWhere(
       (change) => rejections.any((value) => value.changeId == change.changeId),
     );
   }
+
+  @override
+  Future<int> resetRetryablePermanentFailures() async {
+    resetPermanentCalls += 1;
+    final change = retryablePermanentChange;
+    if (change == null) return 0;
+    pending.add(change);
+    retryablePermanentChange = null;
+    permanentFailureMessage = null;
+    return 1;
+  }
+
+  @override
+  Future<String?> loadPermanentFailureMessage() async =>
+      permanentFailureMessage;
 
   @override
   Future<void> applyPushConflicts(List<SyncConflictSummary> conflicts) async {

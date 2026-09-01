@@ -17,6 +17,10 @@ abstract interface class SyncRepository {
 
   Future<void> recordPermanentFailures(List<SyncRejection> rejections);
 
+  Future<int> resetRetryablePermanentFailures();
+
+  Future<String?> loadPermanentFailureMessage();
+
   Future<void> applyPushConflicts(List<SyncConflictSummary> conflicts);
 
   Future<void> resetTransientBackoff();

@@ -31,10 +31,11 @@
 
 - 🇨🇳 用中文自然语言写日程（"明天上午9点开会"），规则引擎自动解析
 - 📅 日/周/月视图、Due 管理、标签筛选、循环日程
-- 💻 macOS / Windows / Android 三平台 Flutter 桌面客户端
+- 💻 macOS / Windows / Android 三平台 Flutter 客户端
 - 🔒 数据完全在你手里：本地 SQLite 存储，可选自托管同步服务
-- 🤖 可选 AI 助手（OpenAI / Ollama），确认后才写入正式日程
+- 🤖 可选 AI 助手（OpenAI-compatible / DeepSeek / Ollama），确认后才写入正式日程
 - 📡 支持 ICS 日历订阅（客户端本地条件抓取）
+- 🌙 经期记录、每日症状和本地周期预测，可选跨设备同步
 
 > **EasyCalendar** is a personal calendar & due manager. Use it fully offline, or connect your own sync server for multi-device sync. Natural-language parsing, day/week/month views, due management, tag filters, recurrence — all stored in your local SQLite database.
 
@@ -49,12 +50,13 @@
 | ✅ Due 管理 | 任务截止日期追踪，日历视图顶部置顶显示 |
 | 🏷️ 标签筛选 | 自定义标签颜色，跨视图一致筛选 |
 | 🔁 循环日程 | 每天/工作日/每周/每月/每年 RRULE，范围查询展开 |
-| 🤖 AI 助手 | OpenAI-compatible / Ollama 多 Provider，候选预览确认后写入 |
+| 🤖 AI 助手 | OpenAI-compatible / DeepSeek / Ollama 多 Provider，候选预览确认后写入 |
 | 📡 ICS 订阅 | 外部日历只读导入独立 Collection，ETag 条件抓取 |
 | 📦 导入导出 | JSON 全量备份、ICS 文件导入，预览后提交 |
 | 🗑️ 回收站 | 软删除恢复，乐观锁幂等保护 |
 | 🔔 通知提醒 | 平台通知适配接口，提醒改期自动协调 |
-| 🔄 自动同步 | outbox push / cursor pull，确定性冲突恢复，网络恢复自动重试 |
+| 🌙 经期跟踪 | 经期、流量、点滴出血和症状记录，本地预测默认不上传 |
+| 🔄 自动同步 | 日程、日历、订阅和经期记录通过 outbox push / cursor pull 同步 |
 | 🪟 桌面窗口 | macOS/Windows 透明度、置顶、点击穿透，桌面日历 overlay |
 | 🧩 macOS Widget | App Group 离线 timeline，快照损坏容错 |
 
@@ -96,7 +98,7 @@ Cloudflare Worker + D1 是当前唯一实现的多设备同步服务器。部署
 需要以下内容：
 
 - Cloudflare 账号。免费套餐可以用于个人同步。
-- Git 和 Node.js 22-24（运行 `node --version` 检查）。
+- Git 和 Node.js 22.x（与 `server/.nvmrc` 和 CI 一致，运行 `node --version` 检查）。
 - 本仓库源码，以及一个最终提供给所有客户端使用的 HTTPS 地址。
 
 同步地址有两种选择：
@@ -246,6 +248,8 @@ https://你的同步域名/v1/health
 
 这里的 `version` 是同步 API 版本，不要求与客户端 Release 版本相同；部署脚本主要检查 `status` 和 `schema_version`。
 
+经期同步要求客户端版本不低于 `0.1.3`，且服务端 `schema_version` 不低于 `4`。从旧版本升级时，必须先重新运行 setup 应用 `0004_cycle_sync.sql` 并部署 Worker，再让各设备执行“立即同步”；否则普通日程可能正常同步，但经期记录会被旧协议拒绝。
+
 然后在 App 中使用“测试连接”。如果健康检查成功但测试连接返回 `401`，通常是客户端令牌与 `config/secrets.env` 中的 `ADMIN_TOKEN` 不一致。
 
 ### 6. 连接客户端
@@ -262,7 +266,7 @@ https://你的同步域名/v1/health
 
 新设备需要连接已有同步日历时，先在原设备复制“日历配置码”，再在新设备选择“连接已有日历”并粘贴。Collection ID 由 App 自动维护，普通用户不需要填写；只在高级连接设置中提供查看和复制。
 
-这些设置会持久化在当前安装中。同步令牌保存在系统安全存储中；“测试连接”会检查网络、TLS、鉴权、API 版本和同步能力，不会修改日历数据。设备 ID 会自动生成并长期保存，只应在复制安装、身份冲突或排查同步问题时使用高级设置中的“重建设备身份”。
+这些设置会持久化在当前安装中。同步令牌保存在系统安全存储中；“测试连接”会检查网络、TLS、鉴权、API 版本、同步能力和经期同步所需的 schema 版本，不会修改日历数据。设备 ID 会自动生成并长期保存，只应在复制安装、身份冲突或排查同步问题时使用高级设置中的“重建设备身份”。
 
 推荐接入顺序：先在原设备完成一次“立即同步”，确认没有错误；再复制日历配置码到新设备，测试连接并同步。不要在两台设备上分别新建同名日历来代替“连接已有日历”，它们会被视为两个不同 Collection。
 
@@ -321,7 +325,13 @@ cd ..
 
 ### 从源码运行 App
 
-Flutter 3.44.9 是开发环境依赖，不是普通用户的安装依赖。
+Flutter 3.44.9 是开发环境依赖，不是普通用户的安装依赖。`setup-client.sh` 会校验 Flutter 版本并安装 Dart 包，但不会安装 Flutter SDK 或平台原生工具。
+
+| 构建目标 | 额外开发依赖 |
+|---|---|
+| Android | JDK 17，以及 Flutter 3.44.9 所需的 Android SDK/NDK |
+| macOS | macOS、Xcode 和 Xcode Command Line Tools |
+| Windows | Windows、Visual Studio C++ Desktop 工具链和 ATL/MFC 组件 |
 
 ```bash
 git clone https://github.com/lvxin1024/EasyCalendar.git
@@ -355,24 +365,24 @@ python3 -m venv .venv
 1. 修改 `client/pubspec.yaml` 中的版本：
 
    ```yaml
-   version: 0.1.2+3
+   version: 0.1.3+4
    ```
 
-   `0.1.2` 是用户看到的版本号，`3` 是必须持续递增的构建号。已经存在的 tag 不能重复使用。
+   `0.1.3` 是用户看到的版本号，`4` 是必须持续递增的构建号。已经存在的 tag 不能重复使用。
 
 2. 提交版本变更并推送 `main`，等待 **Tests** 工作流全部通过：
 
    ```bash
    git add client/pubspec.yaml
-   git commit -m "chore: release v0.1.2"
+   git commit -m "chore: release v0.1.3"
    git push origin main
    ```
 
-3. 创建并推送与版本号完全一致的 tag。tag 不包含 `+3` 构建号：
+3. 创建并推送与版本号完全一致的 tag。tag 不包含 `+4` 构建号：
 
    ```bash
-   git tag -a v0.1.2 -m "EasyCalendar v0.1.2"
-   git push origin v0.1.2
+   git tag -a v0.1.3 -m "EasyCalendar v0.1.3"
+   git push origin v0.1.3
    ```
 
 4. 打开仓库的 **Actions > Client Release** 查看构建。Android、Windows 和 macOS 全部成功后，`publish` job 会自动创建 Release；不要提前手工创建同名 Release。
@@ -416,8 +426,8 @@ unsigned/ad-hoc 产物仍然是优化后的 Release 构建，不是 Debug 构建
 
 ```bash
 ./scripts/test.sh          # Python 离线测试
-cd client && flutter test  # Flutter 客户端测试
-cd server && npm test      # Worker 测试
+(cd client && flutter analyze --no-pub && flutter test --no-pub)
+(cd server && npm run check) # TypeScript、Worker 和本地 D1 migration
 ```
 
 ---
@@ -427,9 +437,9 @@ cd server && npm test      # Worker 测试
 | 层 | 技术 |
 |---|---|
 | 客户端 | Flutter 3.44.9, Dart, SQLite (sqflite), platform channels |
-| 可选兼容 API | Python 3.11+, FastAPI, SQLite, icalendar, RRULE 展开引擎 |
+| 可选兼容 API | Python 3.11+, FastAPI, SQLite, icalendar, python-dateutil |
 | 同步服务 | TypeScript, Cloudflare Workers, D1, Hono, outbox/cursor 协议 |
-| AI | OpenAI-compatible / Ollama Provider, Candidate 确认流程 |
+| AI | OpenAI-compatible / DeepSeek / Ollama Provider, Candidate 确认流程 |
 | 本地解析 | Flutter `LocalRuleParser`，不依赖 AI 或 Python |
 
 离线优先架构：客户端 `LocalItemRepository` 直连本地 SQLite，所有 CRUD 即时完成。同步层通过 outbox push / cursor pull 异步交换变更，确定性 LWW 冲突恢复。ICS 订阅由客户端直接执行 ETag/Last-Modified 条件请求，解析到只读 Collection 后通过同一同步协议交换。
@@ -440,7 +450,7 @@ cd server && npm test      # Worker 测试
 
 项目主要服务一个人，欢迎 Issue 和 PR。
 
-- 提交前运行 `./scripts/test.sh` 确保测试通过
+- 提交前运行上面的 Python、Flutter 和 Worker 检查
 - 每个功能独立 commit，不混合无关改动
 
 > This project primarily serves a single user, but issues and PRs are welcome. Run tests before submitting, and keep commits focused.

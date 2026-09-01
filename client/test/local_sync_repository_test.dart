@@ -148,6 +148,59 @@ void main() {
     },
   );
 
+  test('only retries cycle failures rejected by the legacy protocol', () async {
+    final cycles = LocalCycleRepository(
+      databaseProvider: repository.openSharedDatabase,
+      syncOutboxWriter: repository.writeCycleSyncOutbox,
+    );
+    final settings = await cycles.loadSettings();
+    await cycles.saveSettings(
+      settings.copyWith(
+        enabled: true,
+        updatedAt: DateTime.utc(2026, 9, 1),
+        version: settings.version + 1,
+      ),
+    );
+    await cycles.createPeriod(
+      CyclePeriodDraft(startDate: DateTime(2026, 8, 1)),
+    );
+    final pending = await repository.listPendingChanges(now: DateTime.now());
+    final settingsChange = pending.singleWhere(
+      (change) => change.entityType == 'cycle_settings',
+    );
+    final periodChange = pending.singleWhere(
+      (change) => change.entityType == 'cycle_period',
+    );
+    final collectionChange = pending.singleWhere(
+      (change) => change.entityType == 'collection',
+    );
+    await repository.recordPermanentFailures([
+      SyncRejection(
+        changeId: settingsChange.changeId,
+        code: 'transport_rejected',
+        message: 'entity_type is invalid',
+      ),
+      SyncRejection(
+        changeId: periodChange.changeId,
+        code: 'constraint_violation',
+        message: 'invalid period',
+      ),
+      SyncRejection(
+        changeId: collectionChange.changeId,
+        code: 'transport_rejected',
+        message: 'entity_type is invalid',
+      ),
+    ]);
+
+    expect(await repository.resetRetryablePermanentFailures(), 1);
+
+    final retryable = await repository.listPendingChanges(now: DateTime.now());
+    expect(retryable.map((change) => change.changeId), [
+      settingsChange.changeId,
+    ]);
+    expect(await repository.loadPermanentFailureMessage(), isNotNull);
+  });
+
   test('a winning unsent local edit is not overwritten by pull', () async {
     final local = await repository.createItem(
       const ItemDraft(

@@ -198,6 +198,7 @@ class SyncSnapshot {
     this.lastSyncedAt,
     this.nextRetryAt,
     this.message,
+    this.localDataChanged = false,
   });
 
   const SyncSnapshot.disabled() : this(phase: SyncPhase.disabled);
@@ -206,4 +207,5 @@ class SyncSnapshot {
   final DateTime? lastSyncedAt;
   final DateTime? nextRetryAt;
   final String? message;
+  final bool localDataChanged;
 }
