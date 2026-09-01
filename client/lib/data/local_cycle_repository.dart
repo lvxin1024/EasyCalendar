@@ -13,13 +13,16 @@ class LocalCycleRepository implements CycleRepository {
     required Future<Database> Function() databaseProvider,
     Uuid? uuid,
     DateTime Function()? clock,
+    CycleSyncOutboxWriter? syncOutboxWriter,
   }) : _databaseProvider = databaseProvider,
        _uuid = uuid ?? Uuid(),
-       _clock = clock ?? DateTime.now;
+       _clock = clock ?? DateTime.now,
+       _syncOutboxWriter = syncOutboxWriter;
 
   final Future<Database> Function() _databaseProvider;
   final Uuid _uuid;
   final DateTime Function() _clock;
+  final CycleSyncOutboxWriter? _syncOutboxWriter;
 
   @override
   Future<CycleTrackingSettings> loadSettings() async {
@@ -43,18 +46,38 @@ class LocalCycleRepository implements CycleRepository {
       enabled: row['enabled'] == 1,
       forecastHorizon: (row['forecast_horizon'] as int).clamp(1, 3),
       updatedAt: DateTime.parse(row['updated_at'] as String),
+      version: row['version'] as int? ?? 1,
     );
   }
 
   @override
   Future<void> saveSettings(CycleTrackingSettings settings) async {
     final database = await _databaseProvider();
-    await database.insert('cycle_settings', {
-      'id': 1,
-      'enabled': settings.enabled ? 1 : 0,
-      'forecast_horizon': settings.forecastHorizon.clamp(1, 3),
-      'updated_at': settings.updatedAt.toUtc().toIso8601String(),
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
+    await database.transaction((transaction) async {
+      await transaction.insert('cycle_settings', {
+        'id': 1,
+        'enabled': settings.enabled ? 1 : 0,
+        'forecast_horizon': settings.forecastHorizon.clamp(1, 3),
+        'updated_at': settings.updatedAt.toUtc().toIso8601String(),
+        'version': settings.version,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+      await _writeSync(
+        transaction,
+        'cycle_settings',
+        'singleton',
+        'update',
+        settings.version,
+        settings.updatedAt,
+        {
+          'id': 'singleton',
+          'enabled': settings.enabled,
+          'forecast_horizon': settings.forecastHorizon.clamp(1, 3),
+          'version': settings.version,
+          'updated_at': settings.updatedAt.toUtc().toIso8601String(),
+          'deleted_at': null,
+        },
+      );
+    });
   }
 
   @override
@@ -64,7 +87,10 @@ class LocalCycleRepository implements CycleRepository {
       'cycle_periods',
       orderBy: 'start_date ASC, id ASC',
     );
-    return rows.map(_periodFromRow).toList(growable: false);
+    return rows
+        .where((row) => row['deleted_at'] == null)
+        .map(_periodFromRow)
+        .toList(growable: false);
   }
 
   @override
@@ -96,11 +122,21 @@ class LocalCycleRepository implements CycleRepository {
       context: normalized.context,
       createdAt: now,
       updatedAt: now,
+      version: 1,
     );
     await database.transaction((transaction) async {
       await _ensureNoOverlap(transaction, record);
       await transaction.insert('cycle_periods', _periodToRow(record));
       await _replaceDailyLogs(transaction, record, dailyLogs);
+      await _writeSync(
+        transaction,
+        'cycle_period',
+        record.id,
+        'create',
+        record.version,
+        record.updatedAt,
+        await _periodPayload(transaction, record),
+      );
     });
     return record;
   }
@@ -122,6 +158,7 @@ class LocalCycleRepository implements CycleRepository {
       context: normalized.context,
       createdAt: current.createdAt,
       updatedAt: _clock().toUtc(),
+      version: current.version + 1,
     );
     await database.transaction((transaction) async {
       await _ensureNoOverlap(transaction, record, excludingId: current.id);
@@ -135,6 +172,15 @@ class LocalCycleRepository implements CycleRepository {
         throw const CycleRepositoryConflict('经期记录不存在');
       }
       await _replaceDailyLogs(transaction, record, dailyLogs);
+      await _writeSync(
+        transaction,
+        'cycle_period',
+        record.id,
+        'update',
+        record.version,
+        record.updatedAt,
+        await _periodPayload(transaction, record),
+      );
     });
     return record;
   }
@@ -142,12 +188,48 @@ class LocalCycleRepository implements CycleRepository {
   @override
   Future<void> deletePeriod(String periodId) async {
     final database = await _databaseProvider();
-    final count = await database.delete(
-      'cycle_periods',
-      where: 'id = ?',
-      whereArgs: [periodId],
-    );
-    if (count != 1) throw const CycleRepositoryConflict('经期记录不存在');
+    await database.transaction((transaction) async {
+      final rows = await transaction.query(
+        'cycle_periods',
+        where: 'id = ? AND deleted_at IS NULL',
+        whereArgs: [periodId],
+        limit: 1,
+      );
+      if (rows.isEmpty) throw const CycleRepositoryConflict('经期记录不存在');
+      final current = _periodFromRow(rows.single);
+      final now = _clock().toUtc();
+      final deleted = CyclePeriodRecord(
+        id: current.id,
+        startDate: current.startDate,
+        endDate: current.endDate,
+        excludedFromPrediction: current.excludedFromPrediction,
+        context: current.context,
+        createdAt: current.createdAt,
+        updatedAt: now,
+        deletedAt: now,
+        version: current.version + 1,
+      );
+      await transaction.update(
+        'cycle_periods',
+        _periodToRow(deleted),
+        where: 'id = ?',
+        whereArgs: [periodId],
+      );
+      await transaction.delete(
+        'cycle_daily_logs',
+        where: 'period_id = ?',
+        whereArgs: [periodId],
+      );
+      await _writeSync(
+        transaction,
+        'cycle_period',
+        deleted.id,
+        'delete',
+        deleted.version,
+        deleted.updatedAt,
+        await _periodPayload(transaction, deleted),
+      );
+    });
   }
 
   Future<void> _ensureNoOverlap(
@@ -157,7 +239,9 @@ class LocalCycleRepository implements CycleRepository {
   }) async {
     final rows = await database.query(
       'cycle_periods',
-      where: excludingId == null ? null : 'id != ?',
+      where: excludingId == null
+          ? 'deleted_at IS NULL'
+          : 'id != ? AND deleted_at IS NULL',
       whereArgs: excludingId == null ? null : [excludingId],
     );
     for (final row in rows) {
@@ -212,6 +296,10 @@ class LocalCycleRepository implements CycleRepository {
         context: _enumOrNull(CycleContext.values, row['context']),
         createdAt: DateTime.parse(row['created_at'] as String),
         updatedAt: DateTime.parse(row['updated_at'] as String),
+        deletedAt: row['deleted_at'] == null
+            ? null
+            : DateTime.parse(row['deleted_at'] as String),
+        version: row['version'] as int? ?? 1,
       );
 
   static Map<String, Object?> _periodToRow(CyclePeriodRecord record) => {
@@ -222,7 +310,65 @@ class LocalCycleRepository implements CycleRepository {
     'context': record.context?.name,
     'created_at': record.createdAt.toUtc().toIso8601String(),
     'updated_at': record.updatedAt.toUtc().toIso8601String(),
+    'deleted_at': record.deletedAt?.toUtc().toIso8601String(),
+    'version': record.version,
   };
+
+  Future<Map<String, Object?>> _periodPayload(
+    DatabaseExecutor database,
+    CyclePeriodRecord record,
+  ) async {
+    final rows = await database.query(
+      'cycle_daily_logs',
+      where: 'period_id = ?',
+      whereArgs: [record.id],
+      orderBy: 'date ASC',
+    );
+    return {
+      'id': record.id,
+      'start_date': cycleDateKey(record.startDate),
+      'end_date': record.endDate == null ? null : cycleDateKey(record.endDate!),
+      'excluded_from_prediction': record.excludedFromPrediction,
+      'context': record.context?.name,
+      'created_at': record.createdAt.toUtc().toIso8601String(),
+      'updated_at': record.updatedAt.toUtc().toIso8601String(),
+      'deleted_at': record.deletedAt?.toUtc().toIso8601String(),
+      'version': record.version,
+      'daily_logs': rows
+          .map(
+            (row) => {
+              'date': row['date'],
+              'bleeding_level': row['bleeding_level'],
+              'spotting': row['spotting'] == 1,
+              'symptoms': jsonDecode(row['symptoms_json'] as String),
+              'updated_at': row['updated_at'],
+            },
+          )
+          .toList(growable: false),
+    };
+  }
+
+  Future<void> _writeSync(
+    Transaction transaction,
+    String entityType,
+    String entityId,
+    String operation,
+    int version,
+    DateTime updatedAt,
+    Map<String, Object?> payload,
+  ) async {
+    final writer = _syncOutboxWriter;
+    if (writer == null) return;
+    await writer(
+      transaction,
+      entityType,
+      entityId,
+      operation,
+      version,
+      updatedAt,
+      payload,
+    );
+  }
 
   static CycleDailyLog _dailyLogFromRow(Map<String, Object?> row) {
     final decoded = jsonDecode(row['symptoms_json'] as String);

@@ -44,7 +44,7 @@ app.get("/v1/health", (c) =>
     status: "ok",
     service: "easycalendar",
     version: "0.1.0",
-    schema_version: 3,
+    schema_version: 4,
   }),
 );
 

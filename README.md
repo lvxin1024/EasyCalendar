@@ -241,7 +241,7 @@ https://你的同步域名/v1/health
 正常响应类似：
 
 ```json
-{"status":"ok","service":"easycalendar","version":"0.1.0","schema_version":3}
+{"status":"ok","service":"easycalendar","version":"0.1.0","schema_version":4}
 ```
 
 这里的 `version` 是同步 API 版本，不要求与客户端 Release 版本相同；部署脚本主要检查 `status` 和 `schema_version`。

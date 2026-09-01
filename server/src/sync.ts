@@ -3,7 +3,12 @@ import type { Context } from "hono";
 import { errorResponse } from "./errors";
 import type { AppEnv } from "./types";
 
-type EntityType = "item" | "collection" | "subscription";
+type EntityType =
+  | "item"
+  | "collection"
+  | "subscription"
+  | "cycle_period"
+  | "cycle_settings";
 type Operation = "create" | "update" | "delete";
 
 interface SyncChange {
@@ -86,7 +91,13 @@ interface ConflictRow {
 }
 
 const idPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/;
-const entityTypes = new Set<EntityType>(["item", "collection", "subscription"]);
+const entityTypes = new Set<EntityType>([
+  "item",
+  "collection",
+  "subscription",
+  "cycle_period",
+  "cycle_settings",
+]);
 const operations = new Set<Operation>(["create", "update", "delete"]);
 
 function syncLimit(c: Context<AppEnv>): number {
@@ -289,6 +300,60 @@ function entityStatement(db: D1Database, change: SyncChange): D1PreparedStatemen
         payloadJson,
         change.change_id,
       );
+  }
+  if (change.entity_type === "cycle_period") {
+    if (!validId(change.payload.id) || typeof change.payload.start_date !== "string" ||
+        (change.payload.end_date !== null && typeof change.payload.end_date !== "string") ||
+        !validTimestamp(String(change.payload.created_at)) ||
+        !validTimestamp(String(change.payload.updated_at)) ||
+        !Array.isArray(change.payload.daily_logs)) {
+      throw new Error("Cycle period payload is invalid");
+    }
+    return db
+      .prepare(
+        `INSERT INTO cycle_periods
+          (id, version, updated_at, deleted_at, payload, winner_change_id)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+          version = excluded.version,
+          updated_at = excluded.updated_at,
+          deleted_at = excluded.deleted_at,
+          payload = excluded.payload,
+          winner_change_id = excluded.winner_change_id
+         WHERE julianday(excluded.updated_at) > julianday(cycle_periods.updated_at)
+            OR (julianday(excluded.updated_at) = julianday(cycle_periods.updated_at)
+                AND excluded.version > cycle_periods.version)
+            OR (julianday(excluded.updated_at) = julianday(cycle_periods.updated_at)
+                AND excluded.version = cycle_periods.version
+                AND excluded.winner_change_id > cycle_periods.winner_change_id)`,
+      )
+      .bind(change.entity_id, change.version, change.updated_at, deletedAt, payloadJson, change.change_id);
+  }
+  if (change.entity_type === "cycle_settings") {
+    if (change.entity_id !== "singleton" || typeof change.payload.enabled !== "boolean" ||
+        !Number.isInteger(change.payload.forecast_horizon) ||
+        !validTimestamp(String(change.payload.updated_at))) {
+      throw new Error("Cycle settings payload is invalid");
+    }
+    return db
+      .prepare(
+        `INSERT INTO cycle_settings
+          (id, version, updated_at, deleted_at, payload, winner_change_id)
+         VALUES ('singleton', ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+          version = excluded.version,
+          updated_at = excluded.updated_at,
+          deleted_at = excluded.deleted_at,
+          payload = excluded.payload,
+          winner_change_id = excluded.winner_change_id
+         WHERE julianday(excluded.updated_at) > julianday(cycle_settings.updated_at)
+            OR (julianday(excluded.updated_at) = julianday(cycle_settings.updated_at)
+                AND excluded.version > cycle_settings.version)
+            OR (julianday(excluded.updated_at) = julianday(cycle_settings.updated_at)
+                AND excluded.version = cycle_settings.version
+                AND excluded.winner_change_id > cycle_settings.winner_change_id)`,
+      )
+      .bind(change.version, change.updated_at, deletedAt, payloadJson, change.change_id);
   }
   return db
     .prepare(

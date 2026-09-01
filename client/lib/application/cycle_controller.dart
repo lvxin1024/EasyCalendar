@@ -73,7 +73,11 @@ class CycleController extends ChangeNotifier {
 
   Future<void> setEnabled(bool enabled) async {
     if (enabled == _settings.enabled) return;
-    final settings = _settings.copyWith(enabled: enabled, updatedAt: _clock());
+    final settings = _settings.copyWith(
+      enabled: enabled,
+      updatedAt: _clock(),
+      version: _settings.version + 1,
+    );
     await _runMutation(() async {
       await _repository.saveSettings(settings);
       _settings = settings;

@@ -31,6 +31,8 @@ class CyclePeriodRecord {
     required this.context,
     required this.createdAt,
     required this.updatedAt,
+    this.deletedAt,
+    this.version = 1,
   });
 
   final String id;
@@ -40,6 +42,10 @@ class CyclePeriodRecord {
   final CycleContext? context;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final DateTime? deletedAt;
+  final int version;
+
+  bool get isDeleted => deletedAt != null;
 
   int? get durationDays => endDate == null
       ? null
@@ -129,19 +135,23 @@ class CycleTrackingSettings {
     required this.enabled,
     required this.forecastHorizon,
     required this.updatedAt,
+    this.version = 1,
   });
 
   final bool enabled;
   final int forecastHorizon;
   final DateTime updatedAt;
+  final int version;
 
   CycleTrackingSettings copyWith({
     bool? enabled,
     int? forecastHorizon,
     DateTime? updatedAt,
+    int? version,
   }) => CycleTrackingSettings(
     enabled: enabled ?? this.enabled,
     forecastHorizon: forecastHorizon ?? this.forecastHorizon,
     updatedAt: updatedAt ?? this.updatedAt,
+    version: version ?? this.version,
   );
 }

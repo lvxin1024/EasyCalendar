@@ -7,9 +7,11 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 void main() {
   late Database database;
   late LocalCycleRepository repository;
+  final syncEntities = <String>[];
   final clock = DateTime.utc(2026, 8, 31, 12);
 
   setUp(() async {
+    syncEntities.clear();
     sqfliteFfiInit();
     database = await databaseFactoryFfi.openDatabase(
       inMemoryDatabasePath,
@@ -22,6 +24,18 @@ void main() {
     repository = LocalCycleRepository(
       databaseProvider: () async => database,
       clock: () => clock,
+      syncOutboxWriter:
+          (
+            transaction,
+            entityType,
+            entityId,
+            operation,
+            version,
+            updatedAt,
+            payload,
+          ) async {
+            syncEntities.add('$entityType:$entityId:$operation:$version');
+          },
     );
   });
 
@@ -31,9 +45,10 @@ void main() {
     final initial = await repository.loadSettings();
     expect(initial.enabled, isFalse);
 
-    await repository.saveSettings(initial.copyWith(enabled: true));
+    await repository.saveSettings(initial.copyWith(enabled: true, version: 2));
 
     expect((await repository.loadSettings()).enabled, isTrue);
+    expect(syncEntities.single, contains('cycle_settings:singleton:update:2'));
   });
 
   test('creates periods and replaces optional daily logs atomically', () async {
@@ -70,6 +85,10 @@ void main() {
     final updatedLogs = await repository.listDailyLogs(periodId: period.id);
     expect(updatedLogs.single.date, DateTime(2026, 8, 2));
     expect(updatedLogs.single.spotting, isTrue);
+    expect(syncEntities.map((value) => value.split(':').first), [
+      'cycle_period',
+      'cycle_period',
+    ]);
   });
 
   test('rejects overlapping periods and cascades daily log deletion', () async {
@@ -98,5 +117,10 @@ void main() {
 
     await repository.deletePeriod(period.id);
     expect(await repository.listDailyLogs(periodId: period.id), isEmpty);
+    expect(
+      (await database.query('cycle_periods')).single['deleted_at'],
+      isNotNull,
+    );
+    expect(syncEntities.last, contains(':delete:2'));
   });
 }

@@ -276,6 +276,77 @@ class LocalItemRepository
           _legacyChange('subscription', subscription, payload),
         );
       }
+      for (final period in await transaction.query('cycle_periods')) {
+        if (await _hasSyncHead(transaction, 'cycle_period', period['id'])) {
+          continue;
+        }
+        final logs = await transaction.query(
+          'cycle_daily_logs',
+          where: 'period_id = ?',
+          whereArgs: [period['id']],
+          orderBy: 'date ASC',
+        );
+        final payload = {
+          'id': period['id'],
+          'start_date': period['start_date'],
+          'end_date': period['end_date'],
+          'excluded_from_prediction': period['excluded_from_prediction'] == 1,
+          'context': period['context'],
+          'created_at': period['created_at'],
+          'updated_at': period['updated_at'],
+          'deleted_at': period['deleted_at'],
+          'version': period['version'],
+          'daily_logs': logs
+              .map(
+                (log) => {
+                  'date': log['date'],
+                  'bleeding_level': log['bleeding_level'],
+                  'spotting': log['spotting'] == 1,
+                  'symptoms': jsonDecode(log['symptoms_json'] as String),
+                  'updated_at': log['updated_at'],
+                },
+              )
+              .toList(growable: false),
+        };
+        await writeCycleSyncOutbox(
+          transaction,
+          'cycle_period',
+          period['id'] as String,
+          period['deleted_at'] == null ? 'create' : 'delete',
+          period['version'] as int,
+          DateTime.parse(period['updated_at'] as String),
+          payload,
+        );
+      }
+      final settings = await transaction.query(
+        'cycle_settings',
+        where: 'id = 1',
+        limit: 1,
+      );
+      if (settings.isNotEmpty &&
+          (settings.single['enabled'] == 1 ||
+              settings.single['forecast_horizon'] != 1 ||
+              (settings.single['version'] as int? ?? 1) > 1) &&
+          !await _hasSyncHead(transaction, 'cycle_settings', 'singleton')) {
+        final row = settings.single;
+        final payload = {
+          'id': 'singleton',
+          'enabled': row['enabled'] == 1,
+          'forecast_horizon': row['forecast_horizon'],
+          'version': row['version'] as int? ?? 1,
+          'updated_at': row['updated_at'],
+          'deleted_at': null,
+        };
+        await writeCycleSyncOutbox(
+          transaction,
+          'cycle_settings',
+          'singleton',
+          'update',
+          row['version'] as int? ?? 1,
+          DateTime.parse(row['updated_at'] as String),
+          payload,
+        );
+      }
     });
   }
 
@@ -1414,6 +1485,46 @@ class LocalItemRepository
     );
   }
 
+  Future<void> writeCycleSyncOutbox(
+    Transaction transaction,
+    String entityType,
+    String entityId,
+    String operation,
+    int version,
+    DateTime updatedAt,
+    Map<String, Object?> payload,
+  ) async {
+    final changeId = 'change_${_uuid.v4()}';
+    await transaction.insert('outbox', {
+      'change_id': changeId,
+      'device_id': _runtimeDeviceId,
+      'entity_type': entityType,
+      'entity_id': entityId,
+      'operation': operation,
+      'entity_version': version,
+      'payload_json': jsonEncode(payload),
+      'created_at': _timeText(updatedAt),
+      'retry_count': 0,
+      'last_error': null,
+      'next_attempt_at': null,
+      'permanent_failure': 0,
+      'sent_at': null,
+    });
+    await _upsertSyncHead(
+      transaction,
+      RemoteSyncChange(
+        changeId: changeId,
+        deviceId: _runtimeDeviceId,
+        entityType: entityType,
+        entityId: entityId,
+        operation: operation,
+        version: version,
+        updatedAt: updatedAt,
+        payload: payload,
+      ),
+    );
+  }
+
   Future<void> _writeCollectionOutbox(
     Transaction transaction,
     Map<String, Object?> collection, {
@@ -1758,10 +1869,74 @@ class LocalItemRepository
           'version': change.version,
         });
         break;
+      case 'cycle_period':
+        await _applyRemoteCyclePeriod(transaction, change);
+        break;
+      case 'cycle_settings':
+        final settingsRow = {
+          'id': 1,
+          'enabled': change.payload['enabled'] == true ? 1 : 0,
+          'forecast_horizon':
+              (change.payload['forecast_horizon'] as num?)?.toInt() ?? 1,
+          'updated_at': change.payload['updated_at'],
+          'version': change.version,
+        };
+        final updatedSettings = await transaction.update(
+          'cycle_settings',
+          settingsRow,
+          where: 'id = 1',
+        );
+        if (updatedSettings == 0) {
+          await transaction.insert('cycle_settings', settingsRow);
+        }
+        break;
       default:
         throw FormatException('Unsupported sync entity: ${change.entityType}');
     }
     await _upsertSyncHead(transaction, change);
+  }
+
+  Future<void> _applyRemoteCyclePeriod(
+    Transaction transaction,
+    RemoteSyncChange change,
+  ) async {
+    final payload = change.payload;
+    final row = {
+      'id': change.entityId,
+      'start_date': payload['start_date'],
+      'end_date': payload['end_date'],
+      'excluded_from_prediction': payload['excluded_from_prediction'] == true
+          ? 1
+          : 0,
+      'context': payload['context'],
+      'created_at': payload['created_at'],
+      'updated_at': payload['updated_at'],
+      'deleted_at': payload['deleted_at'],
+      'version': change.version,
+    };
+    await _updateOrInsert(transaction, 'cycle_periods', row);
+    await transaction.delete(
+      'cycle_daily_logs',
+      where: 'period_id = ?',
+      whereArgs: [change.entityId],
+    );
+    final logs = payload['daily_logs'];
+    if (logs is List && payload['deleted_at'] == null) {
+      for (final value in logs) {
+        if (value is! Map) continue;
+        final log = value.cast<String, Object?>();
+        await transaction.insert('cycle_daily_logs', {
+          'date': log['date'],
+          'period_id': change.entityId,
+          'bleeding_level': log['bleeding_level'],
+          'spotting': log['spotting'] == true ? 1 : 0,
+          'symptoms_json': jsonEncode(
+            log['symptoms'] is List ? log['symptoms'] : const [],
+          ),
+          'updated_at': log['updated_at'] ?? payload['updated_at'],
+        });
+      }
+    }
   }
 
   static Future<void> _updateOrInsert(

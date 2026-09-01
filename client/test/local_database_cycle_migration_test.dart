@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
-  test('schema v4 upgrades to v5 without removing existing data', () async {
+  test('schema v4 upgrades to v6 without removing existing data', () async {
     sqfliteFfiInit();
     final directory = await Directory.systemTemp.createTemp(
       'easy_calendar_cycle_migration_',

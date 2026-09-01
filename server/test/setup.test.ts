@@ -27,7 +27,7 @@ const secrets = { ADMIN_TOKEN: "a-secure-token-with-at-least-32-characters" };
 
 describe("Cloudflare setup configuration", () => {
   it("tracks the deployed Worker schema", () => {
-    expect(workerSchemaVersion).toBe(3);
+    expect(workerSchemaVersion).toBe(4);
   });
 
   it("validates the shared configuration and builds generated Wrangler input", () => {

@@ -18,6 +18,7 @@ import 'platform/application_identity.dart';
 import 'sync/connectivity_monitor.dart';
 import 'sync/http_sync_transport.dart';
 import 'sync/sync_coordinator.dart';
+import 'sync/sync_models.dart';
 import 'sync/token_store.dart';
 import 'widget/widget_deep_link_controller.dart';
 import 'widget/widget_snapshot_writer.dart';
@@ -45,6 +46,7 @@ Future<void> main() async {
   final cycleController = CycleController(
     repository: LocalCycleRepository(
       databaseProvider: repository.openSharedDatabase,
+      syncOutboxWriter: repository.writeCycleSyncOutbox,
     ),
   );
   final desktopWindowController = DesktopWindowController();
@@ -58,6 +60,12 @@ Future<void> main() async {
     deviceId: config.deviceId,
     retryLimit: config.syncRetryLimit,
   );
+  syncCoordinator.addListener(() {
+    if (syncCoordinator.snapshot.phase == SyncPhase.idle &&
+        cycleController.initialized) {
+      unawaited(cycleController.refresh().catchError((_) {}));
+    }
+  });
   final controller = ItemController(
     repository: repository,
     config: config,

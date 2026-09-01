@@ -79,6 +79,39 @@ function itemChange(
   };
 }
 
+function cyclePeriodChange(changeId: string, version = 1) {
+  const updatedAt = version === 1 ? timestamp : "2026-08-11T09:00:00.000Z";
+  return {
+    change_id: changeId,
+    device_id: "macbook-01",
+    entity_type: "cycle_period",
+    entity_id: "cycle_01",
+    operation: version === 1 ? "create" : "update",
+    version,
+    updated_at: updatedAt,
+    payload: {
+      id: "cycle_01",
+      start_date: "2026-08-01",
+      end_date: "2026-08-05",
+      excluded_from_prediction: false,
+      context: null,
+      created_at: timestamp,
+      updated_at: updatedAt,
+      deleted_at: null,
+      version,
+      daily_logs: [
+        {
+          date: "2026-08-01",
+          bleeding_level: "medium",
+          spotting: false,
+          symptoms: ["cramps"],
+          updated_at: updatedAt,
+        },
+      ],
+    },
+  };
+}
+
 async function push(
   idempotencyKey: string,
   changes: unknown[],
@@ -131,9 +164,11 @@ beforeAll(async () => {
   const migration1 = await readFile("migrations/0001_initial.sql", "utf8");
   const migration2 = await readFile("migrations/0002_sync_protocol.sql", "utf8");
   const migration3 = await readFile("migrations/0003_sync_conflicts.sql", "utf8");
+  const migration4 = await readFile("migrations/0004_cycle_sync.sql", "utf8");
   await applyMigration(migration1);
   await applyMigration(migration2);
   await applyMigration(migration3);
+  await applyMigration(migration4);
   env = {
     ADMIN_TOKEN: token,
     APP_NAME: "EasyCalendar",
@@ -155,6 +190,8 @@ beforeEach(async () => {
     DELETE FROM sync_entity_heads;
     DELETE FROM change_log;
     DELETE FROM items;
+    DELETE FROM cycle_periods;
+    DELETE FROM cycle_settings;
     DELETE FROM subscriptions;
     DELETE FROM collections;
     DELETE FROM sqlite_sequence WHERE name = 'change_log';
@@ -167,6 +204,39 @@ afterAll(async () => {
 });
 
 describe("sync push", () => {
+  it("stores cycle period aggregates and settings as sync entities", async () => {
+    const response = await push("push_cycle", [
+      cyclePeriodChange("chg_cycle"),
+      {
+        change_id: "chg_cycle_settings",
+        device_id: "macbook-01",
+        entity_type: "cycle_settings",
+        entity_id: "singleton",
+        operation: "update",
+        version: 1,
+        updated_at: timestamp,
+        payload: {
+          id: "singleton",
+          enabled: true,
+          forecast_horizon: 1,
+          updated_at: timestamp,
+          deleted_at: null,
+          version: 1,
+        },
+      },
+    ]);
+    expect(response.status).toBe(200);
+    const responsePayload = await response.json<{ accepted: string[] }>();
+    expect(responsePayload.accepted).toEqual([
+      "chg_cycle",
+      "chg_cycle_settings",
+    ]);
+    expect(
+      await database.prepare("SELECT json_extract(payload, '$.daily_logs[0].date') AS date FROM cycle_periods WHERE id = ?").bind("cycle_01").first(),
+    ).toMatchObject({ date: "2026-08-01" });
+    expect(await database.prepare("SELECT id FROM cycle_settings").first()).toMatchObject({ id: "singleton" });
+  });
+
   it("applies a batch once and replays the same idempotent response", async () => {
     const changes = [collectionChange("chg_collection"), itemChange("chg_item")];
     const first = await push("push_01", changes);

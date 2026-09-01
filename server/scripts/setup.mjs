@@ -10,7 +10,7 @@ import { parse as parseYaml } from "yaml";
 const serverDirectory = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const generatedDirectory = resolve(serverDirectory, ".generated");
 const generatedConfigPath = resolve(generatedDirectory, "wrangler.json");
-export const workerSchemaVersion = 3;
+export const workerSchemaVersion = 4;
 
 function fail(message) {
   throw new Error(message);

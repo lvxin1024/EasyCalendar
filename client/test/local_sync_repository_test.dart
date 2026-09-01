@@ -2,10 +2,12 @@ import 'dart:io';
 
 import 'package:easy_calendar/config/app_config.dart';
 import 'package:easy_calendar/data/item_repository.dart';
+import 'package:easy_calendar/data/local_cycle_repository.dart';
 import 'package:easy_calendar/data/local_item_repository.dart';
 import 'package:easy_calendar/data/local_ics_service.dart';
 import 'package:easy_calendar/data/transfer_models.dart';
 import 'package:easy_calendar/domain/item.dart';
+import 'package:easy_calendar/domain/cycle_record.dart';
 import 'package:easy_calendar/domain/recurrence.dart';
 import 'package:easy_calendar/sync/sync_models.dart';
 import 'package:flutter/material.dart';
@@ -74,6 +76,77 @@ void main() {
     );
     expect(await repository.loadRemoteCursor(), 'cur_1');
   });
+
+  test(
+    'cycle aggregates use the existing outbox and remote apply path',
+    () async {
+      final cycles = LocalCycleRepository(
+        databaseProvider: repository.openSharedDatabase,
+        syncOutboxWriter: repository.writeCycleSyncOutbox,
+      );
+      final created = await cycles.createPeriod(
+        CyclePeriodDraft(
+          startDate: DateTime(2026, 8, 1),
+          endDate: DateTime(2026, 8, 5),
+        ),
+        dailyLogs: [
+          CycleDailyLogDraft(
+            date: DateTime(2026, 8, 1),
+            bleedingLevel: CycleFlowLevel.medium,
+          ),
+        ],
+      );
+      final pending = await repository.listPendingChanges(now: DateTime.now());
+      final cycleChange = pending.singleWhere(
+        (change) => change.entityType == 'cycle_period',
+      );
+      expect(cycleChange.entityId, created.id);
+      expect(cycleChange.payload, isNot(contains('prediction')));
+
+      const remoteId = 'cycle_remote';
+      const updatedAt = '2099-08-11T08:00:00.000Z';
+      await repository.applyRemoteBatch([
+        RemoteSyncChange(
+          changeId: 'change_cycle_remote',
+          deviceId: 'other-device',
+          entityType: 'cycle_period',
+          entityId: remoteId,
+          operation: 'create',
+          version: 1,
+          updatedAt: DateTime.parse(updatedAt),
+          payload: const {
+            'id': remoteId,
+            'start_date': '2099-08-01',
+            'end_date': '2099-08-04',
+            'excluded_from_prediction': false,
+            'context': null,
+            'created_at': updatedAt,
+            'updated_at': updatedAt,
+            'deleted_at': null,
+            'version': 1,
+            'daily_logs': [
+              {
+                'date': '2099-08-01',
+                'bleeding_level': 'light',
+                'spotting': false,
+                'symptoms': [],
+                'updated_at': updatedAt,
+              },
+            ],
+          },
+        ),
+      ], 'cur_cycle');
+
+      expect(
+        (await cycles.listPeriods()).map((period) => period.id),
+        contains(remoteId),
+      );
+      expect(
+        (await cycles.listDailyLogs(periodId: remoteId)).single.bleedingLevel,
+        CycleFlowLevel.light,
+      );
+    },
+  );
 
   test('a winning unsent local edit is not overwritten by pull', () async {
     final local = await repository.createItem(

@@ -1,7 +1,7 @@
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 abstract final class LocalDatabaseSchema {
-  static const version = 5;
+  static const version = 6;
 
   static Future<void> create(Database database, int version) async {
     await database.execute('''
@@ -157,6 +157,23 @@ abstract final class LocalDatabaseSchema {
     if (oldVersion < 5) {
       await _createCycleSchema(database);
     }
+    if (oldVersion == 5) {
+      await database.execute(
+        'DROP INDEX IF EXISTS idx_cycle_periods_start_date',
+      );
+      await database.execute(
+        'CREATE INDEX IF NOT EXISTS idx_cycle_periods_start_date ON cycle_periods(start_date)',
+      );
+      await database.execute(
+        'ALTER TABLE cycle_periods ADD COLUMN deleted_at TEXT',
+      );
+      await database.execute(
+        'ALTER TABLE cycle_periods ADD COLUMN version INTEGER NOT NULL DEFAULT 1',
+      );
+      await database.execute(
+        'ALTER TABLE cycle_settings ADD COLUMN version INTEGER NOT NULL DEFAULT 1',
+      );
+    }
   }
 
   static Future<void> _createCycleSchema(DatabaseExecutor database) async {
@@ -168,11 +185,13 @@ abstract final class LocalDatabaseSchema {
         excluded_from_prediction INTEGER NOT NULL DEFAULT 0,
         context TEXT,
         created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
+        updated_at TEXT NOT NULL,
+        deleted_at TEXT,
+        version INTEGER NOT NULL DEFAULT 1
       )
     ''');
     await database.execute('''
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_cycle_periods_start_date
+      CREATE INDEX IF NOT EXISTS idx_cycle_periods_start_date
       ON cycle_periods(start_date)
     ''');
     await database.execute('''
@@ -194,7 +213,8 @@ abstract final class LocalDatabaseSchema {
         id INTEGER PRIMARY KEY CHECK (id = 1),
         enabled INTEGER NOT NULL DEFAULT 0,
         forecast_horizon INTEGER NOT NULL DEFAULT 1,
-        updated_at TEXT NOT NULL
+        updated_at TEXT NOT NULL,
+        version INTEGER NOT NULL DEFAULT 1
       )
     ''');
     await database.insert('cycle_settings', {
@@ -202,6 +222,7 @@ abstract final class LocalDatabaseSchema {
       'enabled': 0,
       'forecast_horizon': 1,
       'updated_at': DateTime.now().toUtc().toIso8601String(),
+      'version': 1,
     }, conflictAlgorithm: ConflictAlgorithm.ignore);
   }
 
