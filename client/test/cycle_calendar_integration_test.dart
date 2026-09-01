@@ -98,4 +98,47 @@ void main() {
     expect(find.byType(CycleDayMarker), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'week time axis stays visible while columns scroll horizontally',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 760);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final dates = List.generate(
+        7,
+        (index) => DateTime(2026, 8, 10 + index),
+        growable: false,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: CalendarTimeGrid(
+              dates: dates,
+              items: const [],
+              dueItems: const [],
+              selectedDate: dates.first,
+              hourHeight: 72,
+              onHourHeightChanged: (_) {},
+              onDateSelected: (_) {},
+              onEdit: (_) {},
+              onCreateTimedEvent: (_) async {},
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final timeLabel = find.text('8 AM');
+      expect(timeLabel, findsOneWidget);
+      await tester.dragFrom(const Offset(300, 500), const Offset(-240, 0));
+      await tester.pump();
+
+      expect(tester.getTopLeft(timeLabel).dx, greaterThanOrEqualTo(0));
+      expect(tester.getTopLeft(timeLabel).dx, lessThan(48));
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

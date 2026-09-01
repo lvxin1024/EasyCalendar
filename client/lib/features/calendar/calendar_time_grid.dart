@@ -169,13 +169,17 @@ class CalendarTimeGrid extends StatefulWidget {
 class _CalendarTimeGridState extends State<CalendarTimeGrid> {
   final _verticalController = ScrollController();
   final _horizontalController = ScrollController();
+  final _headerHorizontalController = ScrollController();
   final Map<int, Offset> _activePointers = {};
   double? _pinchStartDistance;
   double? _pinchStartHourHeight;
+  bool _syncingHorizontal = false;
 
   @override
   void initState() {
     super.initState();
+    _horizontalController.addListener(_syncHeaderHorizontalOffset);
+    _headerHorizontalController.addListener(_syncBodyHorizontalOffset);
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _scrollToWorkingHours(),
     );
@@ -183,8 +187,11 @@ class _CalendarTimeGridState extends State<CalendarTimeGrid> {
 
   @override
   void dispose() {
+    _horizontalController.removeListener(_syncHeaderHorizontalOffset);
+    _headerHorizontalController.removeListener(_syncBodyHorizontalOffset);
     _verticalController.dispose();
     _horizontalController.dispose();
+    _headerHorizontalController.dispose();
     super.dispose();
   }
 
@@ -205,92 +212,170 @@ class _CalendarTimeGridState extends State<CalendarTimeGrid> {
               platform: defaultTargetPlatform,
             );
             final width = 48.0 + dateColumnWidth * widget.dates.length;
-            return Scrollbar(
-              controller: _horizontalController,
-              notificationPredicate: (notification) =>
-                  notification.metrics.axis == Axis.horizontal,
-              child: SingleChildScrollView(
-                controller: _horizontalController,
-                scrollDirection: Axis.horizontal,
-                child: SizedBox(
-                  width: width,
-                  height: constraints.maxHeight,
-                  child: Column(
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Scrollbar(
+                  controller: _headerHorizontalController,
+                  notificationPredicate: (notification) =>
+                      notification.metrics.axis == Axis.horizontal,
+                  child: SingleChildScrollView(
+                    controller: _headerHorizontalController,
+                    scrollDirection: Axis.horizontal,
+                    child: SizedBox(
+                      width: width,
+                      child: Column(
+                        children: [
+                          _DateHeader(
+                            dates: widget.dates,
+                            selectedDate: widget.selectedDate,
+                            onDateSelected: widget.onDateSelected,
+                            cycleStates: widget.cycleStates,
+                            showCycleMarkers: widget.showCycleMarkers,
+                          ),
+                          _AllDayRow(
+                            dates: widget.dates,
+                            items: widget.items,
+                            tagColors: widget.tagColors,
+                            collectionColors: widget.collectionColors,
+                            onEdit: widget.onEdit,
+                          ),
+                          const Divider(height: 1),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Stack(
                     children: [
-                      _DateHeader(
-                        dates: widget.dates,
-                        selectedDate: widget.selectedDate,
-                        onDateSelected: widget.onDateSelected,
-                        cycleStates: widget.cycleStates,
-                        showCycleMarkers: widget.showCycleMarkers,
-                      ),
-                      _AllDayRow(
-                        dates: widget.dates,
-                        items: widget.items,
-                        tagColors: widget.tagColors,
-                        collectionColors: widget.collectionColors,
-                        onEdit: widget.onEdit,
-                      ),
-                      const Divider(height: 1),
-                      Expanded(
-                        child: Listener(
-                          onPointerSignal: _handlePointerSignal,
-                          onPointerDown: _handlePointerDown,
-                          onPointerMove: _handlePointerMove,
-                          onPointerUp: _handlePointerUp,
-                          onPointerCancel: _handlePointerCancel,
-                          child: Scrollbar(
-                            controller: _verticalController,
-                            thumbVisibility: true,
-                            child: SingleChildScrollView(
-                              controller: _verticalController,
-                              padding: const EdgeInsets.only(bottom: 96),
-                              child: SizedBox(
-                                height: widget.hourHeight * 24,
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    _TimeGutter(hourHeight: widget.hourHeight),
-                                    for (
-                                      var dateIndex = 0;
-                                      dateIndex < widget.dates.length;
-                                      dateIndex++
-                                    )
-                                      SizedBox(
-                                        width: dateColumnWidth,
-                                        child: _DayColumn(
-                                          date: widget.dates[dateIndex],
-                                          dates: widget.dates,
-                                          dateIndex: dateIndex,
-                                          columnWidth: dateColumnWidth,
-                                          items: widget.items,
-                                          dueItems: widget.dueItems,
-                                          tagColors: widget.tagColors,
-                                          collectionColors:
-                                              widget.collectionColors,
-                                          hourHeight: widget.hourHeight,
-                                          onEdit: widget.onEdit,
-                                          onCreateTimedEvent:
-                                              widget.onCreateTimedEvent,
-                                        ),
-                                      ),
-                                  ],
+                      Listener(
+                        onPointerSignal: _handlePointerSignal,
+                        onPointerDown: _handlePointerDown,
+                        onPointerMove: _handlePointerMove,
+                        onPointerUp: _handlePointerUp,
+                        onPointerCancel: _handlePointerCancel,
+                        child: Scrollbar(
+                          controller: _horizontalController,
+                          notificationPredicate: (notification) =>
+                              notification.metrics.axis == Axis.horizontal,
+                          child: SingleChildScrollView(
+                            controller: _horizontalController,
+                            scrollDirection: Axis.horizontal,
+                            child: SizedBox(
+                              width: width,
+                              height: constraints.maxHeight,
+                              child: Scrollbar(
+                                controller: _verticalController,
+                                thumbVisibility: true,
+                                child: SingleChildScrollView(
+                                  controller: _verticalController,
+                                  padding: const EdgeInsets.only(bottom: 96),
+                                  child: SizedBox(
+                                    height: widget.hourHeight * 24,
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const SizedBox(width: 48),
+                                        for (
+                                          var dateIndex = 0;
+                                          dateIndex < widget.dates.length;
+                                          dateIndex++
+                                        )
+                                          SizedBox(
+                                            width: dateColumnWidth,
+                                            child: _DayColumn(
+                                              date: widget.dates[dateIndex],
+                                              dates: widget.dates,
+                                              dateIndex: dateIndex,
+                                              columnWidth: dateColumnWidth,
+                                              items: widget.items,
+                                              dueItems: widget.dueItems,
+                                              tagColors: widget.tagColors,
+                                              collectionColors:
+                                                  widget.collectionColors,
+                                              hourHeight: widget.hourHeight,
+                                              onEdit: widget.onEdit,
+                                              onCreateTimedEvent:
+                                                  widget.onCreateTimedEvent,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
                           ),
                         ),
                       ),
+                      _stickyTimeGutter(),
                     ],
                   ),
                 ),
-              ),
+              ],
             );
           },
         ),
       ),
     ],
   );
+
+  void _syncHeaderHorizontalOffset() =>
+      _syncHorizontalOffset(_horizontalController, _headerHorizontalController);
+
+  void _syncBodyHorizontalOffset() =>
+      _syncHorizontalOffset(_headerHorizontalController, _horizontalController);
+
+  void _syncHorizontalOffset(ScrollController source, ScrollController target) {
+    if (_syncingHorizontal || !source.hasClients || !target.hasClients) return;
+    final offset = source.offset
+        .clamp(0.0, target.position.maxScrollExtent)
+        .toDouble();
+    if ((target.offset - offset).abs() < 0.5) return;
+    _syncingHorizontal = true;
+    target.jumpTo(offset);
+    _syncingHorizontal = false;
+  }
+
+  Widget _stickyTimeGutter() {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Positioned(
+      left: 0,
+      top: 0,
+      bottom: 0,
+      width: 48,
+      child: IgnorePointer(
+        child: ClipRect(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: colorScheme.surface,
+              border: Border(
+                right: BorderSide(color: colorScheme.outlineVariant),
+              ),
+            ),
+            child: AnimatedBuilder(
+              animation: _verticalController,
+              builder: (context, child) {
+                final offset = _verticalController.hasClients
+                    ? _verticalController.offset
+                    : 0.0;
+                return Transform.translate(
+                  offset: Offset(0, -offset),
+                  child: child,
+                );
+              },
+              child: SizedBox(
+                height: widget.hourHeight * 24,
+                child: _TimeGutter(hourHeight: widget.hourHeight),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   void _handlePointerSignal(PointerSignalEvent event) {
     if (event is! PointerScrollEvent) return;
@@ -635,11 +720,15 @@ class _TimeGutter extends StatelessWidget {
         for (var hour = 0; hour < 24; hour += 1)
           Positioned(
             top: hour * hourHeight - 7,
+            left: 0,
             right: 8,
-            child: Text(
-              formatHourLabel(context, hour),
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                formatHourLabel(context, hour),
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
             ),
           ),
