@@ -64,9 +64,12 @@ client/windows/flutter/ephemeral/
 .DS_Store
 Thumbs.db
 
-# Internal development docs (not for public repo)
-docs/*
-!docs/MENSTRUAL_CYCLE_TRACKING_PLAN.md
+# Internal development files (not for public repo)
+AGENTS.md
+ROADMAP.md
+docs/
+.agents/
+.codex/
 .codex-docs-cache/
 .codex-log/
 
