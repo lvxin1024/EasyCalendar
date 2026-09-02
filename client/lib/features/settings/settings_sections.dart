@@ -390,22 +390,24 @@ class _TagColorSection extends StatelessWidget {
     required this.tags,
     required this.colors,
     required this.onChanged,
+    required this.onDelete,
   });
 
   final List<String> tags;
   final Map<String, int> colors;
   final void Function(String tag, Color? color) onChanged;
+  final ValueChanged<String> onDelete;
 
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       const SizedBox(height: 24),
-      const _SectionLabel(label: '标签颜色'),
+      const _SectionLabel(label: '标签'),
       if (tags.isEmpty)
         const Padding(
           padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
-          child: Text('创建事项后可以在这里分配标签颜色'),
+          child: Text('创建事项后可以在这里管理标签'),
         ),
       for (final tag in tags)
         ListTile(
@@ -444,11 +446,135 @@ class _TagColorSection extends StatelessWidget {
                   onPressed: () => onChanged(tag, null),
                   icon: const Icon(Icons.restart_alt),
                 ),
+              IconButton(
+                tooltip: '删除标签',
+                onPressed: () => onDelete(tag),
+                icon: const Icon(Icons.delete_outline),
+              ),
             ],
           ),
         ),
     ],
   );
+}
+
+enum _TagDeletionAction { deleteItems, migrate }
+
+class _TagDeletionResult {
+  const _TagDeletionResult({this.migrateTo});
+
+  final String? migrateTo;
+}
+
+class _TagDeletionDialog extends StatefulWidget {
+  const _TagDeletionDialog({
+    required this.tag,
+    required this.itemCount,
+    required this.targetTags,
+  });
+
+  final String tag;
+  final int itemCount;
+  final List<String> targetTags;
+
+  @override
+  State<_TagDeletionDialog> createState() => _TagDeletionDialogState();
+}
+
+class _TagDeletionDialogState extends State<_TagDeletionDialog> {
+  late _TagDeletionAction _action;
+  String? _targetTag;
+
+  @override
+  void initState() {
+    super.initState();
+    _action = widget.targetTags.isEmpty
+        ? _TagDeletionAction.deleteItems
+        : _TagDeletionAction.migrate;
+    _targetTag = widget.targetTags.firstOrNull;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final deletingItems = _action == _TagDeletionAction.deleteItems;
+    return AlertDialog(
+      title: Text('删除标签“${widget.tag}”'),
+      content: SizedBox(
+        width: 440,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('请选择如何处理 ${widget.itemCount} 个包含该标签的事项。'),
+            const SizedBox(height: 12),
+            RadioGroup<_TagDeletionAction>(
+              groupValue: _action,
+              onChanged: (value) {
+                if (value != null) setState(() => _action = value);
+              },
+              child: Column(
+                children: [
+                  const RadioListTile<_TagDeletionAction>(
+                    value: _TagDeletionAction.deleteItems,
+                    title: Text('删除该标签下的事项'),
+                    subtitle: Text('事项将移入回收站'),
+                  ),
+                  RadioListTile<_TagDeletionAction>(
+                    value: _TagDeletionAction.migrate,
+                    enabled: widget.targetTags.isNotEmpty,
+                    title: const Text('迁移到其他标签'),
+                    subtitle: const Text('在所有事项中替换原标签'),
+                  ),
+                ],
+              ),
+            ),
+            if (!deletingItems) ...[
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                initialValue: _targetTag,
+                decoration: const InputDecoration(labelText: '目标标签'),
+                items: [
+                  for (final tag in widget.targetTags)
+                    DropdownMenuItem(value: tag, child: Text(tag)),
+                ],
+                onChanged: (value) => setState(() => _targetTag = value),
+              ),
+            ],
+            const SizedBox(height: 12),
+            Text(
+              '订阅源自带的同名分类可能在后续刷新时重新出现。',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          style: deletingItems
+              ? FilledButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.error,
+                  foregroundColor: Theme.of(context).colorScheme.onError,
+                )
+              : null,
+          onPressed: !deletingItems && _targetTag == null
+              ? null
+              : () => Navigator.pop(
+                  context,
+                  _TagDeletionResult(
+                    migrateTo: deletingItems ? null : _targetTag,
+                  ),
+                ),
+          child: Text(deletingItems ? '删除标签和事项' : '迁移并删除'),
+        ),
+      ],
+    );
+  }
 }
 
 class _AiProviderSection extends StatelessWidget {

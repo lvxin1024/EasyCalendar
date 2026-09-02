@@ -337,6 +337,16 @@ class ItemController extends ChangeNotifier {
   Future<void> deleteItem(CalendarItem item) =>
       _mutate(() => repository.deleteItem(item));
 
+  Future<void> deleteTag(String tag, {String? migrateTo}) async {
+    final tagColors = {...preferences.tagColors}..remove(tag);
+    final updatedPreferences = preferences.copyWith(tagColors: tagColors);
+    await _mutate(() async {
+      await repository.deleteTag(tag, migrateTo: migrateTo);
+      await repository.savePreferences(updatedPreferences);
+      _preferences = updatedPreferences;
+    });
+  }
+
   Future<CalendarItem> restoreItem(CalendarItem item) async {
     late CalendarItem result;
     await _mutate(() async {

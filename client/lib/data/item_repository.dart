@@ -44,6 +44,8 @@ abstract interface class ItemRepository {
 
   Future<void> deleteItem(CalendarItem current);
 
+  Future<void> deleteTag(String tag, {String? migrateTo});
+
   Future<CalendarItem> restoreItem(CalendarItem current);
 
   Future<List<CalendarItem>> listDeletedItems();

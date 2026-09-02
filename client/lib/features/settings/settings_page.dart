@@ -506,6 +506,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 tags: tagsFromItems(widget.controller.items),
                 colors: _tagColors,
                 onChanged: _setTagColor,
+                onDelete: _deleteTag,
               ),
               _WidgetQuoteSection(
                 quotes: _widgetQuotes,
@@ -993,6 +994,34 @@ class _SettingsPageState extends State<SettingsPage> {
         widget.controller.preferences.copyWith(tagColors: _tagColors),
       ),
     );
+  }
+
+  Future<void> _deleteTag(String tag) async {
+    final tags = tagsFromItems(widget.controller.items);
+    final result = await showDialog<_TagDeletionResult>(
+      context: context,
+      builder: (_) => _TagDeletionDialog(
+        tag: tag,
+        itemCount: widget.controller.items
+            .where((item) => item.tags.contains(tag))
+            .length,
+        targetTags: tags.where((candidate) => candidate != tag).toList(),
+      ),
+    );
+    if (result == null) return;
+    try {
+      await widget.controller.deleteTag(tag, migrateTo: result.migrateTo);
+      if (!mounted) return;
+      setState(() => _tagColors.remove(tag));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('标签已删除')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('删除标签失败：$error')));
+    }
   }
 
   Future<void> _showCollectionEditor([CalendarCollection? current]) async {

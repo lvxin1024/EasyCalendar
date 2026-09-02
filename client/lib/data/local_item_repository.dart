@@ -702,6 +702,115 @@ class LocalItemRepository
   }
 
   @override
+  Future<void> deleteTag(String tag, {String? migrateTo}) async {
+    final source = tag.trim();
+    final target = migrateTo?.trim();
+    if (source.isEmpty) {
+      throw const RepositoryConflict('标签不能为空。');
+    }
+    if (migrateTo != null && (target!.isEmpty || target == source)) {
+      throw const RepositoryConflict('目标标签必须与原标签不同。');
+    }
+
+    final now = DateTime.now();
+    await _db.transaction((transaction) async {
+      final itemRows = await transaction.query(
+        'items',
+        where: 'deleted_at IS NULL',
+      );
+      for (final row in itemRows) {
+        final current = _itemFromRow(row);
+        if (!current.tags.contains(source)) continue;
+        final deletingItem = target == null;
+        final nextTags = deletingItem
+            ? current.tags
+            : _normalizeTags([
+                for (final currentTag in current.tags)
+                  currentTag == source ? target : currentTag,
+              ]);
+        final updated = CalendarItem(
+          id: current.id,
+          collectionId: current.collectionId,
+          type: current.type,
+          title: current.title,
+          body: current.body,
+          startAt: current.startAt,
+          endAt: current.endAt,
+          dueAt: current.dueAt,
+          recurrence: current.recurrence,
+          timezone: current.timezone,
+          allDay: current.allDay,
+          location: current.location,
+          status: current.status,
+          priority: current.priority,
+          reminderEnabled: current.reminderEnabled,
+          reminderMinutes: current.reminderMinutes,
+          tags: nextTags,
+          createdAt: current.createdAt,
+          updatedAt: now,
+          deletedAt: deletingItem ? now : null,
+          version: current.version + 1,
+        );
+        final count = await transaction.update(
+          'items',
+          _itemToRow(updated),
+          where: 'id = ? AND version = ? AND deleted_at IS NULL',
+          whereArgs: [current.id, current.version],
+        );
+        if (count != 1) {
+          throw const RepositoryConflict('标签关联事项已更新，请刷新后重试。');
+        }
+        await _writeOutbox(
+          transaction,
+          updated,
+          deletingItem ? 'delete' : 'update',
+        );
+      }
+
+      final subscriptionRows = await transaction.query(
+        'subscriptions',
+        where: 'deleted_at IS NULL',
+      );
+      for (final row in subscriptionRows) {
+        final payload = _subscriptionPayloadFromRow(row);
+        final metadata = Map<String, Object?>.from(
+          payload['metadata'] is Map
+              ? (payload['metadata'] as Map).cast<String, Object?>()
+              : const {},
+        );
+        final currentTags = (metadata['tags'] as List<dynamic>? ?? const [])
+            .whereType<String>()
+            .toList(growable: false);
+        if (!currentTags.contains(source)) continue;
+        metadata['tags'] = _normalizeTags([
+          for (final currentTag in currentTags)
+            currentTag == source ? target ?? '' : currentTag,
+        ]);
+        final updatedPayload = {
+          ...payload,
+          'metadata': metadata,
+          'updated_at': _timeText(now),
+          'version': (payload['version'] as int) + 1,
+        };
+        final count = await transaction.update(
+          'subscriptions',
+          _subscriptionRow(updatedPayload),
+          where: 'id = ? AND version = ? AND deleted_at IS NULL',
+          whereArgs: [payload['id'], payload['version']],
+        );
+        if (count != 1) {
+          throw const RepositoryConflict('标签关联订阅已更新，请刷新后重试。');
+        }
+        await _writeSubscriptionOutbox(
+          transaction,
+          updatedPayload,
+          operation: 'update',
+        );
+      }
+    });
+  }
+
+  @override
   Future<CalendarItem> restoreItem(CalendarItem current) async {
     if (current.deletedAt == null) {
       throw const RepositoryConflict('事项未被删除。');

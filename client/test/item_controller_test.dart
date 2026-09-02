@@ -87,6 +87,33 @@ void main() {
     expect(controller.items.single.version, 2);
   });
 
+  test('controller migrates a tag and removes its color preference', () async {
+    final repository = _MemoryRepository(
+      storedPreferences: const ClientPreferences(
+        apiUrl: 'http://localhost:8000',
+        syncEnabled: false,
+        notificationsEnabled: false,
+        tagColors: {'work': 0xFF2563EB, 'focus': 0xFF0F766E},
+      ),
+    );
+    final controller = ItemController(repository: repository, config: config);
+    await controller.initialize();
+    await controller.saveItem(
+      draft: const ItemDraft(
+        type: ItemType.task,
+        title: 'Tagged task',
+        timezone: 'Asia/Shanghai',
+        tags: ['work', 'focus'],
+      ),
+    );
+
+    await controller.deleteTag('work', migrateTo: 'focus');
+
+    expect(controller.items.single.tags, ['focus']);
+    expect(controller.preferences.tagColors, {'focus': 0xFF0F766E});
+    expect(repository.storedPreferences?.tagColors, {'focus': 0xFF0F766E});
+  });
+
   test('controller migrates and persists the legacy device identity', () async {
     final repository = _MemoryRepository(
       storedPreferences: const ClientPreferences(
@@ -528,6 +555,45 @@ class _MemoryRepository implements ItemRepository {
   @override
   Future<void> deleteItem(CalendarItem current) async {
     _items.removeWhere((item) => item.id == current.id);
+  }
+
+  @override
+  Future<void> deleteTag(String tag, {String? migrateTo}) async {
+    if (migrateTo == null) {
+      _items.removeWhere((item) => item.tags.contains(tag));
+      return;
+    }
+    for (var index = 0; index < _items.length; index++) {
+      final item = _items[index];
+      if (!item.tags.contains(tag)) continue;
+      _items[index] = _fromDraft(
+        item.id,
+        ItemDraft(
+          collectionId: item.collectionId,
+          type: item.type,
+          title: item.title,
+          body: item.body,
+          startAt: item.startAt,
+          endAt: item.endAt,
+          dueAt: item.dueAt,
+          recurrence: item.recurrence,
+          timezone: item.timezone,
+          allDay: item.allDay,
+          location: item.location,
+          status: item.status,
+          priority: item.priority,
+          reminderEnabled: item.reminderEnabled,
+          reminderMinutes: item.reminderMinutes,
+          tags: {
+            for (final currentTag in item.tags)
+              currentTag == tag ? migrateTo : currentTag,
+          }.toList(growable: false),
+        ),
+        now: DateTime.now(),
+        version: item.version + 1,
+        createdAt: item.createdAt,
+      );
+    }
   }
 
   @override

@@ -45,6 +45,83 @@ void main() {
     expect(pending.map((change) => change.entityType), ['collection', 'item']);
   });
 
+  test('tag migration replaces and deduplicates tags atomically', () async {
+    await repository.createItem(
+      const ItemDraft(
+        type: ItemType.task,
+        title: 'Tagged task',
+        timezone: 'Asia/Shanghai',
+        tags: ['work', 'focus'],
+      ),
+    );
+    await repository.createItem(
+      const ItemDraft(
+        type: ItemType.task,
+        title: 'Unrelated task',
+        timezone: 'Asia/Shanghai',
+        tags: ['personal'],
+      ),
+    );
+
+    await repository.deleteTag('work', migrateTo: 'focus');
+
+    final items = await repository.listItems();
+    final tagged = items.singleWhere((item) => item.title == 'Tagged task');
+    final unrelated = items.singleWhere(
+      (item) => item.title == 'Unrelated task',
+    );
+    expect(tagged.tags, ['focus']);
+    expect(tagged.version, 2);
+    expect(unrelated.tags, ['personal']);
+    expect(unrelated.version, 1);
+  });
+
+  test('deleting a tag moves its items to the recycle bin', () async {
+    final tagged = await repository.createItem(
+      const ItemDraft(
+        type: ItemType.task,
+        title: 'Tagged task',
+        timezone: 'Asia/Shanghai',
+        tags: ['obsolete'],
+      ),
+    );
+    await repository.createItem(
+      const ItemDraft(
+        type: ItemType.task,
+        title: 'Unrelated task',
+        timezone: 'Asia/Shanghai',
+        tags: ['active'],
+      ),
+    );
+
+    await repository.deleteTag('obsolete');
+
+    expect((await repository.listItems()).single.title, 'Unrelated task');
+    final deleted = (await repository.listDeletedItems()).singleWhere(
+      (item) => item.id == tagged.id,
+    );
+    expect(deleted.deletedAt, isNotNull);
+    expect(deleted.version, 2);
+  });
+
+  test(
+    'tag migration updates subscription metadata for future refreshes',
+    () async {
+      await repository.createSubscription(
+        title: 'Course calendar',
+        url: 'https://calendar.example.com/course.ics',
+        refreshIntervalMinutes: 60,
+        tags: const ['course', 'work'],
+      );
+
+      await repository.deleteTag('work', migrateTo: 'study');
+
+      final subscription = (await repository.listSubscriptions()).single;
+      expect(subscription.tags, ['course', 'study']);
+      expect(subscription.version, 2);
+    },
+  );
+
   test('remote batch and cursor commit atomically', () async {
     final change = _remoteItem('item_remote', 'Remote task');
     await repository.applyRemoteBatch([change], 'cur_1');
