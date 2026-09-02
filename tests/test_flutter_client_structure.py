@@ -177,7 +177,7 @@ def test_ci_runs_flutter_analysis_and_tests_with_the_pinned_sdk():
     assert "actions/upload-artifact" not in workflow
 
 
-def test_tag_release_builds_signed_installers_and_checksums():
+def test_tag_release_builds_only_signed_installers():
     workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(
         encoding="utf-8"
     )
@@ -190,7 +190,14 @@ def test_tag_release_builds_signed_installers_and_checksums():
     assert "WINDOWS_CERTIFICATE_PFX_BASE64" in workflow
     assert "MACOS_CERTIFICATE_P12_BASE64" in workflow
     assert "notarytool submit" in workflow
-    assert "sha256sum * > SHA256SUMS.txt" in workflow
+    assert "release-assets/*.apk" in workflow
+    assert "release-assets/*.exe" in workflow
+    assert "release-assets/*.dmg" in workflow
+    assert "flutter build appbundle" not in workflow
+    assert "portable.zip" not in workflow
+    assert "symbols.zip" not in workflow
+    assert "symbols.tar.gz" not in workflow
+    assert "SHA256SUMS.txt" not in workflow
     assert "softprops/action-gh-release@v2" in workflow
     assert "PrivilegesRequired=lowest" in installer
     assert "UninstallDisplayIcon" in installer
@@ -204,7 +211,7 @@ def test_unsigned_macos_release_does_not_enable_library_validation():
         "- name: Ad-hoc sign and package unsigned DMG", maxsplit=1
     )
     unsigned_block = unsigned_and_later.split(
-        "- name: Package macOS debug symbols", maxsplit=1
+        "- uses: actions/upload-artifact@v4", maxsplit=1
     )[0]
 
     assert "--options runtime" in signed_block

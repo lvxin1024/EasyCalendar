@@ -387,7 +387,7 @@ python3 -m venv .venv
 
 4. 打开仓库的 **Actions > Client Release** 查看构建。Android、Windows 和 macOS 全部成功后，`publish` job 会自动创建 Release；不要提前手工创建同名 Release。
 
-5. 打开 [GitHub Releases](https://github.com/lvxin1024/EasyCalendar/releases) 检查安装说明和附件，再把这个页面发给用户。工作流会自动生成变更记录和 `SHA256SUMS.txt`。
+5. 打开 [GitHub Releases](https://github.com/lvxin1024/EasyCalendar/releases) 检查安装说明和三个安装包，再把这个页面发给用户。工作流会自动生成变更记录。
 
 如果 tag 与 `pubspec.yaml` 版本不一致，`version` job 会立即失败。修复发布问题时应提交修复并发布一个新的版本/tag，不要移动已经公开的 tag。
 
@@ -396,12 +396,8 @@ python3 -m venv .venv
 | 文件 | 用途 |
 |---|---|
 | `*-android.apk` | Android 用户直接下载安装。|
-| `*-android.aab` | 上传 Google Play 等应用商店，不供普通用户直接安装。|
-| `*-windows-x64-setup.exe` | Windows 安装器，普通用户优先下载。|
-| `*-windows-x64-portable.zip` | Windows 免安装便携包。|
+| `*-windows-x64-setup.exe` | Windows 安装器。|
 | `*-macos.dmg` | macOS 安装镜像。|
-| `*-symbols.*` | 崩溃堆栈还原用的调试符号，只供维护者保存。|
-| `SHA256SUMS.txt` | 下载文件的 SHA-256 校验值。|
 
 没有配置任何签名 Secret 时，工作流仍能生成可下载的 Release 文件，文件名会包含 `unsigned`。这适合测试和自主分发；正式对公众长期发布时，应配置稳定签名，尤其不要用临时 Android key 发布需要后续覆盖升级的 APK。
 
@@ -415,12 +411,12 @@ python3 -m venv .venv
 
 #### 无正式签名材料的发布
 
-- Android 的 4 个签名 Secrets 全部留空时，CI 使用一次性临时 key 生成 `EasyCalendar-<version>-unsigned-android.apk` 和 AAB。该 APK 可以侧载，但下一次使用不同临时 key 构建的 APK 无法覆盖升级，也不能作为稳定的应用商店发布密钥。
+- Android 的 4 个签名 Secrets 全部留空时，CI 使用一次性临时 key 生成 `EasyCalendar-<version>-unsigned-android.apk`。该 APK 可以侧载，但下一次使用不同临时 key 构建的 APK 无法覆盖升级，也不能作为稳定的应用商店发布密钥。
 - macOS 的 8 个 Apple 签名 Secrets 全部留空时，CI 会移除无法授权 App Group 的 Widget，对主 App 执行 ad-hoc Release 签名，并产出 `EasyCalendar-<version>-unsigned-macos.dmg`。此产物不会公证，首次打开需在 Finder 中右键 App 选择“打开”，或在“系统设置 > 隐私与安全性”中选择“仍要打开”。
-- Windows 的 `WINDOWS_CERTIFICATE_PFX_BASE64` 和 `WINDOWS_CERTIFICATE_PASSWORD` 都留空时，CI 会产出 `EasyCalendar-<version>-unsigned-windows-x64-setup.exe` 和对应便携包。SmartScreen 可能需要用户选择“更多信息 > 仍要运行”。
+- Windows 的 `WINDOWS_CERTIFICATE_PFX_BASE64` 和 `WINDOWS_CERTIFICATE_PASSWORD` 都留空时，CI 会产出 `EasyCalendar-<version>-unsigned-windows-x64-setup.exe`。SmartScreen 可能需要用户选择“更多信息 > 仍要运行”。
 - 任一平台的签名 Secrets 不允许只配置一部分。CI 会在检测到不完整配置时失败，避免误发布看似已签名的产物。
 
-unsigned/ad-hoc 产物仍然是优化后的 Release 构建，不是 Debug 构建。发布页会根据实际产物自动加入警告和首次打开方法，并提醒用户按 `SHA256SUMS.txt` 校验文件。
+unsigned/ad-hoc 产物仍然是优化后的 Release 构建，不是 Debug 构建。发布页会根据实际产物自动加入警告和首次打开方法。
 
 ### 运行测试
 

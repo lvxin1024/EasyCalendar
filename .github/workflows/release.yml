@@ -90,30 +90,21 @@ jobs:
             > client/android/key.properties
       - run: flutter pub get
         working-directory: client
-      - name: Build APK and AAB
+      - name: Build APK
         working-directory: client
         run: |
           flutter build apk --release \
             --build-name "${{ needs.version.outputs.name }}" \
-            --build-number "${{ needs.version.outputs.number }}" \
-            --obfuscate --split-debug-info=build/symbols/android
-          flutter build appbundle --release \
-            --build-name "${{ needs.version.outputs.name }}" \
-            --build-number "${{ needs.version.outputs.number }}" \
-            --obfuscate --split-debug-info=build/symbols/android
+            --build-number "${{ needs.version.outputs.number }}"
           mkdir -p build/release
           suffix=""
           if test "${{ steps.signing.outputs.enabled }}" = "false"; then suffix="-unsigned"; fi
           cp build/app/outputs/flutter-apk/app-release.apk \
             "build/release/EasyCalendar-${{ needs.version.outputs.name }}${suffix}-android.apk"
-          cp build/app/outputs/bundle/release/app-release.aab \
-            "build/release/EasyCalendar-${{ needs.version.outputs.name }}${suffix}-android.aab"
-          tar -czf "build/release/EasyCalendar-${{ needs.version.outputs.name }}-android-symbols.tar.gz" \
-            -C build/symbols android
       - uses: actions/upload-artifact@v4
         with:
           name: android-release
-          path: client/build/release/*
+          path: client/build/release/*.apk
           if-no-files-found: error
 
   windows:
@@ -166,7 +157,6 @@ jobs:
           flutter build windows --release
           --build-name "${{ needs.version.outputs.name }}"
           --build-number "${{ needs.version.outputs.number }}"
-          --obfuscate --split-debug-info=build/symbols/windows
       - name: Import code signing certificate
         if: steps.signing.outputs.enabled == 'true'
         shell: pwsh
@@ -201,18 +191,14 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "Installer signing failed" }
             & $signTool verify /pa $installer
             if ($LASTEXITCODE -ne 0) { throw "Installer signature verification failed" }
-            $portable = "client\windows\build\release\EasyCalendar-${{ needs.version.outputs.name }}-windows-x64-portable.zip"
           } else {
             $unsignedInstaller = "client\windows\build\release\EasyCalendar-${{ needs.version.outputs.name }}-unsigned-windows-x64-setup.exe"
             Move-Item -Path $installer -Destination $unsignedInstaller
-            $portable = "client\windows\build\release\EasyCalendar-${{ needs.version.outputs.name }}-unsigned-windows-x64-portable.zip"
           }
-          Compress-Archive -Path "$buildDir\*" -DestinationPath $portable
-          Compress-Archive -Path "client\build\symbols\windows\*" -DestinationPath "client\windows\build\release\EasyCalendar-${{ needs.version.outputs.name }}-windows-symbols.zip"
       - uses: actions/upload-artifact@v4
         with:
           name: windows-release
-          path: client/windows/build/release/*
+          path: client/windows/build/release/*.exe
           if-no-files-found: error
 
   macos:
@@ -286,8 +272,7 @@ jobs:
           flutter build macos --release --config-only \
             --build-name "${{ needs.version.outputs.name }}" \
             --build-number "${{ needs.version.outputs.number }}" \
-            --dart-define=EASYCALENDAR_USE_DATA_PROTECTION_KEYCHAIN=${{ steps.signing.outputs.enabled }} \
-            --obfuscate --split-debug-info=build/symbols/macos
+            --dart-define=EASYCALENDAR_USE_DATA_PROTECTION_KEYCHAIN=${{ steps.signing.outputs.enabled }}
           register_app_groups=YES
           if test "${{ steps.signing.outputs.enabled }}" = "false"; then
             register_app_groups=NO
@@ -370,23 +355,10 @@ jobs:
           dmg="client/build/release/EasyCalendar-${{ needs.version.outputs.name }}-unsigned-macos.dmg"
           hdiutil create -volname EasyCalendar -srcfolder client/build/release/dmg -ov -format UDZO "$dmg"
           rm -rf client/build/release/dmg
-      - name: Package macOS debug symbols
-        shell: bash
-        run: |
-          set -euo pipefail
-          app="client/build/macos/Build/Products/Release/EasyCalendar.app"
-          if test -d "$app.dSYM"; then
-            ditto -c -k --keepParent "$app.dSYM" "client/build/release/EasyCalendar-${{ needs.version.outputs.name }}-macos-symbols.zip"
-          fi
-          if test -d client/build/symbols/macos; then
-            ditto -c -k --keepParent client/build/symbols/macos "client/build/release/EasyCalendar-${{ needs.version.outputs.name }}-macos-dart-symbols.zip"
-          fi
       - uses: actions/upload-artifact@v4
         with:
           name: macos-release
-          path: |
-            client/build/release/*.dmg
-            client/build/release/*-symbols.zip
+          path: client/build/release/*.dmg
           if-no-files-found: error
 
   publish:
@@ -397,9 +369,6 @@ jobs:
         with:
           path: release-assets
           merge-multiple: true
-      - name: Generate SHA-256 checksums
-        working-directory: release-assets
-        run: sha256sum * > SHA256SUMS.txt
       - name: Generate installation notice
         shell: bash
         run: |
@@ -415,7 +384,7 @@ jobs:
             fi
             if compgen -G 'release-assets/*-unsigned-android.apk' > /dev/null; then
               echo '> [!WARNING]'
-              echo '> The Android APK/AAB was built with a temporary CI key because Android signing secrets were not configured. Configure the Android secrets before distributing production updates.'
+              echo '> The Android APK was built with a temporary CI key because Android signing secrets were not configured. Configure the Android secrets before distributing production updates.'
               echo
             fi
             if compgen -G 'release-assets/*-unsigned-windows-x64-setup.exe' > /dev/null; then
@@ -423,7 +392,6 @@ jobs:
               echo '> The Windows installer is unsigned. Windows SmartScreen may require **More info > Run anyway**.'
               echo
             fi
-            echo 'Verify downloaded files against `SHA256SUMS.txt` before installation.'
           } > "$notice"
           echo "RELEASE_BODY_PATH=$notice" >> "$GITHUB_ENV"
       - uses: softprops/action-gh-release@v2
@@ -431,4 +399,7 @@ jobs:
           body_path: ${{ env.RELEASE_BODY_PATH }}
           generate_release_notes: true
           fail_on_unmatched_files: true
-          files: release-assets/*
+          files: |
+            release-assets/*.apk
+            release-assets/*.exe
+            release-assets/*.dmg
