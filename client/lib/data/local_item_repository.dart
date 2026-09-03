@@ -176,7 +176,9 @@ class LocalItemRepository
       sqfliteFfiInit();
       return databaseFactoryFfi;
     }
-    throw UnsupportedError('EasyCalendar requires Android, macOS, or Windows');
+    throw UnsupportedError(
+      'EasyCalendar requires Android, iOS, macOS, or Windows',
+    );
   }
 
   Future<void> _ensureDefaultCollection() async {

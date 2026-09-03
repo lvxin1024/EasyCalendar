@@ -1,6 +1,6 @@
 # EasyCalendar Flutter client
 
-The client is local-first and uses SQLite on Android, macOS, and Windows. Its
+The client is local-first and uses SQLite on Android, iOS, macOS, and Windows. Its
 runtime defaults follow the host locale and IANA timezone unless
 `config/client.json` overrides them; no user-specific endpoint, timezone,
 collection, or feature toggle is stored in Dart source.
@@ -12,7 +12,7 @@ cp config/client.example.json config/client.json
 ```
 
 `setup-client.sh` requires Flutter `3.44.9` (also declared in `.fvmrc`) and
-generates the standard Android, macOS, and Windows runner projects before
+generates the standard Android, iOS, macOS, and Windows runner projects before
 resolving packages. `run-client.sh` passes the selected config file through
 `--dart-define-from-file`. It defaults to the host desktop target; set
 `EASYCALENDAR_CLIENT_DEVICE` to an Android device ID when needed. Web is not a

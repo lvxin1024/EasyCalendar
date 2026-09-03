@@ -31,7 +31,7 @@
 
 - 🇨🇳 用中文自然语言写日程（"明天上午9点开会"），规则引擎自动解析
 - 📅 日/周/月视图、Due 管理、标签筛选、循环日程
-- 💻 macOS / Windows / Android 三平台 Flutter 客户端
+- 💻 macOS / Windows / Android / iOS 四平台 Flutter 客户端
 - 🔒 数据完全在你手里：本地 SQLite 存储，可选自托管同步服务
 - 🤖 可选 AI 助手（OpenAI-compatible / DeepSeek / Ollama），确认后才写入正式日程
 - 📡 支持 ICS 日历订阅（客户端本地条件抓取）
@@ -74,7 +74,7 @@
 
 | 组件 | 是否必需 | 说明 |
 |---|---|---|
-| **EasyCalendar App** | 是 | macOS / Windows / Android 客户端，内置 SQLite，离线可用 |
+| **EasyCalendar App** | 是 | macOS / Windows / Android / iOS 客户端，内置 SQLite，离线可用 |
 | **Cloud Sync** | 否 | Cloudflare Worker / D1 多设备同步服务 |
 | **Python Compatibility API** | 否 | 面向开发者和第三方集成的参考 REST API，不在 App 主链路上 |
 
@@ -330,6 +330,7 @@ Flutter 3.44.9 是开发环境依赖，不是普通用户的安装依赖。`setu
 | 构建目标 | 额外开发依赖 |
 |---|---|
 | Android | JDK 17，以及 Flutter 3.44.9 所需的 Android SDK/NDK |
+| iOS | macOS、Xcode 和 Xcode Command Line Tools |
 | macOS | macOS、Xcode 和 Xcode Command Line Tools |
 | Windows | Windows、Visual Studio C++ Desktop 工具链和 ATL/MFC 组件 |
 
@@ -358,7 +359,7 @@ python3 -m venv .venv
 
 ### 发布维护
 
-`main` 分支上的 Tests 通过只表示代码可构建，不会生成公开下载文件。只有推送与 `client/pubspec.yaml` 版本一致的 `vX.Y.Z` tag，GitHub Actions 的 **Client Release** 工作流才会构建三端安装包、创建 GitHub Release，并把文件上传到下载页。
+`main` 分支上的 Tests 通过只表示代码可构建，不会生成公开下载文件。只有推送与 `client/pubspec.yaml` 版本一致的 `vX.Y.Z` tag，GitHub Actions 的 **Client Release** 工作流才会构建四端安装包、创建 GitHub Release，并把文件上传到下载页。
 
 #### 发布一个新版本
 
@@ -385,9 +386,9 @@ python3 -m venv .venv
    git push origin v0.1.3
    ```
 
-4. 打开仓库的 **Actions > Client Release** 查看构建。Android、Windows 和 macOS 全部成功后，`publish` job 会自动创建 Release；不要提前手工创建同名 Release。
+4. 打开仓库的 **Actions > Client Release** 查看构建。Android、Windows、macOS 和 iOS 全部成功后，`publish` job 会自动创建 Release；不要提前手工创建同名 Release。
 
-5. 打开 [GitHub Releases](https://github.com/lvxin1024/EasyCalendar/releases) 检查安装说明和三个安装包，再把这个页面发给用户。工作流会自动生成变更记录。
+5. 打开 [GitHub Releases](https://github.com/lvxin1024/EasyCalendar/releases) 检查安装说明和四个安装包，再把这个页面发给用户。工作流会自动生成变更记录。
 
 如果 tag 与 `pubspec.yaml` 版本不一致，`version` job 会立即失败。修复发布问题时应提交修复并发布一个新的版本/tag，不要移动已经公开的 tag。
 
@@ -398,6 +399,7 @@ python3 -m venv .venv
 | `*-android.apk` | Android 用户直接下载安装。|
 | `*-windows-x64-setup.exe` | Windows 安装器。|
 | `*-macos.dmg` | macOS 安装镜像。|
+| `*-ios.ipa` | iOS Release 构建包（未签名，需手动签名后安装）。|
 
 没有配置任何签名 Secret 时，工作流仍能生成可下载的 Release 文件，文件名会包含 `unsigned`。这适合测试和自主分发；正式对公众长期发布时，应配置稳定签名，尤其不要用临时 Android key 发布需要后续覆盖升级的 APK。
 
@@ -414,6 +416,7 @@ python3 -m venv .venv
 - Android 的 4 个签名 Secrets 全部留空时，CI 使用一次性临时 key 生成 `EasyCalendar-<version>-unsigned-android.apk`。该 APK 可以侧载，但下一次使用不同临时 key 构建的 APK 无法覆盖升级，也不能作为稳定的应用商店发布密钥。
 - macOS 的 8 个 Apple 签名 Secrets 全部留空时，CI 会移除无法授权 App Group 的 Widget，对主 App 执行 ad-hoc Release 签名，并产出 `EasyCalendar-<version>-unsigned-macos.dmg`。此产物不会公证，首次打开需在 Finder 中右键 App 选择“打开”，或在“系统设置 > 隐私与安全性”中选择“仍要打开”。
 - Windows 的 `WINDOWS_CERTIFICATE_PFX_BASE64` 和 `WINDOWS_CERTIFICATE_PASSWORD` 都留空时，CI 会产出 `EasyCalendar-<version>-unsigned-windows-x64-setup.exe`。SmartScreen 可能需要用户选择“更多信息 > 仍要运行”。
+- iOS 当前产出 `EasyCalendar-<version>-unsigned-ios.ipa`，未配置 Apple 签名；用于构建验证或手动签名后安装。
 - 任一平台的签名 Secrets 不允许只配置一部分。CI 会在检测到不完整配置时失败，避免误发布看似已签名的产物。
 
 unsigned/ad-hoc 产物仍然是优化后的 Release 构建，不是 Debug 构建。发布页会根据实际产物自动加入警告和首次打开方法。

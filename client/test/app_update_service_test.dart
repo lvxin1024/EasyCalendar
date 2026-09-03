@@ -25,6 +25,7 @@ void main() {
     'macos': 'EasyCalendar-1.2.0-macos.dmg',
     'windows': 'EasyCalendar-1.2.0-windows-x64-setup.exe',
     'android': 'EasyCalendar-1.2.0-android.apk',
+    'ios': 'EasyCalendar-1.2.0-ios.ipa',
   }.entries) {
     test('selects the ${platformAsset.key} release asset', () async {
       final service = AppUpdateService(

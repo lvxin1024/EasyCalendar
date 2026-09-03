@@ -37,9 +37,9 @@ trap 'rm -rf "${GENERATED_ROOT}"' EXIT
 "${FLUTTER_BIN}" create \
     --project-name easy_calendar \
     --org io.easycalendar \
-    --platforms android,macos,windows \
+    --platforms android,ios,macos,windows \
     "${GENERATED_ROOT}/easy_calendar"
-for platform in android macos windows; do
+for platform in android ios macos windows; do
     if [[ ! -d "${CLIENT_DIR}/${platform}" ]]; then
         cp -R "${GENERATED_ROOT}/easy_calendar/${platform}" "${CLIENT_DIR}/${platform}"
     fi

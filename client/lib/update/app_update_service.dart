@@ -179,6 +179,7 @@ class AppUpdateService {
       'macos' => lower.endsWith('-macos.dmg'),
       'windows' => lower.endsWith('-windows-x64-setup.exe'),
       'android' => lower.endsWith('-android.apk'),
+      'ios' => lower.endsWith('-ios.ipa'),
       _ => false,
     };
   }

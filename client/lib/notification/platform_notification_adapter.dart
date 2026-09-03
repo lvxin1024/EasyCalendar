@@ -20,6 +20,7 @@ class PlatformNotificationAdapter implements NotificationAdapter {
       importance: Importance.high,
       priority: Priority.high,
     ),
+    iOS: DarwinNotificationDetails(presentAlert: true, presentSound: true),
     macOS: DarwinNotificationDetails(presentAlert: true, presentSound: true),
     windows: WindowsNotificationDetails(),
   );
@@ -31,6 +32,7 @@ class PlatformNotificationAdapter implements NotificationAdapter {
   String get platformName {
     if (kIsWeb) return 'web';
     if (Platform.isAndroid) return 'android';
+    if (Platform.isIOS) return 'ios';
     if (Platform.isMacOS) return 'macos';
     if (Platform.isWindows) return 'windows';
     return 'unsupported';
@@ -38,12 +40,17 @@ class PlatformNotificationAdapter implements NotificationAdapter {
 
   Future<void> _initialize() async {
     if (_initialized) return;
-    if (!const {'android', 'macos', 'windows'}.contains(platformName)) {
+    if (!const {'android', 'ios', 'macos', 'windows'}.contains(platformName)) {
       throw UnsupportedError('当前平台不支持系统通知');
     }
     final initialized = await _plugin.initialize(
       settings: const InitializationSettings(
         android: AndroidInitializationSettings('ic_launcher'),
+        iOS: DarwinInitializationSettings(
+          requestAlertPermission: false,
+          requestBadgePermission: false,
+          requestSoundPermission: false,
+        ),
         macOS: DarwinInitializationSettings(
           requestAlertPermission: false,
           requestBadgePermission: false,
@@ -76,6 +83,19 @@ class PlatformNotificationAdapter implements NotificationAdapter {
           ? NotificationPermissionStatus.granted
           : NotificationPermissionStatus.denied;
     }
+    if (Platform.isIOS) {
+      final implementation = _plugin
+          .resolvePlatformSpecificImplementation<
+            IOSFlutterLocalNotificationsPlugin
+          >();
+      final permissions = await implementation?.checkPermissions();
+      if (permissions == null) {
+        return NotificationPermissionStatus.notDetermined;
+      }
+      return permissions.isEnabled
+          ? NotificationPermissionStatus.granted
+          : NotificationPermissionStatus.denied;
+    }
     final implementation = _plugin
         .resolvePlatformSpecificImplementation<
           MacOSFlutterLocalNotificationsPlugin
@@ -97,6 +117,12 @@ class PlatformNotificationAdapter implements NotificationAdapter {
                 AndroidFlutterLocalNotificationsPlugin
               >()
               ?.requestNotificationsPermission()
+        : Platform.isIOS
+        ? await _plugin
+              .resolvePlatformSpecificImplementation<
+                IOSFlutterLocalNotificationsPlugin
+              >()
+              ?.requestPermissions(alert: true, sound: true)
         : await _plugin
               .resolvePlatformSpecificImplementation<
                 MacOSFlutterLocalNotificationsPlugin
@@ -168,6 +194,7 @@ class PlatformNotificationAdapter implements NotificationAdapter {
   Future<bool> openSettings() async {
     final uri = switch (platformName) {
       'android' => Uri.parse('app-settings:'),
+      'ios' => Uri.parse('app-settings:'),
       'macos' => Uri.parse(
         'x-apple.systempreferences:com.apple.preference.notifications',
       ),

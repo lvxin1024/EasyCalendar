@@ -361,8 +361,55 @@ jobs:
           path: client/build/release/*.dmg
           if-no-files-found: error
 
+  ios:
+    needs: version
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.9"
+          channel: stable
+          cache: true
+      - name: Generate iOS runner
+        working-directory: client
+        shell: bash
+        run: |
+          set -euo pipefail
+          generated_root="$(mktemp -d)"
+          trap 'rm -rf "$generated_root"' EXIT
+          flutter create \
+            --project-name easy_calendar \
+            --org io.easycalendar \
+            --platforms ios \
+            "$generated_root/easy_calendar"
+          cp -R "$generated_root/easy_calendar/ios" ios
+      - run: flutter pub get
+        working-directory: client
+      - name: Build unsigned iOS IPA
+        working-directory: client
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter build ios --release --no-codesign \
+            --build-name "${{ needs.version.outputs.name }}" \
+            --build-number "${{ needs.version.outputs.number }}"
+          app="build/ios/iphoneos/Runner.app"
+          test -d "$app"
+          payload="$(mktemp -d)"
+          trap 'rm -rf "$payload"' EXIT
+          mkdir -p "$payload/Payload"
+          cp -R "$app" "$payload/Payload/EasyCalendar.app"
+          mkdir -p build/release
+          (cd "$payload" && zip -qry "$GITHUB_WORKSPACE/client/build/release/EasyCalendar-${{ needs.version.outputs.name }}-unsigned-ios.ipa" Payload)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-release
+          path: client/build/release/*.ipa
+          if-no-files-found: error
+
   publish:
-    needs: [version, android, windows, macos]
+    needs: [version, android, windows, macos, ios]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -392,6 +439,11 @@ jobs:
               echo '> The Windows installer is unsigned. Windows SmartScreen may require **More info > Run anyway**.'
               echo
             fi
+            if compgen -G 'release-assets/*-unsigned-ios.ipa' > /dev/null; then
+              echo '> [!WARNING]'
+              echo '> The iOS IPA is unsigned and is intended for build verification or manual signing before device installation.'
+              echo
+            fi
           } > "$notice"
           echo "RELEASE_BODY_PATH=$notice" >> "$GITHUB_ENV"
       - uses: softprops/action-gh-release@v2
@@ -403,3 +455,4 @@ jobs:
             release-assets/*.apk
             release-assets/*.exe
             release-assets/*.dmg
+            release-assets/*.ipa
