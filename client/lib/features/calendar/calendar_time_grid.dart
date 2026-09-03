@@ -838,6 +838,8 @@ class _DayColumnState extends State<_DayColumn> {
                 collectionColors: widget.collectionColors,
                 onTap: () => widget.onEdit(placement.item),
               ),
+            if (_isSameDate(widget.date, configuredNow()))
+              _CurrentTimeLine(hourHeight: widget.hourHeight),
           ],
         ),
       ),
