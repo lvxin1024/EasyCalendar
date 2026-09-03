@@ -82,6 +82,7 @@ def test_t16_views_repository_and_platform_bootstrap_are_present():
     )
     assert "IPHONEOS_DEPLOYMENT_TARGET = 14.0;" in ios_target
     assert "platform :ios, '14.0'" in ios_target
+    assert 'if [[ -f "${PODFILE}" ]]' in ios_target
     assert '"${FLUTTER_BIN}" analyze' in setup
     assert '"${FLUTTER_BIN}" test' in setup
     run = (ROOT / "scripts" / "run-client.sh").read_text(encoding="utf-8")
