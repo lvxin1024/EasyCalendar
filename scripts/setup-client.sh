@@ -44,6 +44,7 @@ for platform in android ios macos windows; do
         cp -R "${GENERATED_ROOT}/easy_calendar/${platform}" "${CLIENT_DIR}/${platform}"
     fi
 done
+bash "${PROJECT_DIR}/scripts/set-ios-deployment-target.sh" "${CLIENT_DIR}/ios"
 cp "${GENERATED_ROOT}/easy_calendar/.metadata" "${CLIENT_DIR}/.metadata"
 "${FLUTTER_BIN}" pub get
 "${FLUTTER_BIN}" analyze

@@ -76,6 +76,12 @@ def test_t16_views_repository_and_platform_bootstrap_are_present():
     assert all((CLIENT / relative).is_file() for relative in required)
     setup = (ROOT / "scripts" / "setup-client.sh").read_text(encoding="utf-8")
     assert "--platforms android,ios,macos,windows" in setup
+    assert 'set-ios-deployment-target.sh' in setup
+    ios_target = (ROOT / "scripts" / "set-ios-deployment-target.sh").read_text(
+        encoding="utf-8"
+    )
+    assert "IPHONEOS_DEPLOYMENT_TARGET = 14.0;" in ios_target
+    assert "platform :ios, '14.0'" in ios_target
     assert '"${FLUTTER_BIN}" analyze' in setup
     assert '"${FLUTTER_BIN}" test' in setup
     run = (ROOT / "scripts" / "run-client.sh").read_text(encoding="utf-8")
@@ -195,6 +201,7 @@ def test_tag_release_builds_only_signed_installers():
     assert "release-assets/*.dmg" in workflow
     assert "ios:" in workflow
     assert "flutter build ios --release --no-codesign" in workflow
+    assert "set-ios-deployment-target.sh ios" in workflow
     assert "release-assets/*.ipa" in workflow
     assert "flutter build appbundle" not in workflow
     assert "portable.zip" not in workflow

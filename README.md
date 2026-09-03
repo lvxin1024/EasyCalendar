@@ -330,7 +330,7 @@ Flutter 3.44.9 是开发环境依赖，不是普通用户的安装依赖。`setu
 | 构建目标 | 额外开发依赖 |
 |---|---|
 | Android | JDK 17，以及 Flutter 3.44.9 所需的 Android SDK/NDK |
-| iOS | macOS、Xcode 和 Xcode Command Line Tools |
+| iOS | macOS、Xcode 和 Xcode Command Line Tools（最低部署版本 iOS 14.0） |
 | macOS | macOS、Xcode 和 Xcode Command Line Tools |
 | Windows | Windows、Visual Studio C++ Desktop 工具链和 ATL/MFC 组件 |
 

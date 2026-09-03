@@ -384,6 +384,7 @@ jobs:
             --platforms ios \
             "$generated_root/easy_calendar"
           cp -R "$generated_root/easy_calendar/ios" ios
+          bash ../scripts/set-ios-deployment-target.sh ios
       - run: flutter pub get
         working-directory: client
       - name: Build unsigned iOS IPA
