@@ -45,6 +45,33 @@ void main() {
     expect(pending.map((change) => change.entityType), ['collection', 'item']);
   });
 
+  test(
+    'queues a subscription collection before its dependent subscription',
+    () async {
+      final created = await repository.createSubscription(
+        title: 'Team calendar',
+        url: 'https://calendar.example.com/team.ics',
+        refreshIntervalMinutes: 180,
+        tags: const [],
+      );
+
+      final pending = await repository.listPendingChanges(now: DateTime.now());
+      final collectionIndex = pending.indexWhere(
+        (change) =>
+            change.entityType == 'collection' &&
+            change.entityId == created.collectionId,
+      );
+      final subscriptionIndex = pending.indexWhere(
+        (change) =>
+            change.entityType == 'subscription' &&
+            change.entityId == created.id,
+      );
+
+      expect(collectionIndex, greaterThanOrEqualTo(0));
+      expect(subscriptionIndex, greaterThan(collectionIndex));
+    },
+  );
+
   test('tag migration replaces and deduplicates tags atomically', () async {
     await repository.createItem(
       const ItemDraft(
@@ -276,6 +303,35 @@ void main() {
       settingsChange.changeId,
     ]);
     expect(await repository.loadPermanentFailureMessage(), isNotNull);
+  });
+
+  test('retries generic constraint failures during manual sync', () async {
+    final created = await repository.createItem(
+      const ItemDraft(
+        type: ItemType.task,
+        title: 'Retryable task',
+        timezone: 'Asia/Shanghai',
+      ),
+    );
+    final itemChange = (await repository.listPendingChanges(
+      now: DateTime.now(),
+    )).singleWhere((change) => change.entityId == created.id);
+
+    await repository.recordPermanentFailures([
+      SyncRejection(
+        changeId: itemChange.changeId,
+        code: 'constraint_violation',
+        message: 'Change could not be applied',
+      ),
+    ]);
+
+    expect(await repository.resetRetryablePermanentFailures(), 1);
+    expect(
+      (await repository.listPendingChanges(
+        now: DateTime.now(),
+      )).map((change) => change.changeId),
+      contains(itemChange.changeId),
+    );
   });
 
   test('a winning unsent local edit is not overwritten by pull', () async {

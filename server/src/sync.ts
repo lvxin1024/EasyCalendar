@@ -99,6 +99,13 @@ const entityTypes = new Set<EntityType>([
   "cycle_settings",
 ]);
 const operations = new Set<Operation>(["create", "update", "delete"]);
+const entityPriority: Record<EntityType, number> = {
+  collection: 0,
+  subscription: 1,
+  item: 2,
+  cycle_period: 3,
+  cycle_settings: 4,
+};
 
 function syncLimit(c: Context<AppEnv>): number {
   const configured = Number.parseInt(c.env.SYNC_PULL_LIMIT || "200", 10);
@@ -191,6 +198,32 @@ function validatePushBody(value: unknown, maximum: number): PushBody {
     throw new Error("change_id values must be unique within a batch");
   }
   return { device_id: value.device_id, changes } as PushBody;
+}
+
+function orderChangesForApply(changes: SyncChange[]): SyncChange[] {
+  return changes
+    .map((change, index) => ({ change, index }))
+    .sort(
+      (left, right) =>
+        entityPriority[left.change.entity_type] -
+          entityPriority[right.change.entity_type] ||
+        Date.parse(left.change.updated_at) -
+          Date.parse(right.change.updated_at) ||
+        left.change.change_id.localeCompare(right.change.change_id) ||
+        left.index - right.index,
+    )
+    .map(({ change }) => change);
+}
+
+function applyFailureMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message.includes("FOREIGN KEY constraint failed")) {
+    return "Referenced collection does not exist";
+  }
+  if (message.includes("UNIQUE constraint failed: subscriptions.collection_id")) {
+    return "A subscription already exists for this collection";
+  }
+  return "Change could not be applied";
 }
 
 function canonicalJson(value: unknown): string {
@@ -580,7 +613,7 @@ export async function pushChanges(c: Context<AppEnv>) {
   const accepted: string[] = [];
   const rejected: Rejection[] = [];
   const conflicts: ConflictSummary[] = [];
-  for (const change of body.changes) {
+  for (const change of orderChangesForApply(body.changes)) {
     const changeHash = await hashJson(change);
     const prior = await c.env.DB.prepare(
       "SELECT request_hash, result FROM applied_changes WHERE change_id = ?",
@@ -614,9 +647,10 @@ export async function pushChanges(c: Context<AppEnv>) {
         message:
           error instanceof Error && error.message.startsWith("Item payload")
             ? error.message
-            : error instanceof Error && error.message.startsWith("Subscription payload")
+            : error instanceof Error &&
+                error.message.startsWith("Subscription payload")
               ? error.message
-              : "Change could not be applied",
+              : applyFailureMessage(error),
       });
     }
   }

@@ -112,6 +112,34 @@ function cyclePeriodChange(changeId: string, version = 1) {
   };
 }
 
+function subscriptionChange(
+  changeId: string,
+  collectionId = "collection_local",
+) {
+  return {
+    change_id: changeId,
+    device_id: "macbook-01",
+    entity_type: "subscription",
+    entity_id: "subscription_01",
+    operation: "create",
+    version: 1,
+    updated_at: timestamp,
+    payload: {
+      id: "subscription_01",
+      collection_id: collectionId,
+      title: "Team calendar",
+      url: "https://calendar.example.com/team.ics",
+      enabled: true,
+      refresh_interval_minutes: 180,
+      metadata: { tags: [] },
+      created_at: timestamp,
+      updated_at: timestamp,
+      deleted_at: null,
+      version: 1,
+    },
+  };
+}
+
 async function push(
   idempotencyKey: string,
   changes: unknown[],
@@ -204,6 +232,43 @@ afterAll(async () => {
 });
 
 describe("sync push", () => {
+  it("orders dependent entities before applying a batch", async () => {
+    const response = await push("push_subscription", [
+      subscriptionChange("chg_subscription"),
+      collectionChange("chg_collection"),
+    ]);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      accepted: ["chg_collection", "chg_subscription"],
+      rejected: [],
+    });
+    expect(
+      await database
+        .prepare("SELECT collection_id FROM subscriptions WHERE id = ?")
+        .bind("subscription_01")
+        .first(),
+    ).toMatchObject({ collection_id: "collection_local" });
+  });
+
+  it("reports a useful message for missing foreign-key dependencies", async () => {
+    const response = await push("push_missing_collection", [
+      subscriptionChange("chg_missing_collection", "collection_missing"),
+    ]);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      accepted: [],
+      rejected: [
+        {
+          change_id: "chg_missing_collection",
+          code: "constraint_violation",
+          message: "Referenced collection does not exist",
+        },
+      ],
+    });
+  });
+
   it("stores cycle period aggregates and settings as sync entities", async () => {
     const response = await push("push_cycle", [
       cyclePeriodChange("chg_cycle"),

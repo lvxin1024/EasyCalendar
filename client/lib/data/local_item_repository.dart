@@ -1728,7 +1728,12 @@ class LocalItemRepository
           'sent_at IS NULL AND permanent_failure = 0 '
           'AND (next_attempt_at IS NULL OR next_attempt_at <= ?)',
       whereArgs: [_timeText(now)],
-      orderBy: 'created_at, change_id',
+      orderBy:
+          'CASE entity_type '
+          "WHEN 'collection' THEN 0 "
+          "WHEN 'subscription' THEN 1 "
+          "WHEN 'item' THEN 2 "
+          'ELSE 3 END, created_at, change_id',
       limit: limit,
     );
     return rows
@@ -1845,9 +1850,13 @@ class LocalItemRepository
       'permanent_failure': 0,
     },
     where:
-        'sent_at IS NULL AND permanent_failure = 1 '
-        "AND entity_type IN ('cycle_period', 'cycle_settings') "
-        "AND last_error LIKE '%entity_type is invalid%'",
+        'sent_at IS NULL AND permanent_failure = 1 AND ('
+        "(entity_type IN ('cycle_period', 'cycle_settings') "
+        "AND last_error LIKE '%entity_type is invalid%') OR "
+        'last_error IN ('
+        "'constraint_violation: Change could not be applied', "
+        "'constraint_violation: Referenced collection does not exist'"
+        '))',
   );
 
   @override
