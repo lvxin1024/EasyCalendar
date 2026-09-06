@@ -15,13 +15,14 @@
 | 8a | 已完成 | secure group profile store、创建/加入/导出流程 |
 | 8b | 已完成 | 接入 endpoint ticket、selector、首次启动和设置页 UI |
 | 9 | 已完成 | Android 前台 dataSync service；桌面退出语义和 iOS 限制文案 |
-| 10 | 进行中 | native 多平台构建/打包、真实端到端测试、运维和最终质量门禁 |
+| 10 | 进行中 | Android/Windows/macOS native 构建与打包已接入；待 hosted CI 首次验证、真实端到端测试、运维和最终质量门禁 |
 
 当前代码已经在 `main.dart` 中通过 `SyncTransportSelector` 接入 Iroh group peer，
 Cloudflare HTTP transport 仍然保留。`IrohSyncGroupPeer` 负责认证、push/pull、
-cursor 和通知；Rust crate 提供 endpoint/QUIC frame 的 FFI 边界。发布包仍需要
-各平台构建并打包 `easycalendar_p2p` 动态库，当前不能把仓库源码状态描述成已经
-可用的公网同步服务。
+cursor 和通知；Rust crate 提供 endpoint/QUIC frame 的 FFI 边界。发布与 PR 工作流
+已经接入 Android 四 ABI、Windows DLL 和 macOS 通用 dylib 的构建与产物断言；iOS
+没有固定 Runner 和静态链接阶段，暂不宣称支持群组同步。首次 hosted CI 构建和真实
+多设备端到端验证完成前，当前实现仍不能描述成已承诺 SLA 的公网同步服务。
 
 ## 1. 目标和非目标
 
@@ -301,7 +302,7 @@ Iroh relay 默认使用公共尽力而为模式；relay 配置必须可替换，
 
 以下任一条件不满足时，不进入下一阶段：
 
-- Iroh FFI 无法在 Android 和 iOS 构建，停止在 Rust bridge 阶段并评估替代绑定。
+- Iroh FFI 无法在 Android、Windows 或 macOS 构建，停止在 Rust bridge 阶段并评估替代绑定；iOS 静态链接另列后续里程碑。
 - 主节点重启后无法恢复 sequence、幂等和 entity head，停止 authority 阶段。
 - 端到端测试出现 outbox 过早删除或 cursor 跳跃，停止 transport 阶段。
 - 公共 relay 的服务条款、费用或默认行为不清楚，不在文案中承诺生产可靠性。
@@ -309,6 +310,6 @@ Iroh relay 默认使用公共尽力而为模式；relay 配置必须可替换，
 
 ## 11. 当前实施顺序
 
-第 1-9 项及第 8a、8b 已完成；第 10 项剩余 native 多平台构建/打包、真实公网
-端到端验证和发布文案。Iroh 原生依赖保持在 bridge/transport 边界，不进入 Dart
-业务层。未完成第 10 项前，Cloudflare 仍是稳定的公网同步方案。
+第 1-9 项及第 8a、8b 已完成；第 10 项剩余 hosted CI 首次构建、真实公网端到端
+验证和最终发布文案。Iroh 原生依赖保持在 bridge/transport 边界，不进入 Dart 业务
+层。未完成第 10 项前，Cloudflare 仍是稳定的公网同步方案。

@@ -174,7 +174,7 @@ jobs:
         working-directory: client
       - name: Verify Windows artifact
         shell: pwsh
-        run: >-
+        run: |
           if (-not (Test-Path
           "client\build\windows\x64\runner\Release\EasyCalendar.exe"))
           { throw "EasyCalendar.exe was not built" }

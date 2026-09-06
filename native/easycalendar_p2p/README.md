@@ -45,9 +45,13 @@ serialized configuration object.
 
 ## Build status
 
-The crate is not yet included in every published Flutter platform artifact.
-Before describing group sync as publicly available, build and package the
-library for each target and run:
+The release and PR workflows build this crate for Android (four ABIs), Windows,
+and a universal macOS dylib. The generated libraries are copied into the
+platform artifact and checked before packaging. iOS is intentionally excluded
+for now because the repository has no fixed Runner project or static-library
+link phase; the Dart UI reports group sync as unavailable on iOS.
+
+The native checks are:
 
 ```text
 cargo fmt --check
@@ -55,4 +59,6 @@ cargo test
 ```
 
 The Dart bridge falls back to an explicit unavailable error when the dynamic
-library is absent; existing local and Cloudflare modes remain usable.
+library is absent; existing local and Cloudflare modes remain usable. A hosted
+CI run and a real multi-device test are still required before changing the
+experimental status or promising public-relay availability.
