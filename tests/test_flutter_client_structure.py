@@ -142,7 +142,7 @@ def test_t24_conflict_heads_and_recovery_history_are_persisted():
         encoding="utf-8"
     )
 
-    assert "static const version = 7;" in schema
+    assert "static const version = 9;" in schema
     assert "static const schemaVersion = LocalDatabaseSchema.version;" in repository
     assert "version: schemaVersion" in repository
     assert "CREATE TABLE sync_entity_heads" in schema
