@@ -14,6 +14,7 @@ import '../../data/calendar_connection_code.dart';
 import '../../data/service_probe_client.dart';
 import '../../device/device_identity.dart';
 import '../../domain/item.dart';
+import '../../domain/sync_mode.dart';
 import '../../notification/notification_adapter.dart';
 import '../../sync/sync_models.dart';
 import '../../utils/tag_colors.dart';
@@ -22,6 +23,7 @@ import '../recycle_bin/recycle_bin_page.dart';
 import '../cycle/cycle_settings_section.dart';
 import '../cycle/cycle_summary_page.dart';
 import '../transfer/transfer_page.dart';
+import '../sync/sync_group_setup_panel.dart';
 import 'about_page.dart';
 
 part 'settings_provider_dialog.dart';
@@ -75,6 +77,7 @@ class _SettingsPageState extends State<SettingsPage> {
   late final TextEditingController _collectionNameController;
   late final TextEditingController _tokenController;
   late bool _syncEnabled;
+  late SyncMode _syncMode;
   late bool _notificationsEnabled;
   late double _windowOpacity;
   late bool _windowAlwaysOnTop;
@@ -114,6 +117,9 @@ class _SettingsPageState extends State<SettingsPage> {
     );
     _tokenController = TextEditingController();
     _syncEnabled = preferences.syncEnabled;
+    _syncMode = preferences.syncMode == SyncMode.group
+        ? SyncMode.group
+        : SyncMode.cloud;
     _notificationsEnabled = preferences.notificationsEnabled;
     _windowOpacity = preferences.windowOpacity;
     _windowAlwaysOnTop = preferences.windowAlwaysOnTop;
@@ -378,6 +384,32 @@ class _SettingsPageState extends State<SettingsPage> {
                 onChanged: (value) => setState(() => _syncEnabled = value),
               ),
               if (_syncEnabled) ...[
+                SegmentedButton<SyncMode>(
+                  showSelectedIcon: false,
+                  segments: const [
+                    ButtonSegment(
+                      value: SyncMode.cloud,
+                      icon: Icon(Icons.cloud_sync_outlined),
+                      label: Text('Cloudflare 服务'),
+                    ),
+                    ButtonSegment(
+                      value: SyncMode.group,
+                      icon: Icon(Icons.hub_outlined),
+                      label: Text('设备群组'),
+                    ),
+                  ],
+                  selected: {_syncMode},
+                  onSelectionChanged: (values) => setState(
+                    () => _syncMode = values.first,
+                  ),
+                ),
+                if (_syncMode == SyncMode.group)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: SyncGroupSetupPanel(
+                      controller: widget.controller,
+                    ),
+                  ),
                 _InfoRow(icon: _syncIcon, label: '同步状态', value: _syncStatus),
                 const SizedBox(height: 8),
                 Wrap(
@@ -720,6 +752,15 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _save() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
+    if (_syncEnabled && _syncMode == SyncMode.group &&
+        await widget.controller.loadSyncGroupProfile() == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('请先创建或加入同步组。')),
+        );
+      }
+      return;
+    }
     try {
       await widget.controller.savePreferences(
         ClientPreferences(
@@ -736,6 +777,7 @@ class _SettingsPageState extends State<SettingsPage> {
           defaultCollectionId: _collectionIdController.text.trim(),
           defaultCollectionName: _collectionNameController.text.trim(),
           syncEnabled: _syncEnabled,
+          syncMode: _syncMode,
           notificationsEnabled: _notificationsEnabled,
           windowOpacity: _windowOpacity,
           windowAlwaysOnTop: _windowAlwaysOnTop,
@@ -780,6 +822,9 @@ class _SettingsPageState extends State<SettingsPage> {
       _collectionIdController.text = preferences.defaultCollectionId;
       _collectionNameController.text = preferences.defaultCollectionName;
       _syncEnabled = preferences.syncEnabled;
+      _syncMode = preferences.syncMode == SyncMode.group
+          ? SyncMode.group
+          : SyncMode.cloud;
       _notificationsEnabled = preferences.notificationsEnabled;
       _windowOpacity = preferences.windowOpacity;
       _windowAlwaysOnTop = preferences.windowAlwaysOnTop;

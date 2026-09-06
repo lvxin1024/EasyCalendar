@@ -189,8 +189,14 @@ class SyncGroupSetupController {
       groupId: provisional.groupId,
       endpointSecret: endpointSecret,
     );
-    final actualEndpointId = await bridge.endpointId();
-    final endpointTicket = await bridge.exportTicket();
+    late final String actualEndpointId;
+    late final String endpointTicket;
+    try {
+      actualEndpointId = await bridge.endpointId();
+      endpointTicket = await bridge.exportTicket();
+    } finally {
+      await bridge.close();
+    }
     final profile = SyncGroupProfile.fromSecret(
       groupSecret: provisional.groupSecret,
       role: SyncGroupRole.primary,
@@ -251,7 +257,12 @@ class SyncGroupSetupController {
       groupId: advertised.groupId,
       endpointSecret: endpointSecret,
     );
-    final actualEndpointId = await bridge.endpointId();
+    late final String actualEndpointId;
+    try {
+      actualEndpointId = await bridge.endpointId();
+    } finally {
+      await bridge.close();
+    }
     await endpointIdentityStore.write(actualEndpointId);
     return join(code: code, localEndpointId: actualEndpointId);
   }
