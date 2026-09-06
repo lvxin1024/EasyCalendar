@@ -34,6 +34,7 @@ class SyncCoordinator extends ChangeNotifier {
 
   SyncSnapshot _snapshot = const SyncSnapshot.disabled();
   StreamSubscription<bool>? _connectivitySubscription;
+  StreamSubscription<SyncTransportEvent>? _transportEventsSubscription;
   Timer? _retryTimer;
   Timer? _periodicSyncTimer;
   Future<void>? _activeSync;
@@ -64,6 +65,12 @@ class SyncCoordinator extends ChangeNotifier {
       _tokenConfigured = false;
     }
     configure(enabled: enabled, serverUrl: serverUrl, mode: mode);
+    if (transport case final SyncTransportLifecycle lifecycle) {
+      _transportEventsSubscription ??= lifecycle.events.listen(
+        _handleTransportEvent,
+      );
+      await lifecycle.start();
+    }
     _connectivitySubscription ??= connectivityMonitor.onlineChanges.listen((
       online,
     ) {
@@ -85,7 +92,7 @@ class SyncCoordinator extends ChangeNotifier {
     _periodicSyncTimer?.cancel();
     if (!enabled) {
       _setSnapshot(const SyncSnapshot.disabled());
-    } else if (!_tokenConfigured) {
+    } else if (_mode != SyncMode.group && !_tokenConfigured) {
       _setSnapshot(const SyncSnapshot(phase: SyncPhase.needsAuthentication));
     } else if (_snapshot.phase == SyncPhase.disabled ||
         _snapshot.phase == SyncPhase.needsAuthentication) {
@@ -134,9 +141,11 @@ class SyncCoordinator extends ChangeNotifier {
   }
 
   Future<void> _runSync({required bool retryPermanentFailures}) async {
-    final token = await tokenStore.read();
-    final serverUrl = _serverUrl;
-    if (token == null || token.isEmpty) {
+    final token = _mode == SyncMode.group ? '' : await tokenStore.read();
+    final serverUrl = _mode == SyncMode.group
+        ? Uri.parse('group://primary')
+        : _serverUrl;
+    if (_mode != SyncMode.group && (token == null || token.isEmpty)) {
       _tokenConfigured = false;
       _setSnapshot(const SyncSnapshot(phase: SyncPhase.needsAuthentication));
       return;
@@ -147,6 +156,8 @@ class SyncCoordinator extends ChangeNotifier {
       );
       return;
     }
+    final endpoint = serverUrl;
+    final authToken = token ?? '';
 
     _retryTimer?.cancel();
     if (retryPermanentFailures) {
@@ -173,8 +184,8 @@ class SyncCoordinator extends ChangeNotifier {
             .toList(growable: false);
         attemptedChangeIds = batch.map((change) => change.changeId).toList();
         final result = await transport.push(
-          serverUrl: serverUrl,
-          token: token,
+          serverUrl: endpoint,
+          token: authToken,
           deviceId: batchDeviceId,
           idempotencyKey: 'push_${_uuid.v4()}',
           changes: batch,
@@ -191,8 +202,8 @@ class SyncCoordinator extends ChangeNotifier {
       var cursor = await repository.loadRemoteCursor();
       while (true) {
         final page = await transport.pull(
-          serverUrl: serverUrl,
-          token: token,
+          serverUrl: endpoint,
+          token: authToken,
           cursor: cursor,
         );
         await repository.applyRemoteBatch(page.changes, page.cursor);
@@ -284,6 +295,29 @@ class SyncCoordinator extends ChangeNotifier {
     await synchronize();
   }
 
+  void _handleTransportEvent(SyncTransportEvent event) {
+    if (!_enabled) return;
+    switch (event.kind) {
+      case SyncTransportEventKind.changesAvailable:
+        unawaited(synchronize());
+        return;
+      case SyncTransportEventKind.authenticationFailed:
+        _setSnapshot(
+          SyncSnapshot(
+            phase: SyncPhase.needsAuthentication,
+            lastSyncedAt: _snapshot.lastSyncedAt,
+            message: event.message,
+          ),
+        );
+        return;
+      case SyncTransportEventKind.connected:
+      case SyncTransportEventKind.disconnected:
+      case SyncTransportEventKind.primaryChanged:
+      case SyncTransportEventKind.error:
+        break;
+    }
+  }
+
   Future<List<SyncConflictRecord>> loadConflictHistory({int limit = 100}) =>
       repository.listSyncConflicts(limit: limit);
 
@@ -297,6 +331,10 @@ class SyncCoordinator extends ChangeNotifier {
     _retryTimer?.cancel();
     _periodicSyncTimer?.cancel();
     unawaited(_connectivitySubscription?.cancel());
+    unawaited(_transportEventsSubscription?.cancel());
+    if (transport case final SyncTransportLifecycle lifecycle) {
+      unawaited(lifecycle.close());
+    }
     super.dispose();
   }
 }

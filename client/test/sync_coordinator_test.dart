@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:easy_calendar/domain/sync_mode.dart';
 import 'package:easy_calendar/sync/connectivity_monitor.dart';
 import 'package:easy_calendar/sync/sync_coordinator.dart';
 import 'package:easy_calendar/sync/sync_models.dart';
@@ -41,6 +42,7 @@ void main() {
   tearDown(() {
     coordinator.dispose();
     connectivity.close();
+    transport.dispose();
   });
 
   test('pushes the outbox, applies pull, and advances the cursor', () async {
@@ -209,6 +211,26 @@ void main() {
     expect(localCoordinator.tokenConfigured, isFalse);
     localCoordinator.dispose();
   });
+
+  test('group change notification pulls without a cloud token', () async {
+    repository.pending.clear();
+    tokenStore.value = null;
+    coordinator.configure(enabled: true, serverUrl: '', mode: SyncMode.group);
+    transport.pullPages.add(
+      const PullSyncPage(cursor: 'cur_0', hasMore: false, changes: []),
+    );
+
+    transport.addEvent(
+      const SyncTransportEvent(
+        kind: SyncTransportEventKind.changesAvailable,
+        cursor: 'cur_1',
+      ),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+
+    expect(transport.pullCalls, 1);
+    expect(coordinator.snapshot.phase, SyncPhase.idle);
+  });
 }
 
 PendingSyncChange _pendingChange({
@@ -338,14 +360,28 @@ class _MemorySyncRepository implements SyncRepository {
       const [];
 }
 
-class _FakeTransport implements SyncTransport {
+class _FakeTransport implements SyncTransport, SyncTransportLifecycle {
   PushSyncResult pushResult = const PushSyncResult(accepted: [], rejected: []);
+  final _events = StreamController<SyncTransportEvent>.broadcast();
   final List<PullSyncPage> pullPages = [];
   SyncTransportException? pushError;
   int pushCalls = 0;
   int pullCalls = 0;
   bool acceptAll = false;
   final List<String> pushedDeviceIds = [];
+
+  @override
+  Stream<SyncTransportEvent> get events => _events.stream;
+
+  @override
+  Future<void> start() async {}
+
+  @override
+  Future<void> close() async {}
+
+  void addEvent(SyncTransportEvent event) => _events.add(event);
+
+  void dispose() => _events.close();
 
   @override
   Future<PushSyncResult> push({
