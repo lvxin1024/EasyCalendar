@@ -1,4 +1,5 @@
 import 'package:easy_calendar/domain/item.dart';
+import 'package:easy_calendar/domain/cycle_prediction.dart';
 import 'package:easy_calendar/domain/recurrence.dart';
 import 'package:easy_calendar/widget/widget_snapshot_writer.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -87,6 +88,45 @@ void main() {
       'outside',
     ]);
     expect(snapshot['quotes'], ['keep going']);
+  });
+
+  test('snapshot serializes recorded and predicted cycle markers by date', () {
+    final snapshot = WidgetSnapshotBuilder.build(
+      const [],
+      timezone: 'Asia/Shanghai',
+      cycleStates: {
+        DateTime(2026, 8, 21): CycleDayState(
+          kind: CycleDayKind.recorded,
+          isStart: true,
+          isEnd: false,
+          isCenter: false,
+        ),
+        DateTime(2026, 8, 20): CycleDayState(
+          kind: CycleDayKind.predicted,
+          isStart: true,
+          isEnd: false,
+          isCenter: true,
+        ),
+      },
+      now: tz.TZDateTime(tz.local, 2026, 8, 19, 12),
+    );
+
+    expect(snapshot['cycle_markers'], [
+      {
+        'date': '2026-08-20',
+        'kind': 'predicted',
+        'is_start': true,
+        'is_end': false,
+        'is_center': true,
+      },
+      {
+        'date': '2026-08-21',
+        'kind': 'recorded',
+        'is_start': true,
+        'is_end': false,
+        'is_center': false,
+      },
+    ]);
   });
 }
 

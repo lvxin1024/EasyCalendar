@@ -12,6 +12,7 @@ import 'application/item_controller.dart';
 import 'config/app_config.dart';
 import 'data/local_cycle_repository.dart';
 import 'data/local_item_repository.dart';
+import 'domain/cycle_record.dart';
 import 'notification/platform_notification_adapter.dart';
 import 'notification/notification_service.dart';
 import 'platform/application_identity.dart';
@@ -28,6 +29,7 @@ import 'sync/sync_group_store.dart';
 import 'sync/sync_platform_lifecycle.dart';
 import 'sync/sync_transport_selector.dart';
 import 'sync/token_store.dart';
+import 'utils/configured_time.dart';
 import 'widget/widget_deep_link_controller.dart';
 import 'widget/widget_snapshot_writer.dart';
 import 'window/desktop_window_controller.dart';
@@ -133,12 +135,25 @@ Future<void> main() async {
     config: config,
     syncCoordinator: syncCoordinator,
     syncGroupSetup: syncGroupSetup,
+    widgetCycleStatesProvider: () {
+      final today = cycleDate(configuredNow());
+      return cycleController.statesBetween(
+        today.subtract(const Duration(days: 14)),
+        today.add(const Duration(days: 21)),
+      );
+    },
     widgetSnapshotWriter: const PlatformWidgetSnapshotWriter(),
     desktopWindowController: desktopWindowController,
     notificationService: notificationService,
   );
+  cycleController.addListener(() {
+    if (cycleController.initialized) {
+      unawaited(controller.refreshWidgetSnapshot().catchError((_) {}));
+    }
+  });
   await controller.initialize();
   await cycleController.initialize();
+  await controller.refreshWidgetSnapshot();
   await notificationService.initialize();
   if (controller.preferences.notificationsEnabled) {
     unawaited(notificationService.reconcileAll(controller.items));

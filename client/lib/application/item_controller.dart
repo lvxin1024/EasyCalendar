@@ -17,6 +17,7 @@ import '../data/subscription_fetch_client.dart';
 import '../data/transfer_models.dart';
 import '../device/device_identity.dart';
 import '../domain/item.dart';
+import '../domain/cycle_prediction.dart';
 import '../domain/subscription.dart';
 import '../notification/notification_service.dart';
 import '../sync/sync_coordinator.dart';
@@ -37,6 +38,7 @@ class ItemController extends ChangeNotifier {
     required this.config,
     this.syncCoordinator,
     this.widgetSnapshotWriter,
+    this.widgetCycleStatesProvider,
     this.desktopWindowController,
     this.notificationService,
     AiApiKeyStore? aiApiKeyStore,
@@ -74,6 +76,7 @@ class ItemController extends ChangeNotifier {
   final AppConfig config;
   final SyncCoordinator? syncCoordinator;
   final WidgetSnapshotWriter? widgetSnapshotWriter;
+  final Map<DateTime, CycleDayState> Function()? widgetCycleStatesProvider;
   final DesktopWindowController? desktopWindowController;
   final NotificationService? notificationService;
   late final AiProviderService _aiProviderService;
@@ -108,6 +111,8 @@ class ItemController extends ChangeNotifier {
   String get activeTimezone => _resolveTimezone(preferences);
   SyncGroupSetupController get syncGroupSetup => _syncGroupSetup;
 
+  Future<void> refreshWidgetSnapshot() => _writeWidgetSnapshot();
+
   Future<SyncGroupProfile?> loadSyncGroupProfile() => _syncGroupSetup.load();
 
   Future<String?> exportSyncGroupCode() => _syncGroupSetup.exportCode();
@@ -115,9 +120,7 @@ class ItemController extends ChangeNotifier {
   Future<SyncGroupProfile> joinSyncGroup(String code) => _syncGroupSetup
       .joinAutomatically(code: code, fallbackDeviceId: preferences.deviceId);
 
-  Future<SyncGroupProfile> createSyncGroupAutomatically(
-    P2pBridge bridge,
-  ) =>
+  Future<SyncGroupProfile> createSyncGroupAutomatically(P2pBridge bridge) =>
       _syncGroupSetup.createPrimaryAutomatically(
         bridge: bridge,
         fallbackDeviceId: preferences.deviceId,
@@ -126,12 +129,11 @@ class ItemController extends ChangeNotifier {
   Future<SyncGroupProfile> joinSyncGroupAutomatically(
     String code,
     P2pBridge bridge,
-  ) =>
-      _syncGroupSetup.joinAutomaticallyWithBridge(
-        code: code,
-        fallbackDeviceId: preferences.deviceId,
-        bridge: bridge,
-      );
+  ) => _syncGroupSetup.joinAutomaticallyWithBridge(
+    code: code,
+    fallbackDeviceId: preferences.deviceId,
+    bridge: bridge,
+  );
 
   Future<void> clearSyncGroup() => _syncGroupSetup.clear();
 
@@ -577,11 +579,7 @@ class ItemController extends ChangeNotifier {
       _preferences = value;
       await _applyRuntimeSettings(value);
       try {
-        await widgetSnapshotWriter?.write(
-          items: _items,
-          timezone: activeTimezone,
-          quotes: value.widgetQuotes,
-        );
+        await _writeWidgetSnapshot();
       } catch (_) {
         // Widget refresh is derived state and must not block settings changes.
       }
@@ -664,11 +662,7 @@ class ItemController extends ChangeNotifier {
     _items = await repository.listItems();
     _collections = await repository.listCollections();
     try {
-      await widgetSnapshotWriter?.write(
-        items: _items,
-        timezone: activeTimezone,
-        quotes: preferences.widgetQuotes,
-      );
+      await _writeWidgetSnapshot();
     } catch (_) {
       // Widget refresh is derived state and must not block local CRUD.
     }
@@ -676,6 +670,15 @@ class ItemController extends ChangeNotifier {
       unawaited(notificationService?.reconcileAll(_items));
     }
     if (notify) notifyListeners();
+  }
+
+  Future<void> _writeWidgetSnapshot() async {
+    await widgetSnapshotWriter?.write(
+      items: _items,
+      timezone: activeTimezone,
+      quotes: preferences.widgetQuotes,
+      cycleStates: widgetCycleStatesProvider?.call() ?? const {},
+    );
   }
 
   Future<void> saveSyncToken(String token) async {
