@@ -92,8 +92,8 @@ void main() {
     final events = <SyncTransportEvent>[];
     final subscription = phone.events.listen(events.add);
 
-    await phone.start();
     await primary.start();
+    await phone.start();
     final change = _change();
     final result = await primary.push(
       serverUrl: Uri.parse('group://primary'),
@@ -133,13 +133,76 @@ void main() {
   });
 
   test(
+    'first authenticated connection registers a new member idempotently',
+    () async {
+      final primary = GroupSyncTransport(
+        peer: AuthoritySyncGroupPeer(authority: authority, notifications: hub),
+        profile: primaryProfile,
+        deviceId: 'primary-device',
+        endpointId: 'endpoint-primary',
+        displayName: '主节点',
+      );
+      final tablet = GroupSyncTransport(
+        peer: AuthoritySyncGroupPeer(authority: authority, notifications: hub),
+        profile: replicaProfile,
+        deviceId: 'tablet-device',
+        endpointId: 'endpoint-tablet',
+        displayName: '平板',
+      );
+
+      await primary.start();
+      await tablet.start();
+      final member = await store.findMember(
+        deviceId: 'tablet-device',
+        endpointId: 'endpoint-tablet',
+      );
+      expect(member?.displayName, '平板');
+      expect(member?.status, 'active');
+
+      await tablet.close();
+      await primary.close();
+    },
+  );
+
+  test(
+    'revoked endpoint cannot re-register with the same group code',
+    () async {
+      final primary = GroupSyncTransport(
+        peer: AuthoritySyncGroupPeer(authority: authority, notifications: hub),
+        profile: primaryProfile,
+        deviceId: 'primary-device',
+        endpointId: 'endpoint-primary',
+      );
+      await primary.start();
+      await store.upsertMember(
+        SyncAuthorityMember(
+          endpointId: 'endpoint-revoked',
+          deviceId: 'revoked-device',
+          displayName: '已撤销',
+          status: 'revoked',
+          joinedAt: DateTime.utc(2026, 9, 6),
+        ),
+      );
+      final revoked = GroupSyncTransport(
+        peer: AuthoritySyncGroupPeer(authority: authority, notifications: hub),
+        profile: replicaProfile,
+        deviceId: 'revoked-device',
+        endpointId: 'endpoint-revoked',
+      );
+
+      expect(revoked.start, throwsA(isA<SyncTransportException>()));
+      await primary.close();
+    },
+  );
+
+  test(
     'group transport rejects calls before start and emits disconnect',
     () async {
       final transport = GroupSyncTransport(
         peer: AuthoritySyncGroupPeer(authority: authority, notifications: hub),
-        profile: replicaProfile,
-        deviceId: 'phone-device',
-        endpointId: 'endpoint-phone',
+        profile: primaryProfile,
+        deviceId: 'primary-device',
+        endpointId: 'endpoint-primary',
       );
       final events = <SyncTransportEvent>[];
       final subscription = transport.events.listen(events.add);

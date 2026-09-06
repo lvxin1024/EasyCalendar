@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'sync_authority.dart';
 import 'sync_authority_engine.dart';
 import 'sync_group.dart';
 import 'sync_models.dart';
@@ -12,6 +13,7 @@ abstract interface class SyncGroupPeer {
     required SyncGroupProfile profile,
     required String deviceId,
     required String endpointId,
+    required String displayName,
   });
 
   Future<PushSyncResult> push({
@@ -37,12 +39,14 @@ class GroupSyncTransport implements SyncTransport, SyncTransportLifecycle {
     required this.profile,
     required this.deviceId,
     required this.endpointId,
-  });
+    String? displayName,
+  }) : displayName = displayName ?? deviceId;
 
   final SyncGroupPeer _peer;
   final SyncGroupProfile profile;
   final String deviceId;
   final String endpointId;
+  final String displayName;
   bool _started = false;
 
   @override
@@ -55,6 +59,7 @@ class GroupSyncTransport implements SyncTransport, SyncTransportLifecycle {
       profile: profile,
       deviceId: deviceId,
       endpointId: endpointId,
+      displayName: displayName,
     );
     _started = true;
   }
@@ -147,6 +152,7 @@ class AuthoritySyncGroupPeer implements SyncGroupPeer {
     required SyncGroupProfile profile,
     required String deviceId,
     required String endpointId,
+    required String displayName,
   }) async {
     if (profile.protocolVersion != 1) {
       throw const SyncTransportException(
@@ -154,21 +160,37 @@ class AuthoritySyncGroupPeer implements SyncGroupPeer {
         permanent: true,
       );
     }
-    final member = await authority.store.findMember(
-      deviceId: deviceId,
-      endpointId: endpointId,
-    );
-    if (member == null) {
+    try {
+      if (profile.role == SyncGroupRole.primary) {
+        if (endpointId != profile.primaryEndpointId ||
+            deviceId != authority.primaryDeviceId) {
+          throw const SyncTransportException(
+            'Primary endpoint identity does not match the sync group.',
+            permanent: true,
+          );
+        }
+      }
+      if (profile.role == SyncGroupRole.primary) {
+        await authority.establishGroup(profile.groupId);
+      } else {
+        await authority.verifyGroup(profile.groupId);
+      }
+      await authority.registerMember(
+        groupId: profile.groupId,
+        deviceId: deviceId,
+        endpointId: endpointId,
+        displayName: displayName,
+      );
+    } on SyncAuthorityException catch (error) {
       _notifications.publish(
-        const SyncTransportEvent(
-          kind: SyncTransportEventKind.authenticationFailed,
-          message: 'Device is not an active sync group member.',
+        SyncTransportEvent(
+          kind: error.code == 'member_revoked'
+              ? SyncTransportEventKind.authenticationFailed
+              : SyncTransportEventKind.error,
+          message: error.message,
         ),
       );
-      throw const SyncTransportException(
-        'Device is not an active sync group member.',
-        permanent: true,
-      );
+      throw SyncTransportException(error.message, permanent: true);
     }
     _connected = true;
     _deviceId = deviceId;

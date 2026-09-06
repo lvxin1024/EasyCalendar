@@ -23,6 +23,88 @@ class SyncAuthorityEngine {
   final int maxBatchSize;
   final DateTime Function() _clock;
 
+  Future<void> establishGroup(String groupId) async {
+    _validateGroupId(groupId);
+    final stored = await store.loadState('sync_group_id');
+    if (stored != null && stored != groupId) {
+      throw const SyncAuthorityException(
+        'authentication_failed',
+        'Sync group identity does not match the primary authority',
+      );
+    }
+    if (stored == null) await store.saveState('sync_group_id', groupId);
+  }
+
+  Future<void> verifyGroup(String groupId) async {
+    _validateGroupId(groupId);
+    final stored = await store.loadState('sync_group_id');
+    if (stored == null) {
+      throw const SyncAuthorityException(
+        'primary_unavailable',
+        'The primary authority has not established this sync group',
+      );
+    }
+    if (stored != groupId) {
+      throw const SyncAuthorityException(
+        'authentication_failed',
+        'Sync group identity does not match the primary authority',
+      );
+    }
+  }
+
+  Future<SyncAuthorityMember> registerMember({
+    required String groupId,
+    required String deviceId,
+    required String endpointId,
+    required String displayName,
+  }) async {
+    await verifyGroup(groupId);
+    _validateId(deviceId, 'device_id');
+    _validateId(endpointId, 'endpoint_id');
+    final normalizedName = displayName.trim();
+    if (normalizedName.isEmpty || normalizedName.length > 200) {
+      throw const SyncAuthorityException(
+        'validation_error',
+        'display_name is invalid',
+      );
+    }
+    final existing = await store.findMemberByEndpoint(endpointId);
+    if (existing != null) {
+      if (existing.status != 'active') {
+        throw const SyncAuthorityException(
+          'member_revoked',
+          'Device is not an active sync group member',
+        );
+      }
+      if (existing.deviceId != deviceId) {
+        throw const SyncAuthorityException(
+          'authentication_failed',
+          'Endpoint is already registered to another device',
+        );
+      }
+      final refreshed = SyncAuthorityMember(
+        endpointId: existing.endpointId,
+        deviceId: existing.deviceId,
+        displayName: normalizedName,
+        status: existing.status,
+        joinedAt: existing.joinedAt,
+        lastSeenAt: _clock(),
+      );
+      await store.upsertMember(refreshed);
+      return refreshed;
+    }
+    final member = SyncAuthorityMember(
+      endpointId: endpointId,
+      deviceId: deviceId,
+      displayName: normalizedName,
+      status: 'active',
+      joinedAt: _clock(),
+      lastSeenAt: _clock(),
+    );
+    await store.upsertMember(member);
+    return member;
+  }
+
   Future<PushSyncResult> push({
     required String deviceId,
     required String idempotencyKey,
@@ -303,6 +385,15 @@ class SyncAuthorityEngine {
   static bool _validIdValue(Object? value) =>
       value is String &&
       RegExp(r'^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$').hasMatch(value);
+
+  static void _validateGroupId(String value) {
+    if (!RegExp(r'^[a-f0-9]{64}$').hasMatch(value)) {
+      throw const SyncAuthorityException(
+        'validation_error',
+        'group_id is invalid',
+      );
+    }
+  }
 
   static bool _hasTimezone(DateTime value) =>
       value.isUtc || value.timeZoneOffset != Duration.zero;

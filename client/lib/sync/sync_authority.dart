@@ -168,6 +168,32 @@ class SyncAuthorityStore {
     );
   }
 
+  /// Looks up an endpoint without filtering revoked members.
+  ///
+  /// Join requests need to distinguish a first-seen endpoint from an endpoint
+  /// that was explicitly revoked by the primary. Treating both as "missing"
+  /// would let a revoked device silently re-register.
+  Future<SyncAuthorityMember?> findMemberByEndpoint(String endpointId) async {
+    final existing = await database.query(
+      'sync_group_members',
+      where: 'endpoint_id = ?',
+      whereArgs: [endpointId],
+      limit: 1,
+    );
+    if (existing.isEmpty) return null;
+    final row = existing.single;
+    return SyncAuthorityMember(
+      endpointId: row['endpoint_id'] as String,
+      deviceId: row['device_id'] as String,
+      displayName: row['display_name'] as String,
+      status: row['status'] as String,
+      joinedAt: DateTime.parse(row['joined_at'] as String),
+      lastSeenAt: (row['last_seen_at'] as String?) == null
+          ? null
+          : DateTime.parse(row['last_seen_at'] as String),
+    );
+  }
+
   Future<String> latestCursor() async {
     final rows = await database.rawQuery(
       'SELECT COALESCE(MAX(sequence), 0) AS sequence '
