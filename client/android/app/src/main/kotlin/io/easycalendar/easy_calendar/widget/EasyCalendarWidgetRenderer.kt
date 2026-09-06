@@ -192,6 +192,14 @@ internal object EasyCalendarWidgetRenderer {
             textSize = 10f * density
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         }
+        val cycleRecordedPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = color(context, R.color.widget_cycle_recorded)
+            strokeCap = Paint.Cap.ROUND
+        }
+        val cyclePredictedPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = color(context, R.color.widget_cycle_predicted)
+            strokeCap = Paint.Cap.ROUND
+        }
 
         val pad = (10f * density)
         val titleTop = 20f * density
@@ -221,6 +229,10 @@ internal object EasyCalendarWidgetRenderer {
             headerBottom = headerBottom,
             dayPaint = dayPaint,
             todayFillPaint = todayFillPaint,
+            cycleMarkers = snapshot?.cycleMarkers.orEmpty(),
+            cycleRecordedPaint = cycleRecordedPaint,
+            cyclePredictedPaint = cyclePredictedPaint,
+            density = density,
         )
 
         if (allDayEvents.isNotEmpty()) {
@@ -307,18 +319,69 @@ internal object EasyCalendarWidgetRenderer {
         headerBottom: Float,
         dayPaint: Paint,
         todayFillPaint: Paint,
+        cycleMarkers: Map<LocalDate, WidgetCycleMarker>,
+        cycleRecordedPaint: Paint,
+        cyclePredictedPaint: Paint,
+        density: Float,
     ) {
         for (dayIndex in 0 until 7) {
             val date = weekStart.plusDays(dayIndex.toLong())
             val left = gridLeft + dayWidth * dayIndex
             val right = left + dayWidth
             if (date == today) {
-                canvas.drawRect(left, 16f * dayPaint.textSize / 12f, right, headerBottom, todayFillPaint)
+                canvas.drawRect(
+                    left,
+                    headerBottom - 30f * density,
+                    right,
+                    headerBottom - 4f * density,
+                    todayFillPaint,
+                )
             }
             val label = "${weekDayNames[dayIndex].takeLast(1)}${date.dayOfMonth}"
             val textWidth = dayPaint.measureText(label)
             val x = left + (dayWidth - textWidth) / 2f
             canvas.drawText(label, x, headerBottom - 14f, dayPaint)
+            cycleMarkers[date]?.let { marker ->
+                drawCycleMarker(
+                    canvas = canvas,
+                    left = left + 7f * density,
+                    right = right - 7f * density,
+                    y = headerBottom - 2f * density,
+                    marker = marker,
+                    recordedPaint = cycleRecordedPaint,
+                    predictedPaint = cyclePredictedPaint,
+                    density = density,
+                )
+            }
+        }
+    }
+
+    private fun drawCycleMarker(
+        canvas: Canvas,
+        left: Float,
+        right: Float,
+        y: Float,
+        marker: WidgetCycleMarker,
+        recordedPaint: Paint,
+        predictedPaint: Paint,
+        density: Float,
+    ) {
+        val paint = if (marker.kind == "recorded") recordedPaint else predictedPaint
+        paint.strokeWidth = when {
+            marker.kind == "recorded" -> 2.5f * density
+            marker.isCenter -> 3f * density
+            else -> 2.5f * density
+        }
+        if (marker.kind == "recorded") {
+            canvas.drawLine(left, y, right, y, paint)
+            return
+        }
+        val dash = 3f * density
+        val gap = 2f * density
+        var cursor = left
+        while (cursor < right) {
+            canvas.drawLine(cursor, y, min(cursor + dash, right), y, paint)
+            cursor += dash + gap
         }
     }
 

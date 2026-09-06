@@ -4,6 +4,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../ai/ai_provider.dart';
 import '../domain/item.dart';
+import '../domain/sync_mode.dart';
 
 class LocalPreferencesStore {
   const LocalPreferencesStore(this.database);
@@ -37,6 +38,13 @@ class LocalPreferencesStore {
           values['default_collection_id'] ?? defaults.defaultCollectionId,
       defaultCollectionName:
           values['default_collection_name'] ?? defaults.defaultCollectionName,
+      syncMode:
+          SyncModeCodec.tryParse(values['sync_mode']) ??
+          (values.containsKey('sync_enabled')
+              ? (_storedBool(values['sync_enabled'], false)
+                    ? SyncMode.cloud
+                    : SyncMode.local)
+              : defaults.syncMode),
       syncEnabled: _storedBool(values['sync_enabled'], defaults.syncEnabled),
       notificationsEnabled: _storedBool(
         values['notifications_enabled'],
@@ -82,6 +90,7 @@ class LocalPreferencesStore {
         'device_name': preferences.deviceName.trim(),
         'default_collection_id': preferences.defaultCollectionId.trim(),
         'default_collection_name': preferences.defaultCollectionName.trim(),
+        'sync_mode': preferences.syncMode.wireName,
         'sync_enabled': preferences.syncEnabled ? 'true' : 'false',
         'notifications_enabled': preferences.notificationsEnabled
             ? 'true'

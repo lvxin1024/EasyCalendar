@@ -9,6 +9,7 @@ import 'package:easy_calendar/data/transfer_models.dart';
 import 'package:easy_calendar/domain/item.dart';
 import 'package:easy_calendar/domain/cycle_record.dart';
 import 'package:easy_calendar/domain/recurrence.dart';
+import 'package:easy_calendar/domain/sync_mode.dart';
 import 'package:easy_calendar/sync/sync_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -450,6 +451,13 @@ void main() {
     expect(loaded.featureApiUrl, 'https://core.example.com');
     expect(loaded.tagColors, {'工作': 0xFF2563EB});
     expect(loaded.onboardingCompleted, isTrue);
+
+    await repository.savePreferences(
+      defaults.copyWith(syncMode: SyncMode.group, syncEnabled: true),
+    );
+    final groupMode = await repository.loadPreferences(defaults);
+    expect(groupMode.syncMode, SyncMode.group);
+    expect(groupMode.effectiveSyncMode, SyncMode.group);
 
     await repository.savePreferences(
       defaults.copyWith(

@@ -17,10 +17,14 @@ import '../data/subscription_fetch_client.dart';
 import '../data/transfer_models.dart';
 import '../device/device_identity.dart';
 import '../domain/item.dart';
+import '../domain/cycle_prediction.dart';
 import '../domain/subscription.dart';
 import '../notification/notification_service.dart';
 import '../sync/sync_coordinator.dart';
+import '../sync/sync_group.dart';
+import '../sync/sync_group_store.dart';
 import '../sync/sync_models.dart';
+import '../sync/p2p_bridge.dart';
 import '../sync/token_store.dart';
 import '../utils/configured_time.dart';
 import '../widget/widget_snapshot_writer.dart';
@@ -34,12 +38,14 @@ class ItemController extends ChangeNotifier {
     required this.config,
     this.syncCoordinator,
     this.widgetSnapshotWriter,
+    this.widgetCycleStatesProvider,
     this.desktopWindowController,
     this.notificationService,
     AiApiKeyStore? aiApiKeyStore,
     AiProviderConnectionTester? aiProviderConnectionTester,
     DeviceIdentity? deviceIdentity,
     SyncTokenStore? featureTokenStore,
+    SyncGroupSetupController? syncGroupSetup,
     ServiceProbeClient? serviceProbeClient,
     SubscriptionFetchClient? subscriptionFetchClient,
   }) {
@@ -49,6 +55,9 @@ class ItemController extends ChangeNotifier {
       connectionTester: aiProviderConnectionTester,
     );
     _deviceIdentity = deviceIdentity ?? DeviceIdentity();
+    _syncGroupSetup =
+        syncGroupSetup ??
+        SyncGroupSetupController(SecureSyncGroupProfileStore());
     _serviceConnectionService = ServiceConnectionService(
       syncCoordinator: syncCoordinator,
       featureTokenStore: featureTokenStore,
@@ -67,10 +76,12 @@ class ItemController extends ChangeNotifier {
   final AppConfig config;
   final SyncCoordinator? syncCoordinator;
   final WidgetSnapshotWriter? widgetSnapshotWriter;
+  final Map<DateTime, CycleDayState> Function()? widgetCycleStatesProvider;
   final DesktopWindowController? desktopWindowController;
   final NotificationService? notificationService;
   late final AiProviderService _aiProviderService;
   late final DeviceIdentity _deviceIdentity;
+  late final SyncGroupSetupController _syncGroupSetup;
   late final ServiceConnectionService _serviceConnectionService;
   late final SubscriptionService _subscriptionService;
   final LocalIcsService _localIcsService = const LocalIcsService();
@@ -98,6 +109,33 @@ class ItemController extends ChangeNotifier {
   ServiceProbeResult? get syncServiceProbe => _syncServiceProbe;
   ServiceProbeResult? get featureServiceProbe => _featureServiceProbe;
   String get activeTimezone => _resolveTimezone(preferences);
+  SyncGroupSetupController get syncGroupSetup => _syncGroupSetup;
+
+  Future<void> refreshWidgetSnapshot() => _writeWidgetSnapshot();
+
+  Future<SyncGroupProfile?> loadSyncGroupProfile() => _syncGroupSetup.load();
+
+  Future<String?> exportSyncGroupCode() => _syncGroupSetup.exportCode();
+
+  Future<SyncGroupProfile> joinSyncGroup(String code) => _syncGroupSetup
+      .joinAutomatically(code: code, fallbackDeviceId: preferences.deviceId);
+
+  Future<SyncGroupProfile> createSyncGroupAutomatically(P2pBridge bridge) =>
+      _syncGroupSetup.createPrimaryAutomatically(
+        bridge: bridge,
+        fallbackDeviceId: preferences.deviceId,
+      );
+
+  Future<SyncGroupProfile> joinSyncGroupAutomatically(
+    String code,
+    P2pBridge bridge,
+  ) => _syncGroupSetup.joinAutomaticallyWithBridge(
+    code: code,
+    fallbackDeviceId: preferences.deviceId,
+    bridge: bridge,
+  );
+
+  Future<void> clearSyncGroup() => _syncGroupSetup.clear();
 
   ClientPreferences get _defaultPreferences => ClientPreferences(
     apiUrl: config.apiUrl,
@@ -107,6 +145,7 @@ class ItemController extends ChangeNotifier {
     deviceId: config.deviceId,
     defaultCollectionId: config.defaultCollectionId,
     defaultCollectionName: config.defaultCollectionName,
+    syncMode: config.syncMode,
     syncEnabled: config.syncEnabled,
     notificationsEnabled: config.notificationsEnabled,
     windowOpacity: 1,
@@ -242,6 +281,7 @@ class ItemController extends ChangeNotifier {
       await syncCoordinator?.start(
         enabled: _preferences!.syncEnabled,
         serverUrl: _preferences!.apiUrl,
+        mode: _preferences!.effectiveSyncMode,
       );
       await _reload(notify: false);
       _error = null;
@@ -539,11 +579,7 @@ class ItemController extends ChangeNotifier {
       _preferences = value;
       await _applyRuntimeSettings(value);
       try {
-        await widgetSnapshotWriter?.write(
-          items: _items,
-          timezone: activeTimezone,
-          quotes: value.widgetQuotes,
-        );
+        await _writeWidgetSnapshot();
       } catch (_) {
         // Widget refresh is derived state and must not block settings changes.
       }
@@ -556,6 +592,7 @@ class ItemController extends ChangeNotifier {
       syncCoordinator?.configure(
         enabled: value.syncEnabled,
         serverUrl: value.apiUrl,
+        mode: value.effectiveSyncMode,
       );
       if (notificationsWereEnabled != value.notificationsEnabled) {
         if (value.notificationsEnabled) {
@@ -625,11 +662,7 @@ class ItemController extends ChangeNotifier {
     _items = await repository.listItems();
     _collections = await repository.listCollections();
     try {
-      await widgetSnapshotWriter?.write(
-        items: _items,
-        timezone: activeTimezone,
-        quotes: preferences.widgetQuotes,
-      );
+      await _writeWidgetSnapshot();
     } catch (_) {
       // Widget refresh is derived state and must not block local CRUD.
     }
@@ -637,6 +670,15 @@ class ItemController extends ChangeNotifier {
       unawaited(notificationService?.reconcileAll(_items));
     }
     if (notify) notifyListeners();
+  }
+
+  Future<void> _writeWidgetSnapshot() async {
+    await widgetSnapshotWriter?.write(
+      items: _items,
+      timezone: activeTimezone,
+      quotes: preferences.widgetQuotes,
+      cycleStates: widgetCycleStatesProvider?.call() ?? const {},
+    );
   }
 
   Future<void> saveSyncToken(String token) async {

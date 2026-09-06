@@ -5,8 +5,10 @@ import '../../application/item_controller.dart';
 import '../../config/app_config.dart';
 import '../../data/service_probe_client.dart';
 import '../../domain/item.dart';
+import '../../domain/sync_mode.dart';
+import '../sync/sync_group_setup_panel.dart';
 
-enum _SetupMode { local, sync }
+enum _SetupMode { local, cloud, group }
 
 class FirstRunPage extends StatefulWidget {
   const FirstRunPage({
@@ -27,6 +29,7 @@ class _FirstRunPageState extends State<FirstRunPage> {
   late final TextEditingController _urlController;
   final _tokenController = TextEditingController();
   _SetupMode _mode = _SetupMode.local;
+  bool _groupConfigured = false;
   bool _obscureToken = true;
   bool _testing = false;
   bool _saving = false;
@@ -37,6 +40,11 @@ class _FirstRunPageState extends State<FirstRunPage> {
   @override
   void initState() {
     super.initState();
+    _mode = switch (widget.config.syncMode) {
+      SyncMode.group => _SetupMode.group,
+      SyncMode.cloud => _SetupMode.cloud,
+      SyncMode.local => _SetupMode.local,
+    };
     _urlController = TextEditingController(
       text: widget.controller.preferences.apiUrl,
     );
@@ -90,9 +98,14 @@ class _FirstRunPageState extends State<FirstRunPage> {
                         label: Text('仅本地使用'),
                       ),
                       ButtonSegment(
-                        value: _SetupMode.sync,
+                        value: _SetupMode.cloud,
                         icon: Icon(Icons.cloud_sync_outlined),
                         label: Text('连接已有服务'),
+                      ),
+                      ButtonSegment(
+                        value: _SetupMode.group,
+                        icon: Icon(Icons.hub_outlined),
+                        label: Text('设备群组同步'),
                       ),
                     ],
                     selected: {_mode},
@@ -117,7 +130,7 @@ class _FirstRunPageState extends State<FirstRunPage> {
                         label: const Text('开始使用'),
                       ),
                     ),
-                  ] else ...[
+                  ] else if (_mode == _SetupMode.cloud) ...[
                     TextFormField(
                       controller: _urlController,
                       keyboardType: TextInputType.url,
@@ -205,6 +218,24 @@ class _FirstRunPageState extends State<FirstRunPage> {
                           label: const Text('保存并启用同步'),
                         ),
                       ],
+                    ),
+                  ] else ...[
+                    SyncGroupSetupPanel(
+                      controller: widget.controller,
+                      onProfileChanged: (profile) => setState(
+                        () => _groupConfigured = profile != null,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: FilledButton.icon(
+                        onPressed: _groupConfigured && !_saving
+                            ? _finishGroup
+                            : null,
+                        icon: const Icon(Icons.hub_outlined),
+                        label: const Text('保存并启用群组同步'),
+                      ),
                     ),
                   ],
                 ],
@@ -305,6 +336,14 @@ class _FirstRunPageState extends State<FirstRunPage> {
       if (mounted) setState(() => _saving = false);
     }
   }
+
+  Future<void> _finishGroup() => _save(
+    widget.controller.preferences.copyWith(
+      syncMode: SyncMode.group,
+      syncEnabled: true,
+      onboardingCompleted: true,
+    ),
+  );
 
   Future<void> _save(ClientPreferences preferences) async {
     setState(() => _saving = true);

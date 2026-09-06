@@ -8,4 +8,6 @@
     <color name="widget_coral">#B23A48</color>
     <color name="widget_today_surface">#DDE9E4</color>
     <color name="widget_today_text">#203F3C</color>
+    <color name="widget_cycle_recorded">#A33F49</color>
+    <color name="widget_cycle_predicted">#E8B9C0</color>
 </resources>

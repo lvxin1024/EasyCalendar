@@ -53,6 +53,22 @@ jobs:
           flutter-version: "3.44.9"
           channel: stable
           cache: true
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+      - name: Install cargo-ndk
+        shell: bash
+        run: cargo install cargo-ndk --locked
+      - name: Configure Android NDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:?ANDROID_HOME is not set}}"
+          ndk_dir="$(find "$sdk_root/ndk" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          test -n "$ndk_dir"
+          echo "ANDROID_NDK_HOME=$ndk_dir" >> "$GITHUB_ENV"
+      - name: Build native P2P bridge
+        run: bash scripts/build_native_p2p.sh android client/android/app/src/main/jniLibs
       - name: Configure release signing
         id: signing
         shell: bash
@@ -93,9 +109,20 @@ jobs:
       - name: Build APK
         working-directory: client
         run: |
+          test -f android/app/src/main/jniLibs/arm64-v8a/libeasycalendar_p2p.so
+          test -f android/app/src/main/jniLibs/armeabi-v7a/libeasycalendar_p2p.so
+          test -f android/app/src/main/jniLibs/x86_64/libeasycalendar_p2p.so
           flutter build apk --release \
             --build-name "${{ needs.version.outputs.name }}" \
             --build-number "${{ needs.version.outputs.number }}"
+          apk="build/app/outputs/flutter-apk/app-release.apk"
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            entry="lib/$abi/libeasycalendar_p2p.so"
+            if ! unzip -l "$apk" | grep -q "$entry"; then
+              echo "Missing APK native library: $entry" >&2
+              exit 1
+            fi
+          done
           mkdir -p build/release
           suffix=""
           if test "${{ steps.signing.outputs.enabled }}" = "false"; then suffix="-unsigned"; fi
@@ -135,6 +162,12 @@ jobs:
           flutter-version: "3.44.9"
           channel: stable
           cache: true
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build native P2P bridge
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "client\build\native\windows" | Out-Null
+          & .\scripts\build_native_p2p.ps1 -OutputDirectory "client\build\native\windows"
       - name: Detect Windows signing configuration
         id: signing
         shell: pwsh
@@ -157,6 +190,11 @@ jobs:
           flutter build windows --release
           --build-name "${{ needs.version.outputs.name }}"
           --build-number "${{ needs.version.outputs.number }}"
+      - name: Verify native P2P bridge
+        shell: pwsh
+        run: |
+          $library = "client\build\windows\x64\runner\Release\easycalendar_p2p.dll"
+          if (-not (Test-Path $library)) { throw "Windows native P2P bridge was not packaged: $library" }
       - name: Import code signing certificate
         if: steps.signing.outputs.enabled == 'true'
         shell: pwsh
@@ -220,6 +258,12 @@ jobs:
           flutter-version: "3.44.9"
           channel: stable
           cache: true
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - name: Build native P2P bridge
+        shell: bash
+        run: bash scripts/build_native_p2p.sh macos "$RUNNER_TEMP/easycalendar-p2p"
       - name: Detect macOS signing configuration
         id: signing
         shell: bash
@@ -292,6 +336,15 @@ jobs:
             CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
             REGISTER_APP_GROUPS="$register_app_groups" \
             build
+      - name: Add native P2P bridge to app bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="client/build/macos/Build/Products/Release/EasyCalendar.app"
+          mkdir -p "$app/Contents/Frameworks"
+          cp "$RUNNER_TEMP/easycalendar-p2p/libeasycalendar_p2p.dylib" \
+            "$app/Contents/Frameworks/libeasycalendar_p2p.dylib"
+          test -f "$app/Contents/Frameworks/libeasycalendar_p2p.dylib"
       - name: Sign, package, and notarize DMG
         if: steps.signing.outputs.enabled == 'true'
         shell: bash

@@ -1,7 +1,7 @@
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 abstract final class LocalDatabaseSchema {
-  static const version = 7;
+  static const version = 9;
 
   static Future<void> create(Database database, int version) async {
     await database.execute('''
@@ -88,6 +88,7 @@ abstract final class LocalDatabaseSchema {
     ''');
     await _createConflictSchema(database);
     await _createCycleSchema(database);
+    await _createAuthoritySchema(database);
   }
 
   static Future<void> upgrade(
@@ -189,6 +190,9 @@ abstract final class LocalDatabaseSchema {
             "AND last_error LIKE '%entity_type is invalid%'",
       );
     }
+    if (oldVersion < 9) {
+      await _createAuthoritySchema(database);
+    }
   }
 
   static Future<void> _createCycleSchema(DatabaseExecutor database) async {
@@ -271,6 +275,72 @@ abstract final class LocalDatabaseSchema {
     await database.execute('''
       CREATE INDEX idx_client_sync_conflicts
       ON sync_conflicts (conflict_id DESC)
+    ''');
+  }
+
+  static Future<void> _createAuthoritySchema(DatabaseExecutor database) async {
+    await database.execute('''
+      CREATE TABLE IF NOT EXISTS sync_authority_change_log (
+        sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+        change_id TEXT UNIQUE NOT NULL,
+        device_id TEXT NOT NULL,
+        entity_type TEXT NOT NULL,
+        entity_id TEXT NOT NULL,
+        operation TEXT NOT NULL,
+        entity_version INTEGER NOT NULL,
+        changed_at TEXT NOT NULL,
+        payload_json TEXT NOT NULL CHECK (json_valid(payload_json))
+      )
+    ''');
+    await database.execute('''
+      CREATE INDEX IF NOT EXISTS idx_sync_authority_change_log_cursor
+      ON sync_authority_change_log(sequence)
+    ''');
+    await database.execute('''
+      CREATE TABLE IF NOT EXISTS sync_authority_entity_heads (
+        entity_type TEXT NOT NULL,
+        entity_id TEXT NOT NULL,
+        change_id TEXT NOT NULL,
+        device_id TEXT NOT NULL,
+        operation TEXT NOT NULL,
+        entity_version INTEGER NOT NULL,
+        updated_at TEXT NOT NULL,
+        payload_json TEXT NOT NULL CHECK (json_valid(payload_json)),
+        PRIMARY KEY (entity_type, entity_id)
+      )
+    ''');
+    await database.execute('''
+      CREATE TABLE IF NOT EXISTS sync_authority_requests (
+        idempotency_key TEXT PRIMARY KEY NOT NULL,
+        request_hash TEXT NOT NULL,
+        response_json TEXT NOT NULL CHECK (json_valid(response_json)),
+        created_at TEXT NOT NULL
+      )
+    ''');
+    await database.execute('''
+      CREATE TABLE IF NOT EXISTS sync_authority_applied_changes (
+        change_id TEXT PRIMARY KEY NOT NULL,
+        request_hash TEXT NOT NULL,
+        result_json TEXT NOT NULL CHECK (json_valid(result_json)),
+        applied_at TEXT NOT NULL
+      )
+    ''');
+    await database.execute('''
+      CREATE TABLE IF NOT EXISTS sync_group_members (
+        endpoint_id TEXT PRIMARY KEY NOT NULL,
+        device_id TEXT NOT NULL,
+        display_name TEXT NOT NULL,
+        status TEXT NOT NULL,
+        joined_at TEXT NOT NULL,
+        last_seen_at TEXT
+      )
+    ''');
+    await database.execute('''
+      CREATE TABLE IF NOT EXISTS sync_group_state (
+        key TEXT PRIMARY KEY NOT NULL,
+        value TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
     ''');
   }
 }

@@ -16,6 +16,7 @@ private object WidgetSnapshotFields {
     const val TODAY_EVENTS = "today_events"
     const val UPCOMING_EVENTS = "upcoming_events"
     const val DUE_ITEMS = "due_items"
+    const val CYCLE_MARKERS = "cycle_markers"
     const val QUOTES = "quotes"
 }
 
@@ -29,12 +30,20 @@ internal data class WidgetItem(
     val allDay: Boolean,
 )
 
+internal data class WidgetCycleMarker(
+    val kind: String,
+    val isStart: Boolean,
+    val isEnd: Boolean,
+    val isCenter: Boolean,
+)
+
 internal data class WidgetSnapshot(
     val generatedAt: Instant?,
     val zoneId: ZoneId,
     val dueItems: List<WidgetItem>,
     val weekEvents: List<WidgetItem>,
     val calendarEvents: List<WidgetItem>,
+    val cycleMarkers: Map<java.time.LocalDate, WidgetCycleMarker>,
     val quotes: List<String>,
 ) {
     companion object {
@@ -58,6 +67,7 @@ internal data class WidgetSnapshot(
                 dueItems = decodeItems(root.optJSONArray(WidgetSnapshotFields.DUE_ITEMS)),
                 weekEvents = decodeItems(weekEvents),
                 calendarEvents = decodeItems(root.optJSONArray(WidgetSnapshotFields.CALENDAR_EVENTS)),
+                cycleMarkers = decodeCycleMarkers(root.optJSONArray(WidgetSnapshotFields.CYCLE_MARKERS)),
                 quotes = decodeStrings(root.optJSONArray(WidgetSnapshotFields.QUOTES)),
             )
         }
@@ -91,6 +101,27 @@ internal data class WidgetSnapshot(
             return buildList {
                 for (index in 0 until minOf(array.length(), 10)) {
                     array.optString(index).trim().takeIf(String::isNotEmpty)?.let(::add)
+                }
+            }
+        }
+
+        private fun decodeCycleMarkers(array: JSONArray?): Map<java.time.LocalDate, WidgetCycleMarker> {
+            if (array == null) return emptyMap()
+            return buildMap {
+                for (index in 0 until array.length()) {
+                    val value = array.optJSONObject(index) ?: continue
+                    val date = runCatching {
+                        java.time.LocalDate.parse(value.optString("date"))
+                    }.getOrNull() ?: continue
+                    put(
+                        date,
+                        WidgetCycleMarker(
+                            kind = value.optString("kind"),
+                            isStart = value.optBoolean("is_start", false),
+                            isEnd = value.optBoolean("is_end", false),
+                            isCenter = value.optBoolean("is_center", false),
+                        ),
+                    )
                 }
             }
         }

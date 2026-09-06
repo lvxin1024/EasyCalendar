@@ -17,6 +17,31 @@ abstract interface class SyncTransport {
   });
 }
 
+enum SyncTransportEventKind {
+  connected,
+  disconnected,
+  changesAvailable,
+  primaryChanged,
+  authenticationFailed,
+  error,
+}
+
+class SyncTransportEvent {
+  const SyncTransportEvent({required this.kind, this.cursor, this.message});
+
+  final SyncTransportEventKind kind;
+  final String? cursor;
+  final String? message;
+}
+
+abstract interface class SyncTransportLifecycle {
+  Stream<SyncTransportEvent> get events;
+
+  Future<void> start();
+
+  Future<void> close();
+}
+
 class SyncTransportException implements Exception {
   const SyncTransportException(this.message, {this.permanent = false});
 

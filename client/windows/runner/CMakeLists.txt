@@ -38,3 +38,21 @@ target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")
 
 # Run the Flutter tool portions of the build. This must not be removed.
 add_dependencies(${BINARY_NAME} flutter_assemble)
+
+# The release workflow builds the Rust bridge before Flutter configures CMake.
+# Keep local builds usable when the bridge is absent, while copying it into the
+# executable directory whenever it is available.
+set(EASYCALENDAR_P2P_LIBRARY
+  "${CMAKE_SOURCE_DIR}/../build/native/windows/easycalendar_p2p.dll"
+)
+if(EXISTS "${EASYCALENDAR_P2P_LIBRARY}")
+  add_custom_command(TARGET ${BINARY_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+      "${EASYCALENDAR_P2P_LIBRARY}"
+      "$<TARGET_FILE_DIR:${BINARY_NAME}>/easycalendar_p2p.dll"
+  )
+  install(FILES "${EASYCALENDAR_P2P_LIBRARY}"
+    DESTINATION "${CMAKE_INSTALL_PREFIX}"
+    COMPONENT Runtime
+  )
+endif()

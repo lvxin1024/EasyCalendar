@@ -49,6 +49,7 @@ class HttpSyncTransport implements SyncTransport {
             ),
           )
           .toList(growable: false),
+      serverCursor: body['server_cursor'] as String?,
     );
   }
 

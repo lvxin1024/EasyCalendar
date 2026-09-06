@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 
 import '../domain/item.dart';
+import '../domain/cycle_prediction.dart';
+import '../domain/cycle_record.dart';
 import '../domain/recurrence.dart';
 import '../utils/configured_time.dart';
 
@@ -17,6 +19,7 @@ abstract final class WidgetSnapshotSchema {
   static const weekEvents = 'week_events';
   static const calendarEvents = 'calendar_events';
   static const dueItems = 'due_items';
+  static const cycleMarkers = 'cycle_markers';
   static const quotes = 'quotes';
   static const items = 'items';
 }
@@ -26,6 +29,7 @@ abstract interface class WidgetSnapshotWriter {
     required List<CalendarItem> items,
     required String timezone,
     required List<String> quotes,
+    Map<DateTime, CycleDayState> cycleStates = const {},
   });
 }
 
@@ -39,12 +43,14 @@ class PlatformWidgetSnapshotWriter implements WidgetSnapshotWriter {
     required List<CalendarItem> items,
     required String timezone,
     required List<String> quotes,
+    Map<DateTime, CycleDayState> cycleStates = const {},
   }) async {
     if (!Platform.isMacOS && !Platform.isAndroid) return;
     final payload = WidgetSnapshotBuilder.build(
       items,
       timezone: timezone,
       quotes: quotes,
+      cycleStates: cycleStates,
     );
     await _channel.invokeMethod<void>('writeSnapshot', <String, dynamic>{
       'json': jsonEncode(payload),
@@ -59,6 +65,7 @@ class WidgetSnapshotBuilder {
     List<CalendarItem> items, {
     required String timezone,
     List<String> quotes = defaultWidgetQuotes,
+    Map<DateTime, CycleDayState> cycleStates = const {},
     DateTime? now,
   }) {
     final effectiveNow = now ?? configuredNow();
@@ -130,6 +137,8 @@ class WidgetSnapshotBuilder {
       ...upcomingEvents,
       ...dueItems,
     ];
+    final sortedCycleMarkers = cycleStates.entries.toList(growable: false)
+      ..sort((left, right) => left.key.compareTo(right.key));
     return <String, dynamic>{
       WidgetSnapshotSchema.schemaVersion: WidgetSnapshotSchema.version,
       WidgetSnapshotSchema.generatedAt: effectiveNow.toUtc().toIso8601String(),
@@ -152,6 +161,9 @@ class WidgetSnapshotBuilder {
           .toList(growable: false),
       WidgetSnapshotSchema.dueItems: dueItems
           .map(_serializeItem)
+          .toList(growable: false),
+      WidgetSnapshotSchema.cycleMarkers: sortedCycleMarkers
+          .map(_serializeCycleMarker)
           .toList(growable: false),
       WidgetSnapshotSchema.quotes: quotes
           .map((value) => value.trim())
@@ -196,4 +208,14 @@ class WidgetSnapshotBuilder {
     serialized['id'] = '${item.id}@${item.startAt!.toUtc().toIso8601String()}';
     return serialized;
   }
+
+  static Map<String, dynamic> _serializeCycleMarker(
+    MapEntry<DateTime, CycleDayState> entry,
+  ) => <String, dynamic>{
+    'date': cycleDateKey(entry.key),
+    'kind': entry.value.kind.name,
+    'is_start': entry.value.isStart,
+    'is_end': entry.value.isEnd,
+    'is_center': entry.value.isCenter,
+  };
 }
