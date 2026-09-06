@@ -3,6 +3,7 @@ mod endpoint;
 mod error;
 mod iroh_endpoint;
 mod protocol;
+mod session;
 
 use std::ptr;
 
@@ -11,6 +12,7 @@ pub use endpoint::{Endpoint, EndpointConfig, EndpointState};
 pub use error::{ErrorCode, P2pError};
 pub use iroh_endpoint::{ALPN, IrohEndpointHandle};
 pub use protocol::{validate_frame, Frame, FrameKind, MAX_FRAME_BYTES, PROTOCOL_VERSION};
+pub use session::{receive_frame, request, send_frame};
 
 fn copy_string(value: &str, output: *mut u8, capacity: usize) -> Result<usize, P2pError> {
     if value.len() > capacity {
