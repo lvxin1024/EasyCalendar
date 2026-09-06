@@ -116,6 +116,10 @@ jobs:
           flutter build apk --release \
             --build-name "${{ needs.version.outputs.name }}" \
             --build-number "${{ needs.version.outputs.number }}"
+          apk="build/app/outputs/flutter-apk/app-release.apk"
+          for abi in arm64-v8a armeabi-v7a x86_64 x86; do
+            unzip -l "$apk" | grep -q "lib/$abi/libeasycalendar_p2p.so"
+          done
           mkdir -p build/release
           suffix=""
           if test "${{ steps.signing.outputs.enabled }}" = "false"; then suffix="-unsigned"; fi

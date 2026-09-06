@@ -77,7 +77,12 @@ jobs:
         run: flutter build apk --release --no-pub
         working-directory: client
       - name: Verify Android artifact
-        run: test -f build/app/outputs/flutter-apk/app-release.apk
+        run: |
+          apk="build/app/outputs/flutter-apk/app-release.apk"
+          test -f "$apk"
+          for abi in arm64-v8a armeabi-v7a x86_64 x86; do
+            unzip -l "$apk" | grep -q "lib/$abi/libeasycalendar_p2p.so"
+          done
         working-directory: client
 
   macos-release:
