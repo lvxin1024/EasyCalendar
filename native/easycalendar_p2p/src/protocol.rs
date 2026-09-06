@@ -22,7 +22,7 @@ pub enum FrameKind {
 impl TryFrom<u8> for FrameKind {
     type Error = P2pError;
 
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
+    fn try_from(value: u8) -> Result<Self, <Self as TryFrom<u8>>::Error> {
         match value {
             1 => Ok(Self::Hello),
             2 => Ok(Self::AuthChallenge),
@@ -78,16 +78,18 @@ impl Frame {
         if encoded[5] != 0 {
             return Err(P2pError::InvalidCode);
         }
-        let payload_len = u32::from_be_bytes([
-            encoded[6], encoded[7], encoded[8], encoded[9],
-        ]) as usize;
+        let payload_len =
+            u32::from_be_bytes([encoded[6], encoded[7], encoded[8], encoded[9]]) as usize;
         if payload_len > MAX_FRAME_BYTES - HEADER_BYTES {
             return Err(P2pError::FrameTooLarge);
         }
         if encoded.len() != HEADER_BYTES + payload_len {
             return Err(P2pError::InvalidCode);
         }
-        Frame::new(FrameKind::try_from(encoded[4])?, encoded[HEADER_BYTES..].to_vec())
+        Frame::new(
+            FrameKind::try_from(encoded[4])?,
+            encoded[HEADER_BYTES..].to_vec(),
+        )
     }
 }
 

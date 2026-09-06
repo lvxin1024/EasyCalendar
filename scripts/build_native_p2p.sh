@@ -3,7 +3,11 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CRATE_DIR="${ROOT_DIR}/native/easycalendar_p2p"
-OUTPUT_DIR="${2:?output directory is required}"
+OUTPUT_DIR_INPUT="${2:?output directory is required}"
+case "${OUTPUT_DIR_INPUT}" in
+  /*) OUTPUT_DIR="${OUTPUT_DIR_INPUT}" ;;
+  *) OUTPUT_DIR="${ROOT_DIR}/${OUTPUT_DIR_INPUT}" ;;
+esac
 
 case "${1:?target is required}" in
   android)
@@ -13,15 +17,17 @@ case "${1:?target is required}" in
     }
     rm -rf "${OUTPUT_DIR}"
     mkdir -p "${OUTPUT_DIR}"
-    cargo ndk \
-      -t arm64-v8a \
-      -t armeabi-v7a \
-      -t x86_64 \
-      -t x86 \
-      -o "${OUTPUT_DIR}" \
-      build --release \
-      --manifest-path "${CRATE_DIR}/Cargo.toml" \
-      --target-dir "${ROOT_DIR}/target"
+    (
+      cd "${CRATE_DIR}"
+      cargo ndk \
+        -t arm64-v8a \
+        -t armeabi-v7a \
+        -t x86_64 \
+        -t x86 \
+        -o "${OUTPUT_DIR}" \
+        build --release \
+        --target-dir "${ROOT_DIR}/target"
+    )
     for abi in arm64-v8a armeabi-v7a x86_64 x86; do
       test -f "${OUTPUT_DIR}/${abi}/libeasycalendar_p2p.so"
     done

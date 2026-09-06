@@ -16,9 +16,7 @@ pub fn challenge_response(
     endpoint_id: &str,
 ) -> Result<[u8; 32], P2pError> {
     validate_inputs(group_secret, nonce, endpoint_id)?;
-    let mut message = Vec::with_capacity(
-        AUTH_DOMAIN.len() + nonce.len() + endpoint_id.len() + 2,
-    );
+    let mut message = Vec::with_capacity(AUTH_DOMAIN.len() + nonce.len() + endpoint_id.len() + 2);
     message.extend_from_slice(AUTH_DOMAIN);
     message.extend_from_slice(nonce);
     message.extend_from_slice(endpoint_id.as_bytes());
@@ -42,9 +40,7 @@ pub fn verify_response(
         return Err(P2pError::AuthenticationFailed);
     }
     validate_inputs(group_secret, nonce, endpoint_id)?;
-    let mut message = Vec::with_capacity(
-        AUTH_DOMAIN.len() + nonce.len() + endpoint_id.len() + 2,
-    );
+    let mut message = Vec::with_capacity(AUTH_DOMAIN.len() + nonce.len() + endpoint_id.len() + 2);
     message.extend_from_slice(AUTH_DOMAIN);
     message.extend_from_slice(nonce);
     message.extend_from_slice(endpoint_id.as_bytes());

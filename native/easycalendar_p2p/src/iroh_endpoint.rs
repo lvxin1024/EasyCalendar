@@ -4,10 +4,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use iroh::{
-    Endpoint as IrohEndpoint,
-    EndpointAddr,
-    SecretKey,
-    endpoint::{Connection, SendStream, presets},
+    endpoint::{presets, Connection, SendStream},
+    Endpoint as IrohEndpoint, EndpointAddr, SecretKey,
 };
 use tokio::runtime::Runtime;
 
@@ -37,19 +35,17 @@ struct PendingRequest {
 
 impl IrohEndpointHandle {
     pub fn bind(secret_key: [u8; 32]) -> Result<Self, P2pError> {
-        let runtime = Arc::new(
-            Runtime::new()
-                .map_err(|_| P2pError::TransportUnavailable)?,
-        );
+        let runtime = Arc::new(Runtime::new().map_err(|_| P2pError::TransportUnavailable)?);
         let key = SecretKey::from_bytes(&secret_key);
-        let endpoint = runtime.block_on(async {
-            IrohEndpoint::builder(presets::N0)
-                .secret_key(key)
-                .alpns(vec![ALPN.to_vec()])
-                .bind()
-                .await
-        })
-        .map_err(|_| P2pError::TransportUnavailable)?;
+        let endpoint = runtime
+            .block_on(async {
+                IrohEndpoint::builder(presets::N0)
+                    .secret_key(key)
+                    .alpns(vec![ALPN.to_vec()])
+                    .bind()
+                    .await
+            })
+            .map_err(|_| P2pError::TransportUnavailable)?;
         Ok(Self {
             runtime,
             endpoint,
@@ -76,17 +72,16 @@ impl IrohEndpointHandle {
                 .map_err(|_| P2pError::TransportUnavailable)?;
             Ok::<EndpointAddr, P2pError>(self.endpoint.addr())
         })?;
-        serde_json::to_string(&address)
-            .map_err(|_| P2pError::TransportUnavailable)
+        serde_json::to_string(&address).map_err(|_| P2pError::TransportUnavailable)
     }
 
     pub fn connect(&self, ticket: &str) -> Result<u64, P2pError> {
         let address: EndpointAddr = serde_json::from_str(ticket)
             .map_err(|_| P2pError::InvalidArgument("endpoint ticket is invalid"))?;
-        let connection = self.runtime
+        let connection = self
+            .runtime
             .block_on(self.endpoint.connect(address, ALPN))
-            .map_err(|_| P2pError::TransportUnavailable)
-            ?;
+            .map_err(|_| P2pError::TransportUnavailable)?;
         Ok(self.insert_connection(connection))
     }
 
@@ -102,16 +97,12 @@ impl IrohEndpointHandle {
         };
         let connection = self
             .runtime
-            .block_on(incoming)
+            .block_on(incoming.into_future())
             .map_err(|_| P2pError::TransportUnavailable)?;
         Ok(Some(self.insert_connection(connection)))
     }
 
-    pub fn request(
-        &self,
-        connection_id: u64,
-        encoded_request: &[u8],
-    ) -> Result<Vec<u8>, P2pError> {
+    pub fn request(&self, connection_id: u64, encoded_request: &[u8]) -> Result<Vec<u8>, P2pError> {
         let frame = Frame::decode(encoded_request)?;
         let connection = self.take_connection(connection_id)?;
         let result = self.runtime.block_on(request(&connection, frame));
@@ -139,24 +130,27 @@ impl IrohEndpointHandle {
         self.pending
             .lock()
             .map_err(|_| P2pError::TransportUnavailable)?
-            .insert(connection_id, PendingRequest { _connection: connection, send });
+            .insert(
+                connection_id,
+                PendingRequest {
+                    _connection: connection,
+                    send,
+                },
+            );
         Ok(frame.encode())
     }
 
-    pub fn respond(
-        &self,
-        connection_id: u64,
-        encoded_response: &[u8],
-    ) -> Result<(), P2pError> {
+    pub fn respond(&self, connection_id: u64, encoded_response: &[u8]) -> Result<(), P2pError> {
         let frame = Frame::decode(encoded_response)?;
         let mut pending = self
             .pending
             .lock()
             .map_err(|_| P2pError::TransportUnavailable)?
             .remove(&connection_id)
-            .ok_or(P2pError::InvalidArgument("connection has no pending request"))?;
-        self.runtime
-            .block_on(send_frame(&mut pending.send, &frame))
+            .ok_or(P2pError::InvalidArgument(
+                "connection has no pending request",
+            ))?;
+        self.runtime.block_on(send_frame(&mut pending.send, &frame))
     }
 
     fn insert_connection(&self, connection: Connection) -> u64 {

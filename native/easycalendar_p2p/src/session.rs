@@ -12,9 +12,7 @@ pub async fn send_frame(stream: &mut SendStream, frame: &Frame) -> Result<(), P2
         .write_all(&frame.encode())
         .await
         .map_err(|_| P2pError::TransportUnavailable)?;
-    stream
-        .finish()
-        .map_err(|_| P2pError::TransportUnavailable)
+    stream.finish().map_err(|_| P2pError::TransportUnavailable)
 }
 
 /// Reads exactly one bounded protocol frame from a QUIC bidirectional stream.
@@ -24,9 +22,7 @@ pub async fn receive_frame(stream: &mut RecvStream) -> Result<Frame, P2pError> {
         .read_exact(&mut header)
         .await
         .map_err(|_| P2pError::TransportUnavailable)?;
-    let payload_len = u32::from_be_bytes([
-        header[6], header[7], header[8], header[9],
-    ]) as usize;
+    let payload_len = u32::from_be_bytes([header[6], header[7], header[8], header[9]]) as usize;
     if payload_len > MAX_FRAME_BYTES - HEADER_BYTES {
         return Err(P2pError::FrameTooLarge);
     }
@@ -61,9 +57,8 @@ mod tests {
         encoded[0..2].copy_from_slice(b"EC");
         encoded[2..4].copy_from_slice(&1_u16.to_be_bytes());
         encoded[4] = FrameKind::Push as u8;
-        encoded[6..10].copy_from_slice(
-            &((MAX_FRAME_BYTES - HEADER_BYTES + 1) as u32).to_be_bytes(),
-        );
+        encoded[6..10]
+            .copy_from_slice(&((MAX_FRAME_BYTES - HEADER_BYTES + 1) as u32).to_be_bytes());
         assert_eq!(encoded.len(), HEADER_BYTES);
     }
 }
