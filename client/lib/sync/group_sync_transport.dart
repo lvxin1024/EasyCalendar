@@ -84,8 +84,8 @@ class GroupSyncTransport implements SyncTransport, SyncTransportLifecycle {
     required String idempotencyKey,
     required List<PendingSyncChange> changes,
   }) async {
-    await _ensureCurrentConnection();
-    if (deviceId != _currentDeviceId) {
+    await _ensurePushConnection(deviceId);
+    if (deviceId != _connectedDeviceId) {
       throw const SyncTransportException(
         'Group transport device ID does not match the configured endpoint.',
         permanent: true,
@@ -93,7 +93,7 @@ class GroupSyncTransport implements SyncTransport, SyncTransportLifecycle {
     }
     return _peer.push(
       deviceId: deviceId,
-      endpointId: _currentEndpointId,
+      endpointId: _connectedEndpointId!,
       idempotencyKey: idempotencyKey,
       changes: changes,
     );
@@ -144,6 +144,23 @@ class GroupSyncTransport implements SyncTransport, SyncTransportLifecycle {
     }
     await close();
     await start();
+  }
+
+  Future<void> _ensurePushConnection(String batchDeviceId) async {
+    if (!_started) {
+      throw const SyncTransportException(
+        'Group transport has not been started.',
+        permanent: true,
+      );
+    }
+    if (_connectedDeviceId == batchDeviceId) return;
+    if (batchDeviceId != _currentDeviceId) {
+      throw const SyncTransportException(
+        'Group transport device ID does not match the configured endpoint.',
+        permanent: true,
+      );
+    }
+    await _ensureCurrentConnection();
   }
 }
 

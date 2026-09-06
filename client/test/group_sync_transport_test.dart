@@ -223,6 +223,31 @@ void main() {
       await subscription.cancel();
     },
   );
+
+  test('device identity changes keep older outbox batches on the active connection',
+      () async {
+    var currentDeviceId = 'primary-device';
+    final transport = GroupSyncTransport(
+      peer: AuthoritySyncGroupPeer(authority: authority, notifications: hub),
+      profile: primaryProfile,
+      deviceId: 'primary-device',
+      endpointId: 'endpoint-primary',
+      deviceIdProvider: () => currentDeviceId,
+    );
+
+    await transport.start();
+    currentDeviceId = 'new-device';
+    final result = await transport.push(
+      serverUrl: Uri.parse('group://primary'),
+      token: '',
+      deviceId: 'primary-device',
+      idempotencyKey: 'old-device-push-1',
+      changes: [_change()],
+    );
+
+    expect(result.accepted, ['primary-change-1']);
+    await transport.close();
+  });
 }
 
 PendingSyncChange _change() {
