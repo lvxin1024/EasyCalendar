@@ -17,6 +17,7 @@ class PlatformNotificationAdapter implements NotificationAdapter {
       'easycalendar_reminders',
       '日程提醒',
       channelDescription: 'EasyCalendar 的日程和待办提醒',
+      icon: 'ic_notification',
       importance: Importance.high,
       priority: Priority.high,
     ),
@@ -45,7 +46,7 @@ class PlatformNotificationAdapter implements NotificationAdapter {
     }
     final initialized = await _plugin.initialize(
       settings: const InitializationSettings(
-        android: AndroidInitializationSettings('ic_launcher'),
+        android: AndroidInitializationSettings('ic_notification'),
         iOS: DarwinInitializationSettings(
           requestAlertPermission: false,
           requestBadgePermission: false,

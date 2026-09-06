@@ -28,7 +28,7 @@ class SyncForegroundService : Service() {
         val notification = notificationBuilder
             .setContentTitle("EasyCalendar")
             .setContentText("同步组连接保持运行")
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_notification)
             .setOngoing(true)
             .build()
         startForeground(NOTIFICATION_ID, notification)
