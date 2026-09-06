@@ -41,6 +41,33 @@ def test_platform_artifact_checks_are_shell_parseable_and_diagnostic():
     assert 'echo "Missing APK native library: $entry" >&2' in release_workflow
 
 
+def test_android_native_build_targets_match_flutter_supported_abis():
+    script = (ROOT / "scripts" / "build_native_p2p.sh").read_text(encoding="utf-8")
+    workflow = (ROOT / ".github" / "workflows" / "tests.yml").read_text(
+        encoding="utf-8"
+    )
+    release_workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "-t x86 \\" not in script
+    assert "for abi in arm64-v8a armeabi-v7a x86_64; do" in script
+    assert (
+        "targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android"
+        in workflow
+    )
+    assert (
+        "targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android"
+        in release_workflow
+    )
+    assert "i686-linux-android" not in workflow
+    assert "i686-linux-android" not in release_workflow
+    assert "for abi in arm64-v8a armeabi-v7a x86_64; do" in workflow
+    assert "for abi in arm64-v8a armeabi-v7a x86_64; do" in release_workflow
+    assert "lib/x86/libeasycalendar_p2p.so" not in workflow
+    assert "lib/x86/libeasycalendar_p2p.so" not in release_workflow
+
+
 def test_macos_builds_use_xcode_26_compatible_runners():
     workflow = (ROOT / ".github" / "workflows" / "tests.yml").read_text(
         encoding="utf-8"

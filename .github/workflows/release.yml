@@ -55,7 +55,7 @@ jobs:
           cache: true
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android,i686-linux-android
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
       - name: Install cargo-ndk
         shell: bash
         run: cargo install cargo-ndk --locked
@@ -112,12 +112,11 @@ jobs:
           test -f android/app/src/main/jniLibs/arm64-v8a/libeasycalendar_p2p.so
           test -f android/app/src/main/jniLibs/armeabi-v7a/libeasycalendar_p2p.so
           test -f android/app/src/main/jniLibs/x86_64/libeasycalendar_p2p.so
-          test -f android/app/src/main/jniLibs/x86/libeasycalendar_p2p.so
           flutter build apk --release \
             --build-name "${{ needs.version.outputs.name }}" \
             --build-number "${{ needs.version.outputs.number }}"
           apk="build/app/outputs/flutter-apk/app-release.apk"
-          for abi in arm64-v8a armeabi-v7a x86_64 x86; do
+          for abi in arm64-v8a armeabi-v7a x86_64; do
             entry="lib/$abi/libeasycalendar_p2p.so"
             if ! unzip -l "$apk" | grep -q "$entry"; then
               echo "Missing APK native library: $entry" >&2

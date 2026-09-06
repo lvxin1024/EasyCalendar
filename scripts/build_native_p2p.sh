@@ -23,12 +23,11 @@ case "${1:?target is required}" in
         -t arm64-v8a \
         -t armeabi-v7a \
         -t x86_64 \
-        -t x86 \
         -o "${OUTPUT_DIR}" \
         build --release \
         --target-dir "${ROOT_DIR}/target"
     )
-    for abi in arm64-v8a armeabi-v7a x86_64 x86; do
+    for abi in arm64-v8a armeabi-v7a x86_64; do
       test -f "${OUTPUT_DIR}/${abi}/libeasycalendar_p2p.so"
     done
     ;;
