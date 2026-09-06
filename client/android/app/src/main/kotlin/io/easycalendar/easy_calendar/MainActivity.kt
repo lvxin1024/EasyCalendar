@@ -1,7 +1,9 @@
 package io.easycalendar.easy_calendar
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import io.easycalendar.easy_calendar.widget.EasyCalendarWidgetUpdater
 import io.easycalendar.easy_calendar.widget.WidgetSnapshotStore
 import io.flutter.embedding.android.FlutterActivity
@@ -11,6 +13,7 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     private var widgetChannel: MethodChannel? = null
     private var syncLifecycleChannel: MethodChannel? = null
+    private var notificationChannel: MethodChannel? = null
     private var dartReady = false
     private var pendingWidgetUrl: String? = null
 
@@ -80,6 +83,17 @@ class MainActivity : FlutterActivity() {
                 }
             }
         }
+        notificationChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            NOTIFICATION_CHANNEL,
+        ).also { channel ->
+            channel.setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "openSettings" -> result.success(openNotificationSettings())
+                    else -> result.notImplemented()
+                }
+            }
+        }
         captureWidgetUrl(intent)
     }
 
@@ -103,8 +117,27 @@ class MainActivity : FlutterActivity() {
         widgetChannel?.invokeMethod("openWidgetTarget", url)
     }
 
+    private fun openNotificationSettings(): Boolean {
+        val notificationIntent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+            putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+        }
+        val appIntent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = Uri.parse("package:$packageName")
+        }
+        return runCatching {
+            startActivity(notificationIntent)
+            true
+        }.getOrElse {
+            runCatching {
+                startActivity(appIntent)
+                true
+            }.getOrDefault(false)
+        }
+    }
+
     private companion object {
         const val WIDGET_CHANNEL = "io.easycalendar/widget"
         const val SYNC_LIFECYCLE_CHANNEL = "io.easycalendar/sync_lifecycle"
+        const val NOTIFICATION_CHANNEL = "io.easycalendar/notifications"
     }
 }

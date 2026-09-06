@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:url_launcher/url_launcher.dart';
@@ -24,6 +25,9 @@ class PlatformNotificationAdapter implements NotificationAdapter {
     iOS: DarwinNotificationDetails(presentAlert: true, presentSound: true),
     macOS: DarwinNotificationDetails(presentAlert: true, presentSound: true),
     windows: WindowsNotificationDetails(),
+  );
+  static const _androidSettingsChannel = MethodChannel(
+    'io.easycalendar/notifications',
   );
 
   final FlutterLocalNotificationsPlugin _plugin;
@@ -193,8 +197,19 @@ class PlatformNotificationAdapter implements NotificationAdapter {
 
   @override
   Future<bool> openSettings() async {
+    if (Platform.isAndroid) {
+      try {
+        final opened = await _androidSettingsChannel.invokeMethod<bool>(
+          'openSettings',
+        );
+        return opened ?? false;
+      } on MissingPluginException {
+        return false;
+      } on PlatformException {
+        return false;
+      }
+    }
     final uri = switch (platformName) {
-      'android' => Uri.parse('app-settings:'),
       'ios' => Uri.parse('app-settings:'),
       'macos' => Uri.parse(
         'x-apple.systempreferences:com.apple.preference.notifications',
