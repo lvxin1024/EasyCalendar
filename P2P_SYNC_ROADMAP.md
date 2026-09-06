@@ -13,13 +13,15 @@
 | 6 | 已完成 | Rust transport-neutral bridge、帧/HMAC/错误码/生命周期 |
 | 7 | 已完成 | Dart group peer、push/pull、`changesAvailable` 通知 |
 | 8a | 已完成 | secure group profile store、创建/加入/导出流程 |
-| 8b | 待完成 | 接入真实 endpoint ticket 后提供首次启动和设置页 UI |
+| 8b | 已完成 | 接入 endpoint ticket、selector、首次启动和设置页 UI |
 | 9 | 已完成 | Android 前台 dataSync service；桌面退出语义和 iOS 限制文案 |
-| 10 | 进行中 | 运维、隐私、可靠性说明和最终质量门禁 |
+| 10 | 进行中 | native 多平台构建/打包、真实端到端测试、运维和最终质量门禁 |
 
-当前代码仍未把 Iroh endpoint 实现接入发布版 `main.dart`；`GroupSyncTransport`
-通过 `SyncGroupPeer` 抽象承载业务协议，真实 Iroh peer 必须实现同一接口后才可
-开启公网 group 模式。Cloudflare Worker/D1 是现有稳定方案，继续保留。
+当前代码已经在 `main.dart` 中通过 `SyncTransportSelector` 接入 Iroh group peer，
+Cloudflare HTTP transport 仍然保留。`IrohSyncGroupPeer` 负责认证、push/pull、
+cursor 和通知；Rust crate 提供 endpoint/QUIC frame 的 FFI 边界。发布包仍需要
+各平台构建并打包 `easycalendar_p2p` 动态库，当前不能把仓库源码状态描述成已经
+可用的公网同步服务。
 
 ## 1. 目标和非目标
 
@@ -51,12 +53,16 @@ cloud  现有 Cloudflare Worker/D1
 group  Iroh 同步组
 ```
 
-目标中的首次启动和设置页提供：
+当前首次启动和设置页提供：
 
 - 仅本地使用
 - 创建同步组
 - 加入同步组
 - 连接已有 Cloudflare 服务
+
+群组入口会自动生成或恢复 endpoint 私钥和身份；主节点创建后展示可复制的
+`ECG1-...` 同步码，从节点粘贴同步码即可完成注册。没有 native bridge 的安装包
+会显示明确错误，但不会影响仅本地或 Cloudflare 模式。
 
 已有 `apiUrl`、`syncEnabled`、Bearer token 和日历配置码保持兼容。同步组配置不复用 `apiUrl`，避免把 Iroh ticket 当成 URL 或把群组密钥混入普通设置导出。
 
@@ -115,7 +121,8 @@ payload 字段：
 
 ## 5. Dart 同步接口
 
-现有 `SyncTransport` 继续作为业务同步抽象。扩展时保持 HTTP 实现可替换：
+现有 `SyncTransport` 继续作为业务同步抽象，生命周期单独由
+`SyncTransportLifecycle` 承担，selector 根据 `SyncMode` 切换实现：
 
 ```dart
 enum SyncMode { local, cloud, group }
@@ -129,25 +136,7 @@ enum SyncTransportEventKind {
   error,
 }
 
-class SyncTransportConfig {
-  const SyncTransportConfig({
-    required this.mode,
-    required this.serverUrl,
-    required this.token,
-    required this.deviceId,
-    this.groupProfile,
-  });
-
-  final SyncMode mode;
-  final Uri? serverUrl;
-  final String? token;
-  final String deviceId;
-  final SyncGroupProfile? groupProfile;
-}
-
 abstract interface class SyncTransport {
-  Future<void> start(SyncTransportConfig config);
-  Stream<SyncTransportEvent> get events;
   Future<PushSyncResult> push({
     required Uri serverUrl,
     required String token,
@@ -161,7 +150,21 @@ abstract interface class SyncTransport {
     String? cursor,
     int limit = 200,
   });
+}
+
+abstract interface class SyncTransportLifecycle {
+  Stream<SyncTransportEvent> get events;
+  Future<void> start();
   Future<void> close();
+}
+
+class SyncTransportSelector implements SyncTransport, SyncTransportLifecycle {
+  SyncTransportSelector({
+    required SyncTransport cloudTransport,
+    required Future<SyncTransport?> Function() groupTransportFactory,
+  });
+  // cloudTransport remains the existing HTTP implementation. The group
+  // factory is lazy, so local/cloud startup does not load native libraries.
 }
 ```
 
@@ -240,7 +243,9 @@ sync_group_members(
 
 ## 7. Iroh/Rust bridge
 
-Iroh core 通过仓库内 Rust crate 包装，不在 Dart 层手写 UDP/NAT/QUIC。Flutter 通过 `flutter_rust_bridge` 或等价稳定 FFI 边界调用。
+Iroh core 通过仓库内 Rust crate 包装，不在 Dart 层手写 UDP/NAT/QUIC。当前使用
+稳定 C ABI + Dart FFI 边界；`iroh_endpoint.rs` 负责 endpoint、ticket、connect、
+accept 和 QUIC request/response，`session.rs` 负责有界 frame session。
 
 Rust 内部模块：
 
@@ -250,7 +255,6 @@ easycalendar_p2p/
   auth.rs           group_secret challenge-response
   endpoint.rs       Iroh Endpoint 启停、dial、accept
   session.rs        push/pull/notification 请求响应
-  authority.rs      主节点权威存储适配
   error.rs          稳定错误码
 ```
 
@@ -268,7 +272,7 @@ cursor_invalid
 transport_unavailable
 ```
 
-Iroh relay 默认使用公共尽力而为模式；relay 配置必须可替换，不能把项目方 API key 固化进客户端。生产说明必须明确：Iroh 开源免费，公共 relay 不保证 SLA；用户可选择直连、公共 relay 或自建 relay。
+Iroh relay 默认使用公共尽力而为模式；relay 配置必须可替换，不能把项目方 API key 固化进客户端。生产说明必须明确：Iroh 开源免费，公共 relay 不保证 SLA；用户可选择直连、公共 relay 或自建 relay。当前本地机器未安装 Rust 工具链，native 检查以 CI 的 `cargo fmt --check` 和 `cargo test` 为准。
 
 ## 8. 平台策略
 
@@ -289,7 +293,7 @@ Iroh relay 默认使用公共尽力而为模式；relay 配置必须可替换，
 5. `test: add star protocol simulation`：内存主从网络和端到端协议测试；验证离线、重试、幂等、冲突。
 6. `feat: add rust p2p bridge`：Rust crate、FFI 和最小 endpoint；运行 `cargo fmt --check`、`cargo test`、Flutter analyze。
 7. `feat: implement group transport`：Iroh transport、主节点 handler、通知和 cursor pull；运行 Rust/Flutter/Worker 全量检查。
-8. `feat: add group setup ui`：首次启动、设置、二维码/文本码导入导出；运行 Widget 和设置持久化测试。
+8. `feat: add group setup ui`：首次启动、设置、文本码导入导出；运行 Flutter analyze、同步存储和 selector 测试。
 9. `feat: add platform lifecycle support`：Android 前台服务、桌面 close、iOS 限制文案和 CI 原生构建检查。
 10. `docs: document p2p operations`：可靠性、隐私、relay、主节点离线和恢复说明；运行最终质量门禁。
 
@@ -305,5 +309,6 @@ Iroh relay 默认使用公共尽力而为模式；relay 配置必须可替换，
 
 ## 11. 当前实施顺序
 
-第 1-7 项及第 8a、9 项已完成；第 8b 依赖真实 endpoint ticket 和 Iroh peer
-实现。Iroh 原生依赖保持在 bridge/transport 边界，不进入 Dart 业务层。
+第 1-9 项及第 8a、8b 已完成；第 10 项剩余 native 多平台构建/打包、真实公网
+端到端验证和发布文案。Iroh 原生依赖保持在 bridge/transport 边界，不进入 Dart
+业务层。未完成第 10 项前，Cloudflare 仍是稳定的公网同步方案。
