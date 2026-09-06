@@ -4,6 +4,23 @@
 分支：`feat/p2p-sync`
 范围：保留现有 Cloudflare Worker/D1，同步新增无需用户部署服务的同步组模式。
 
+## 当前实现状态
+
+| 里程碑 | 状态 | 说明 |
+|---|---|---|
+| 1-4 | 已完成 | 模式配置、ECG1 同步码、authority schema/store |
+| 5 | 已完成 | authority engine、LWW/幂等、三端星型模拟 |
+| 6 | 已完成 | Rust transport-neutral bridge、帧/HMAC/错误码/生命周期 |
+| 7 | 已完成 | Dart group peer、push/pull、`changesAvailable` 通知 |
+| 8a | 已完成 | secure group profile store、创建/加入/导出流程 |
+| 8b | 待完成 | 接入真实 endpoint ticket 后提供首次启动和设置页 UI |
+| 9 | 已完成 | Android 前台 dataSync service；桌面退出语义和 iOS 限制文案 |
+| 10 | 进行中 | 运维、隐私、可靠性说明和最终质量门禁 |
+
+当前代码仍未把 Iroh endpoint 实现接入发布版 `main.dart`；`GroupSyncTransport`
+通过 `SyncGroupPeer` 抽象承载业务协议，真实 Iroh peer 必须实现同一接口后才可
+开启公网 group 模式。Cloudflare Worker/D1 是现有稳定方案，继续保留。
+
 ## 1. 目标和非目标
 
 ### 目标
@@ -34,7 +51,7 @@ cloud  现有 Cloudflare Worker/D1
 group  Iroh 同步组
 ```
 
-首次启动和设置页提供：
+目标中的首次启动和设置页提供：
 
 - 仅本地使用
 - 创建同步组
@@ -68,7 +85,7 @@ group  Iroh 同步组
 同步码使用版本化 canonical JSON，外层格式暂定：
 
 ```text
-ECG1.<base64url(canonical-json)>.<base64url(sha256(payload))>
+ECG1-<base64url(canonical-json)>.<base64url(sha256(payload))>
 ```
 
 payload 字段：
@@ -288,4 +305,5 @@ Iroh relay 默认使用公共尽力而为模式；relay 配置必须可替换，
 
 ## 11. 当前实施顺序
 
-当前先完成第 1 项文档提交，然后实现第 2、3 项的纯 Dart 协议和配置模型。Iroh 原生依赖放到 Dart 协议、authority schema 和模拟网络测试通过之后，控制依赖升级风险。
+第 1-7 项及第 8a、9 项已完成；第 8b 依赖真实 endpoint ticket 和 Iroh peer
+实现。Iroh 原生依赖保持在 bridge/transport 边界，不进入 Dart 业务层。

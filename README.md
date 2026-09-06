@@ -76,6 +76,7 @@
 |---|---|---|
 | **EasyCalendar App** | 是 | macOS / Windows / Android / iOS 客户端，内置 SQLite，离线可用 |
 | **Cloud Sync** | 否 | Cloudflare Worker / D1 多设备同步服务 |
+| **Group Sync** | 开发中 | 一主多从、ECG1 同步码和本地 authority；Iroh endpoint 尚未接入发布版 |
 | **Python Compatibility API** | 否 | 面向开发者和第三方集成的参考 REST API，不在 App 主链路上 |
 
 ---
@@ -92,6 +93,23 @@
 ```
 
 Cloudflare Worker + D1 是当前唯一实现的多设备同步服务器。部署命令只需在一台开发电脑上执行，Worker 和数据库最终运行在你的 Cloudflare 账户中，不需要 VPS，也不要求这台电脑保持开机。
+
+## 🔗 同步组（开发中）
+
+同步组模式的目标是让普通用户只输入或扫描一次 ECG1 同步码，不需要购买或部署
+Cloudflare/VPS。拓扑固定为“一主多从”：任意设备可创建主节点，其他设备向主节点
+提交 outbox 变更并按 cursor 拉取；主节点离线时从节点继续本地工作，恢复连接后
+补发未提交变更。权威日志使用与现有 Worker 相同的确定性 LWW 和幂等规则。
+
+当前分支已经包含同步码校验、SQLite authority store、Dart group transport、Rust
+帧/HMAC bridge 和 Android 前台生命周期边界，但真实 Iroh NAT/relay peer 尚未接入
+发布版。因而目前可继续使用 Cloudflare 模式；不要把当前 bridge 当作已经可用的
+公网同步服务。实现进度和接口约定见 [`P2P_SYNC_ROADMAP.md`](P2P_SYNC_ROADMAP.md)。
+
+可靠性边界：公共 relay 只能提供尽力而为的连接转发，不承诺 SLA；直连失败时可
+选择公共 relay 或后续自建 relay。同步组密钥保存在系统安全存储中，不进入普通设置
+导出；主节点关闭、手机系统回收后台进程或 iOS 被挂起时，其他设备不会丢失本地
+outbox，但必须等主节点恢复后才能提交到权威日志。
 
 ### 1. 准备账号、工具和同步地址
 
