@@ -304,8 +304,9 @@ class SyncAuthorityEngine {
       value.isUtc || value.timeZoneOffset != Duration.zero;
 
   static bool _validTimestamp(Object? value) {
-    if (value is! String || !RegExp(r'(Z|[+-]\d\d:\d\d)$').hasMatch(value))
+    if (value is! String || !RegExp(r'(Z|[+-]\d\d:\d\d)$').hasMatch(value)) {
       return false;
+    }
     return DateTime.tryParse(value) != null;
   }
 
@@ -318,8 +319,9 @@ class SyncAuthorityEngine {
     }
     if (value is Map) {
       final entries = value.keys.map((key) {
-        if (key is! String)
+        if (key is! String) {
           throw const FormatException('JSON object keys must be strings');
+        }
         return key;
       }).toList()..sort();
       return '{${entries.map((key) => '${jsonEncode(key)}:${_canonicalJson(value[key])}').join(',')}}';
