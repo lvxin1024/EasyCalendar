@@ -199,6 +199,35 @@ void main() {
       throwsA(isA<SyncAuthorityException>()),
     );
   });
+
+  test('payload timestamps may use an equivalent explicit offset', () async {
+    final updatedAt = DateTime.parse('2026-09-06T09:01:00+08:00');
+    final change = PendingSyncChange(
+      changeId: 'offset-change',
+      deviceId: 'phone-device',
+      entityType: 'item',
+      entityId: 'offset-item',
+      operation: 'update',
+      version: 1,
+      updatedAt: updatedAt,
+      payload: const {
+        'id': 'offset-item',
+        'collection_id': 'collection_local',
+        'type': 'task',
+        'updated_at': '2026-09-06T09:01:00+08:00',
+        'version': 1,
+      },
+      retryCount: 0,
+    );
+
+    final result = await authority.push(
+      deviceId: 'phone-device',
+      endpointId: 'endpoint-phone',
+      idempotencyKey: 'offset-request',
+      changes: [change],
+    );
+    expect(result.accepted, ['offset-change']);
+  });
 }
 
 class _Replica {

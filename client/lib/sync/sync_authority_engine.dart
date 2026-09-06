@@ -219,7 +219,11 @@ class SyncAuthorityEngine {
         'payload id and version must match the change',
       );
     }
-    if (payload['updated_at'] != change.updatedAt.toUtc().toIso8601String()) {
+    final payloadUpdatedAt = payload['updated_at'] is String
+        ? DateTime.tryParse(payload['updated_at'] as String)
+        : null;
+    if (payloadUpdatedAt == null ||
+        !payloadUpdatedAt.toUtc().isAtSameMomentAs(change.updatedAt.toUtc())) {
       throw const SyncAuthorityException(
         'validation_error',
         'payload.updated_at must match change updated_at',
