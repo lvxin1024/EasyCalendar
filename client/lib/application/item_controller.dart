@@ -20,6 +20,8 @@ import '../domain/item.dart';
 import '../domain/subscription.dart';
 import '../notification/notification_service.dart';
 import '../sync/sync_coordinator.dart';
+import '../sync/sync_group.dart';
+import '../sync/sync_group_store.dart';
 import '../sync/sync_models.dart';
 import '../sync/token_store.dart';
 import '../utils/configured_time.dart';
@@ -40,6 +42,7 @@ class ItemController extends ChangeNotifier {
     AiProviderConnectionTester? aiProviderConnectionTester,
     DeviceIdentity? deviceIdentity,
     SyncTokenStore? featureTokenStore,
+    SyncGroupSetupController? syncGroupSetup,
     ServiceProbeClient? serviceProbeClient,
     SubscriptionFetchClient? subscriptionFetchClient,
   }) {
@@ -49,6 +52,9 @@ class ItemController extends ChangeNotifier {
       connectionTester: aiProviderConnectionTester,
     );
     _deviceIdentity = deviceIdentity ?? DeviceIdentity();
+    _syncGroupSetup =
+        syncGroupSetup ??
+        SyncGroupSetupController(SecureSyncGroupProfileStore());
     _serviceConnectionService = ServiceConnectionService(
       syncCoordinator: syncCoordinator,
       featureTokenStore: featureTokenStore,
@@ -71,6 +77,7 @@ class ItemController extends ChangeNotifier {
   final NotificationService? notificationService;
   late final AiProviderService _aiProviderService;
   late final DeviceIdentity _deviceIdentity;
+  late final SyncGroupSetupController _syncGroupSetup;
   late final ServiceConnectionService _serviceConnectionService;
   late final SubscriptionService _subscriptionService;
   final LocalIcsService _localIcsService = const LocalIcsService();
@@ -98,6 +105,16 @@ class ItemController extends ChangeNotifier {
   ServiceProbeResult? get syncServiceProbe => _syncServiceProbe;
   ServiceProbeResult? get featureServiceProbe => _featureServiceProbe;
   String get activeTimezone => _resolveTimezone(preferences);
+  SyncGroupSetupController get syncGroupSetup => _syncGroupSetup;
+
+  Future<SyncGroupProfile?> loadSyncGroupProfile() => _syncGroupSetup.load();
+
+  Future<String?> exportSyncGroupCode() => _syncGroupSetup.exportCode();
+
+  Future<SyncGroupProfile> joinSyncGroup(String code) => _syncGroupSetup
+      .joinAutomatically(code: code, fallbackDeviceId: preferences.deviceId);
+
+  Future<void> clearSyncGroup() => _syncGroupSetup.clear();
 
   ClientPreferences get _defaultPreferences => ClientPreferences(
     apiUrl: config.apiUrl,
