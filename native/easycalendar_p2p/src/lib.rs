@@ -27,7 +27,7 @@ fn copy_string(value: &str, output: *mut u8, capacity: usize) -> Result<usize, P
     Ok(value.len())
 }
 
-fn copy_bytes(value: &[u8], output: *mut u8, capacity: usize) -> Result<(), P2pError> {
+fn copy_bytes(value: &[u8], output: *mut u8, capacity: usize) -> Result<usize, P2pError> {
     if value.len() > capacity {
         return Err(P2pError::BufferTooSmall);
     }
@@ -37,7 +37,7 @@ fn copy_bytes(value: &[u8], output: *mut u8, capacity: usize) -> Result<(), P2pE
     if !value.is_empty() {
         unsafe { ptr::copy_nonoverlapping(value.as_ptr(), output, value.len()) };
     }
-    Ok(())
+    Ok(value.len())
 }
 
 /// Creates an Iroh endpoint with a stable secret key.
@@ -90,16 +90,16 @@ pub unsafe extern "C" fn easycalendar_p2p_endpoint_ticket(
     handle: *const IrohEndpointHandle,
     output: *mut u8,
     capacity: usize,
-) -> i32 {
+) -> i64 {
     let Some(handle) = handle.as_ref() else {
-        return ErrorCode::InvalidArgument as i32;
+        return -(ErrorCode::InvalidArgument as i64);
     };
     let Ok(ticket) = handle.endpoint_ticket() else {
-        return ErrorCode::TransportUnavailable as i32;
+        return -(ErrorCode::TransportUnavailable as i64);
     };
     copy_string(&ticket, output, capacity)
-        .map(|_| ErrorCode::Ok as i32)
-        .unwrap_or_else(|error| error.code() as i32)
+        .map(|length| length as i64)
+        .unwrap_or_else(|error| -(error.code() as i64))
 }
 
 #[unsafe(no_mangle)]
@@ -167,20 +167,20 @@ pub unsafe extern "C" fn easycalendar_p2p_endpoint_request(
     request_len: usize,
     output: *mut u8,
     capacity: usize,
-) -> i32 {
+) -> i64 {
     let Some(handle) = handle.as_ref() else {
-        return ErrorCode::InvalidArgument as i32;
+        return -(ErrorCode::InvalidArgument as i64);
     };
     let Some(request) = read_bytes(request_ptr, request_len) else {
-        return ErrorCode::InvalidArgument as i32;
+        return -(ErrorCode::InvalidArgument as i64);
     };
     let response = match handle.request(connection_id, request) {
         Ok(response) => response,
-        Err(error) => return error.code() as i32,
+        Err(error) => return -(error.code() as i64),
     };
     copy_bytes(&response, output, capacity)
-        .map(|_| ErrorCode::Ok as i32)
-        .unwrap_or_else(|error| error.code() as i32)
+        .map(|length| length as i64)
+        .unwrap_or_else(|error| -(error.code() as i64))
 }
 
 #[unsafe(no_mangle)]
@@ -189,17 +189,17 @@ pub unsafe extern "C" fn easycalendar_p2p_endpoint_receive_request(
     connection_id: u64,
     output: *mut u8,
     capacity: usize,
-) -> i32 {
+) -> i64 {
     let Some(handle) = handle.as_ref() else {
-        return ErrorCode::InvalidArgument as i32;
+        return -(ErrorCode::InvalidArgument as i64);
     };
     let request = match handle.receive_request(connection_id) {
         Ok(request) => request,
-        Err(error) => return error.code() as i32,
+        Err(error) => return -(error.code() as i64),
     };
     copy_bytes(&request, output, capacity)
-        .map(|_| ErrorCode::Ok as i32)
-        .unwrap_or_else(|error| error.code() as i32)
+        .map(|length| length as i64)
+        .unwrap_or_else(|error| -(error.code() as i64))
 }
 
 #[unsafe(no_mangle)]
