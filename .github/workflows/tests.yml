@@ -81,7 +81,11 @@ jobs:
           apk="build/app/outputs/flutter-apk/app-release.apk"
           test -f "$apk"
           for abi in arm64-v8a armeabi-v7a x86_64 x86; do
-            unzip -l "$apk" | grep -q "lib/$abi/libeasycalendar_p2p.so"
+            entry="lib/$abi/libeasycalendar_p2p.so"
+            if ! unzip -l "$apk" | grep -q "$entry"; then
+              echo "Missing APK native library: $entry" >&2
+              exit 1
+            fi
           done
         working-directory: client
 
@@ -180,12 +184,10 @@ jobs:
       - name: Verify Windows artifact
         shell: pwsh
         run: |
-          if (-not (Test-Path
-          "client\build\windows\x64\runner\Release\EasyCalendar.exe"))
-          { throw "EasyCalendar.exe was not built" }
-          if (-not (Test-Path
-          "client\build\windows\x64\runner\Release\easycalendar_p2p.dll"))
-          { throw "easycalendar_p2p.dll was not packaged" }
+          $application = "client\build\windows\x64\runner\Release\EasyCalendar.exe"
+          if (-not (Test-Path $application)) { throw "EasyCalendar.exe was not built: $application" }
+          $library = "client\build\windows\x64\runner\Release\easycalendar_p2p.dll"
+          if (-not (Test-Path $library)) { throw "easycalendar_p2p.dll was not packaged: $library" }
 
   worker:
     runs-on: ubuntu-latest

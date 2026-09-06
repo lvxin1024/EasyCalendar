@@ -18,6 +18,29 @@ def test_windows_release_suppresses_third_party_coroutine_header_deprecation():
     ) in cmake
 
 
+def test_windows_release_copies_native_bridge_from_flutter_build_output():
+    cmake = (CLIENT / "windows" / "runner" / "CMakeLists.txt").read_text(
+        encoding="utf-8"
+    )
+
+    assert '"${CMAKE_SOURCE_DIR}/../build/native/windows/easycalendar_p2p.dll"' in cmake
+    assert "native/easycalendar_p2p/target/release" not in cmake
+
+
+def test_platform_artifact_checks_are_shell_parseable_and_diagnostic():
+    workflow = (ROOT / ".github" / "workflows" / "tests.yml").read_text(
+        encoding="utf-8"
+    )
+    release_workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert '$application = "client\\build\\windows\\x64\\runner\\Release\\EasyCalendar.exe"' in workflow
+    assert '$library = "client\\build\\windows\\x64\\runner\\Release\\easycalendar_p2p.dll"' in workflow
+    assert 'echo "Missing APK native library: $entry" >&2' in workflow
+    assert 'echo "Missing APK native library: $entry" >&2' in release_workflow
+
+
 def test_macos_builds_use_xcode_26_compatible_runners():
     workflow = (ROOT / ".github" / "workflows" / "tests.yml").read_text(
         encoding="utf-8"

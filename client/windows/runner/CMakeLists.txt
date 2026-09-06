@@ -43,7 +43,7 @@ add_dependencies(${BINARY_NAME} flutter_assemble)
 # Keep local builds usable when the bridge is absent, while copying it into the
 # executable directory whenever it is available.
 set(EASYCALENDAR_P2P_LIBRARY
-  "${CMAKE_SOURCE_DIR}/../../native/easycalendar_p2p/target/release/easycalendar_p2p.dll"
+  "${CMAKE_SOURCE_DIR}/../build/native/windows/easycalendar_p2p.dll"
 )
 if(EXISTS "${EASYCALENDAR_P2P_LIBRARY}")
   add_custom_command(TARGET ${BINARY_NAME} POST_BUILD
