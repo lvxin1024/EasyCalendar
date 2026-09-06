@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../device/device_identity.dart';
+import '../domain/sync_mode.dart';
 
 class AppConfig {
   const AppConfig({
@@ -14,6 +15,7 @@ class AppConfig {
     required this.deviceId,
     required this.apiUrl,
     this.featureApiUrl = 'http://localhost:8000',
+    this.syncMode = SyncMode.cloud,
     required this.syncEnabled,
     required this.syncRetryLimit,
     required this.notificationsEnabled,
@@ -45,6 +47,15 @@ class AppConfig {
     const configuredDeviceId = String.fromEnvironment(
       'EASYCALENDAR_DEVICE_ID',
       defaultValue: '',
+    );
+    final syncEnabled = _parseBool(
+      const String.fromEnvironment(
+        'EASYCALENDAR_SYNC_ENABLED',
+        defaultValue: 'false',
+      ),
+    );
+    final configuredSyncMode = SyncModeCodec.tryParse(
+      const String.fromEnvironment('EASYCALENDAR_SYNC_MODE', defaultValue: ''),
     );
     return AppConfig(
       appName: const String.fromEnvironment(
@@ -79,12 +90,9 @@ class AppConfig {
         'EASYCALENDAR_FEATURE_API_URL',
         defaultValue: 'http://localhost:8000',
       ),
-      syncEnabled: _parseBool(
-        const String.fromEnvironment(
-          'EASYCALENDAR_SYNC_ENABLED',
-          defaultValue: 'false',
-        ),
-      ),
+      syncMode:
+          configuredSyncMode ?? (syncEnabled ? SyncMode.cloud : SyncMode.local),
+      syncEnabled: syncEnabled,
       syncRetryLimit: const int.fromEnvironment(
         'EASYCALENDAR_SYNC_RETRY_LIMIT',
         defaultValue: 8,
@@ -108,6 +116,7 @@ class AppConfig {
   final String deviceId;
   final String apiUrl;
   final String featureApiUrl;
+  final SyncMode syncMode;
   final bool syncEnabled;
   final int syncRetryLimit;
   final bool notificationsEnabled;

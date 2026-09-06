@@ -107,6 +107,7 @@ class ItemController extends ChangeNotifier {
     deviceId: config.deviceId,
     defaultCollectionId: config.defaultCollectionId,
     defaultCollectionName: config.defaultCollectionName,
+    syncMode: config.syncMode,
     syncEnabled: config.syncEnabled,
     notificationsEnabled: config.notificationsEnabled,
     windowOpacity: 1,
@@ -242,6 +243,7 @@ class ItemController extends ChangeNotifier {
       await syncCoordinator?.start(
         enabled: _preferences!.syncEnabled,
         serverUrl: _preferences!.apiUrl,
+        mode: _preferences!.effectiveSyncMode,
       );
       await _reload(notify: false);
       _error = null;
@@ -556,6 +558,7 @@ class ItemController extends ChangeNotifier {
       syncCoordinator?.configure(
         enabled: value.syncEnabled,
         serverUrl: value.apiUrl,
+        mode: value.effectiveSyncMode,
       );
       if (notificationsWereEnabled != value.notificationsEnabled) {
         if (value.notificationsEnabled) {

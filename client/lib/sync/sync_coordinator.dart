@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
 import 'connectivity_monitor.dart';
+import '../domain/sync_mode.dart';
 import 'sync_models.dart';
 import 'sync_repository.dart';
 import 'sync_transport.dart';
@@ -39,9 +40,11 @@ class SyncCoordinator extends ChangeNotifier {
   Uri? _serverUrl;
   bool _enabled = false;
   bool _tokenConfigured = false;
+  SyncMode _mode = SyncMode.cloud;
 
   SyncSnapshot get snapshot => _snapshot;
   bool get tokenConfigured => _tokenConfigured;
+  SyncMode get mode => _mode;
 
   void configureDeviceId(String value) {
     final normalized = value.trim();
@@ -49,14 +52,18 @@ class SyncCoordinator extends ChangeNotifier {
     deviceId = normalized;
   }
 
-  Future<void> start({required bool enabled, required String serverUrl}) async {
+  Future<void> start({
+    required bool enabled,
+    required String serverUrl,
+    SyncMode mode = SyncMode.cloud,
+  }) async {
     try {
       _tokenConfigured = (await tokenStore.read())?.isNotEmpty ?? false;
     } catch (_) {
       // Secure storage availability must not block local-first startup.
       _tokenConfigured = false;
     }
-    configure(enabled: enabled, serverUrl: serverUrl);
+    configure(enabled: enabled, serverUrl: serverUrl, mode: mode);
     _connectivitySubscription ??= connectivityMonitor.onlineChanges.listen((
       online,
     ) {
@@ -66,8 +73,13 @@ class SyncCoordinator extends ChangeNotifier {
     if (_enabled) unawaited(synchronize());
   }
 
-  void configure({required bool enabled, required String serverUrl}) {
+  void configure({
+    required bool enabled,
+    required String serverUrl,
+    SyncMode mode = SyncMode.cloud,
+  }) {
     _enabled = enabled;
+    _mode = mode;
     _serverUrl = Uri.tryParse(serverUrl);
     _retryTimer?.cancel();
     _periodicSyncTimer?.cancel();

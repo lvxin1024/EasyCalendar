@@ -1,5 +1,6 @@
 import '../ai/ai_provider.dart';
 import 'recurrence.dart';
+import 'sync_mode.dart';
 
 enum ItemType { event, task, note }
 
@@ -188,6 +189,7 @@ class ClientPreferences {
     this.deviceName = '',
     this.defaultCollectionId = 'collection_local',
     this.defaultCollectionName = '我的日程',
+    this.syncMode = SyncMode.cloud,
     required this.syncEnabled,
     required this.notificationsEnabled,
     this.windowOpacity = 1,
@@ -211,6 +213,7 @@ class ClientPreferences {
   final String deviceName;
   final String defaultCollectionId;
   final String defaultCollectionName;
+  final SyncMode syncMode;
   final bool syncEnabled;
   final bool notificationsEnabled;
   final double windowOpacity;
@@ -219,6 +222,8 @@ class ClientPreferences {
   final List<AiProviderConfig> aiProviders;
   final Map<String, int> tagColors;
   final List<String> widgetQuotes;
+
+  SyncMode get effectiveSyncMode => syncEnabled ? syncMode : SyncMode.local;
 
   ClientPreferences copyWith({
     String? apiUrl,
@@ -232,6 +237,7 @@ class ClientPreferences {
     String? deviceName,
     String? defaultCollectionId,
     String? defaultCollectionName,
+    SyncMode? syncMode,
     bool? syncEnabled,
     bool? notificationsEnabled,
     double? windowOpacity,
@@ -252,6 +258,7 @@ class ClientPreferences {
     deviceName: deviceName ?? this.deviceName,
     defaultCollectionId: defaultCollectionId ?? this.defaultCollectionId,
     defaultCollectionName: defaultCollectionName ?? this.defaultCollectionName,
+    syncMode: syncMode ?? this.syncMode,
     syncEnabled: syncEnabled ?? this.syncEnabled,
     notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
     windowOpacity: windowOpacity ?? this.windowOpacity,
