@@ -16,9 +16,17 @@ import 'notification/platform_notification_adapter.dart';
 import 'notification/notification_service.dart';
 import 'platform/application_identity.dart';
 import 'sync/connectivity_monitor.dart';
+import 'sync/group_sync_transport.dart';
 import 'sync/http_sync_transport.dart';
+import 'sync/iroh_group_sync_peer.dart';
+import 'sync/p2p_bridge.dart';
+import 'sync/sync_authority.dart';
+import 'sync/sync_authority_engine.dart';
 import 'sync/sync_coordinator.dart';
+import 'sync/sync_group.dart';
+import 'sync/sync_group_store.dart';
 import 'sync/sync_platform_lifecycle.dart';
+import 'sync/sync_transport_selector.dart';
 import 'sync/token_store.dart';
 import 'widget/widget_deep_link_controller.dart';
 import 'widget/widget_snapshot_writer.dart';
@@ -52,9 +60,62 @@ Future<void> main() async {
   final desktopWindowController = DesktopWindowController();
   final notificationAdapter = PlatformNotificationAdapter();
   final notificationService = NotificationService(adapter: notificationAdapter);
+  final syncProfileStore = SecureSyncGroupProfileStore();
+  final syncEndpointIdentityStore = SecureSyncEndpointIdentityStore();
+  final syncEndpointKeyStore = SecureSyncEndpointKeyStore();
+  final syncGroupSetup = SyncGroupSetupController(
+    syncProfileStore,
+    endpointIdentityStore: syncEndpointIdentityStore,
+    endpointKeyStore: syncEndpointKeyStore,
+  );
+  late final ItemController controller;
+  final syncTransport = SyncTransportSelector(
+    cloudTransport: HttpSyncTransport(),
+    groupTransportFactory: () async {
+      final profile = await syncProfileStore.read();
+      if (profile == null) return null;
+      final endpointSecret = await syncEndpointKeyStore.read();
+      if (endpointSecret == null) return null;
+      final api = FfiP2pNativeApi.tryLoad();
+      if (api == null) return null;
+      final bridge = NativeP2pBridge(api: api);
+      final storedEndpointId = await syncEndpointIdentityStore.read();
+      final endpointId = storedEndpointId ?? controller.preferences.deviceId;
+      await bridge.start(
+        endpointId: endpointId,
+        groupId: profile.groupId,
+        endpointSecret: endpointSecret,
+      );
+      final actualEndpointId = await bridge.endpointId();
+      if (actualEndpointId != storedEndpointId) {
+        await syncEndpointIdentityStore.write(actualEndpointId);
+      }
+      final authority = profile.role == SyncGroupRole.primary
+          ? SyncAuthorityEngine(
+              SyncAuthorityStore(await repository.openSharedDatabase()),
+              primaryDeviceId: controller.preferences.deviceId,
+            )
+          : null;
+      final peer = IrohSyncGroupPeer(
+        bridge: bridge,
+        endpointSecret: endpointSecret,
+        authority: authority,
+      );
+      return GroupSyncTransport(
+        peer: peer,
+        profile: profile,
+        deviceId: controller.preferences.deviceId,
+        endpointId: actualEndpointId,
+        displayName: controller.preferences.deviceName,
+        deviceIdProvider: () => controller.preferences.deviceId,
+        endpointIdProvider: () => actualEndpointId,
+        displayNameProvider: () => controller.preferences.deviceName,
+      );
+    },
+  );
   final syncCoordinator = SyncCoordinator(
     repository: repository,
-    transport: HttpSyncTransport(),
+    transport: syncTransport,
     tokenStore: SecureSyncTokenStore(),
     connectivityMonitor: PlatformConnectivityMonitor(),
     deviceId: config.deviceId,
@@ -67,10 +128,11 @@ Future<void> main() async {
       unawaited(cycleController.refresh().catchError((_) {}));
     }
   });
-  final controller = ItemController(
+  controller = ItemController(
     repository: repository,
     config: config,
     syncCoordinator: syncCoordinator,
+    syncGroupSetup: syncGroupSetup,
     widgetSnapshotWriter: const PlatformWidgetSnapshotWriter(),
     desktopWindowController: desktopWindowController,
     notificationService: notificationService,

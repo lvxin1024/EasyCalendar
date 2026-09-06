@@ -40,6 +40,9 @@ class GroupSyncTransport implements SyncTransport, SyncTransportLifecycle {
     required this.deviceId,
     required this.endpointId,
     String? displayName,
+    this.deviceIdProvider,
+    this.endpointIdProvider,
+    this.displayNameProvider,
   }) : displayName = displayName ?? deviceId;
 
   final SyncGroupPeer _peer;
@@ -47,7 +50,12 @@ class GroupSyncTransport implements SyncTransport, SyncTransportLifecycle {
   final String deviceId;
   final String endpointId;
   final String displayName;
+  final String Function()? deviceIdProvider;
+  final String Function()? endpointIdProvider;
+  final String Function()? displayNameProvider;
   bool _started = false;
+  String? _connectedDeviceId;
+  String? _connectedEndpointId;
 
   @override
   Stream<SyncTransportEvent> get events => _peer.events;
@@ -55,13 +63,17 @@ class GroupSyncTransport implements SyncTransport, SyncTransportLifecycle {
   @override
   Future<void> start() async {
     if (_started) return;
+    final currentDeviceId = _currentDeviceId;
+    final currentEndpointId = _currentEndpointId;
     await _peer.connect(
       profile: profile,
-      deviceId: deviceId,
-      endpointId: endpointId,
-      displayName: displayName,
+      deviceId: currentDeviceId,
+      endpointId: currentEndpointId,
+      displayName: _currentDisplayName,
     );
     _started = true;
+    _connectedDeviceId = currentDeviceId;
+    _connectedEndpointId = currentEndpointId;
   }
 
   @override
@@ -71,9 +83,9 @@ class GroupSyncTransport implements SyncTransport, SyncTransportLifecycle {
     required String deviceId,
     required String idempotencyKey,
     required List<PendingSyncChange> changes,
-  }) {
-    _ensureStarted();
-    if (deviceId != this.deviceId) {
+  }) async {
+    await _ensureCurrentConnection();
+    if (deviceId != _currentDeviceId) {
       throw const SyncTransportException(
         'Group transport device ID does not match the configured endpoint.',
         permanent: true,
@@ -81,7 +93,7 @@ class GroupSyncTransport implements SyncTransport, SyncTransportLifecycle {
     }
     return _peer.push(
       deviceId: deviceId,
-      endpointId: endpointId,
+      endpointId: _currentEndpointId,
       idempotencyKey: idempotencyKey,
       changes: changes,
     );
@@ -93,11 +105,11 @@ class GroupSyncTransport implements SyncTransport, SyncTransportLifecycle {
     required String token,
     String? cursor,
     int limit = 200,
-  }) {
-    _ensureStarted();
+  }) async {
+    await _ensureCurrentConnection();
     return _peer.pull(
-      deviceId: deviceId,
-      endpointId: endpointId,
+      deviceId: _currentDeviceId,
+      endpointId: _currentEndpointId,
       cursor: cursor,
       limit: limit,
     );
@@ -107,16 +119,31 @@ class GroupSyncTransport implements SyncTransport, SyncTransportLifecycle {
   Future<void> close() async {
     if (!_started) return;
     _started = false;
+    _connectedDeviceId = null;
+    _connectedEndpointId = null;
     await _peer.close();
   }
 
-  void _ensureStarted() {
+  String get _currentDeviceId => deviceIdProvider?.call() ?? deviceId;
+
+  String get _currentEndpointId => endpointIdProvider?.call() ?? endpointId;
+
+  String get _currentDisplayName =>
+      displayNameProvider?.call() ?? displayName;
+
+  Future<void> _ensureCurrentConnection() async {
     if (!_started) {
       throw const SyncTransportException(
         'Group transport has not been started.',
         permanent: true,
       );
     }
+    if (_connectedDeviceId == _currentDeviceId &&
+        _connectedEndpointId == _currentEndpointId) {
+      return;
+    }
+    await close();
+    await start();
   }
 }
 
