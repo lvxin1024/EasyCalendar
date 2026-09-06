@@ -16,6 +16,7 @@ pub enum ErrorCode {
     TransportUnavailable = 9,
     InvalidArgument = 10,
     EndpointClosed = 11,
+    BufferTooSmall = 12,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -31,6 +32,7 @@ pub enum P2pError {
     TransportUnavailable,
     InvalidArgument(&'static str),
     EndpointClosed,
+    BufferTooSmall,
 }
 
 impl P2pError {
@@ -47,6 +49,7 @@ impl P2pError {
             Self::TransportUnavailable => ErrorCode::TransportUnavailable,
             Self::InvalidArgument(_) => ErrorCode::InvalidArgument,
             Self::EndpointClosed => ErrorCode::EndpointClosed,
+            Self::BufferTooSmall => ErrorCode::BufferTooSmall,
         }
     }
 }
@@ -67,6 +70,7 @@ impl fmt::Display for P2pError {
                 ErrorCode::TransportUnavailable => "transport_unavailable",
                 ErrorCode::EndpointClosed => "endpoint_closed",
                 ErrorCode::InvalidArgument => "invalid_argument",
+                ErrorCode::BufferTooSmall => "buffer_too_small",
                 ErrorCode::Ok => "ok",
             }),
         }
