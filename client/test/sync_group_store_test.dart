@@ -1,3 +1,6 @@
+import 'dart:typed_data';
+
+import 'package:easy_calendar/sync/p2p_bridge.dart';
 import 'package:easy_calendar/sync/sync_group.dart';
 import 'package:easy_calendar/sync/sync_group_store.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -108,6 +111,48 @@ void main() {
     expect(key, isNot('invalid'));
     expect(keyStore.value, key);
   });
+
+  test('automatic primary setup uses the native endpoint identity and ticket', () async {
+    final bridge = _MemoryP2pBridge();
+    final setup = SyncGroupSetupController(
+      _MemoryGroupStore(),
+      endpointIdentityStore: _MemoryEndpointIdentityStore(),
+      endpointKeyStore: _MemoryEndpointKeyStore(),
+    );
+
+    final profile = await setup.createPrimaryAutomatically(
+      bridge: bridge,
+      fallbackDeviceId: 'device-desktop',
+    );
+
+    expect(profile.role, SyncGroupRole.primary);
+    expect(profile.primaryEndpointId, 'endpoint-native');
+    expect(profile.endpointTicket, 'ticket-native');
+    expect(bridge.secretLength, 32);
+  });
+
+  test('automatic join starts the endpoint before storing the replica profile', () async {
+    final source = SyncGroupProfile.createPrimary(
+      primaryEndpointId: 'endpoint-primary',
+      endpointTicket: 'ticket-primary',
+    );
+    final bridge = _MemoryP2pBridge();
+    final setup = SyncGroupSetupController(
+      _MemoryGroupStore(),
+      endpointIdentityStore: _MemoryEndpointIdentityStore(),
+      endpointKeyStore: _MemoryEndpointKeyStore(),
+    );
+
+    final profile = await setup.joinAutomaticallyWithBridge(
+      code: source.encode(),
+      fallbackDeviceId: 'device-phone',
+      bridge: bridge,
+    );
+
+    expect(profile.role, SyncGroupRole.replica);
+    expect(profile.groupId, source.groupId);
+    expect(bridge.startedGroupId, source.groupId);
+  });
 }
 
 class _MemoryGroupStore implements SyncGroupProfileStore {
@@ -147,4 +192,56 @@ class _MemoryEndpointKeyStore implements SyncEndpointKeyStore {
 
   @override
   Future<void> clear() async => value = null;
+}
+
+class _MemoryP2pBridge implements P2pBridge {
+  int? secretLength;
+  String? startedGroupId;
+
+  @override
+  int get protocolVersion => 1;
+
+  @override
+  int get maxFrameBytes => 1024 * 1024;
+
+  @override
+  Future<void> start({
+    required String endpointId,
+    required String groupId,
+    String? endpointSecret,
+  }) async {
+    startedGroupId = groupId;
+    secretLength = endpointSecret == null ? null : 32;
+  }
+
+  @override
+  Future<String> endpointId() async => 'endpoint-native';
+
+  @override
+  Future<String> exportTicket() async => 'ticket-native';
+
+  @override
+  Future<int> connect(String ticket) async => 1;
+
+  @override
+  Future<int?> accept({Duration timeout = const Duration(milliseconds: 250)}) async => null;
+
+  @override
+  Future<Uint8List> request({
+    required int connectionId,
+    required Uint8List frame,
+  }) async => Uint8List(0);
+
+  @override
+  Future<Uint8List> receiveRequest({required int connectionId}) async =>
+      Uint8List(0);
+
+  @override
+  Future<void> respond({
+    required int connectionId,
+    required Uint8List frame,
+  }) async {}
+
+  @override
+  Future<void> close() async {}
 }

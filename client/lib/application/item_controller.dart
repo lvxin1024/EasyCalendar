@@ -23,6 +23,7 @@ import '../sync/sync_coordinator.dart';
 import '../sync/sync_group.dart';
 import '../sync/sync_group_store.dart';
 import '../sync/sync_models.dart';
+import '../sync/p2p_bridge.dart';
 import '../sync/token_store.dart';
 import '../utils/configured_time.dart';
 import '../widget/widget_snapshot_writer.dart';
@@ -113,6 +114,24 @@ class ItemController extends ChangeNotifier {
 
   Future<SyncGroupProfile> joinSyncGroup(String code) => _syncGroupSetup
       .joinAutomatically(code: code, fallbackDeviceId: preferences.deviceId);
+
+  Future<SyncGroupProfile> createSyncGroupAutomatically(
+    P2pBridge bridge,
+  ) =>
+      _syncGroupSetup.createPrimaryAutomatically(
+        bridge: bridge,
+        fallbackDeviceId: preferences.deviceId,
+      );
+
+  Future<SyncGroupProfile> joinSyncGroupAutomatically(
+    String code,
+    P2pBridge bridge,
+  ) =>
+      _syncGroupSetup.joinAutomaticallyWithBridge(
+        code: code,
+        fallbackDeviceId: preferences.deviceId,
+        bridge: bridge,
+      );
 
   Future<void> clearSyncGroup() => _syncGroupSetup.clear();
 

@@ -5,6 +5,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:uuid/uuid.dart';
 
 import '../platform/secure_storage.dart';
+import 'p2p_bridge.dart';
 import 'sync_group.dart';
 
 abstract interface class SyncGroupProfileStore {
@@ -165,6 +166,45 @@ class SyncGroupSetupController {
     return profile;
   }
 
+  Future<SyncGroupProfile> createPrimaryAutomatically({
+    required P2pBridge bridge,
+    required String fallbackDeviceId,
+    SyncRelayMode relayMode = SyncRelayMode.publicBestEffort,
+    List<String> relayUrls = const [],
+    int topologyEpoch = 1,
+  }) async {
+    final endpointId = await ensureLocalEndpointId(
+      fallbackDeviceId: fallbackDeviceId,
+    );
+    final endpointSecret = await ensureLocalEndpointKey();
+    final provisional = SyncGroupProfile.createPrimary(
+      primaryEndpointId: endpointId,
+      endpointTicket: 'pending',
+      relayMode: relayMode,
+      relayUrls: relayUrls,
+      topologyEpoch: topologyEpoch,
+    );
+    await bridge.start(
+      endpointId: endpointId,
+      groupId: provisional.groupId,
+      endpointSecret: endpointSecret,
+    );
+    final actualEndpointId = await bridge.endpointId();
+    final endpointTicket = await bridge.exportTicket();
+    final profile = SyncGroupProfile.fromSecret(
+      groupSecret: provisional.groupSecret,
+      role: SyncGroupRole.primary,
+      primaryEndpointId: actualEndpointId,
+      endpointTicket: endpointTicket,
+      relayMode: relayMode,
+      relayUrls: relayUrls,
+      topologyEpoch: topologyEpoch,
+    );
+    await endpointIdentityStore.write(actualEndpointId);
+    await store.write(profile);
+    return profile;
+  }
+
   Future<SyncGroupProfile> join({
     required String code,
     required String localEndpointId,
@@ -194,6 +234,26 @@ class SyncGroupSetupController {
       fallbackDeviceId: fallbackDeviceId,
     );
     return join(code: code, localEndpointId: endpointId);
+  }
+
+  Future<SyncGroupProfile> joinAutomaticallyWithBridge({
+    required String code,
+    required String fallbackDeviceId,
+    required P2pBridge bridge,
+  }) async {
+    final advertised = SyncGroupCode.decode(code);
+    final endpointId = await ensureLocalEndpointId(
+      fallbackDeviceId: fallbackDeviceId,
+    );
+    final endpointSecret = await ensureLocalEndpointKey();
+    await bridge.start(
+      endpointId: endpointId,
+      groupId: advertised.groupId,
+      endpointSecret: endpointSecret,
+    );
+    final actualEndpointId = await bridge.endpointId();
+    await endpointIdentityStore.write(actualEndpointId);
+    return join(code: code, localEndpointId: actualEndpointId);
   }
 
   Future<SyncGroupProfile?> load() => store.read();
