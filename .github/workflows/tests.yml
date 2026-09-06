@@ -157,6 +157,20 @@ jobs:
       - run: npm run check
         working-directory: server
 
+  native-p2p:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          components: rustfmt
+      - run: cargo fmt --check
+        working-directory: native/easycalendar_p2p
+      - run: cargo test
+        working-directory: native/easycalendar_p2p
+
   core:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -181,6 +195,7 @@ jobs:
       - macos-release
       - windows-release
       - worker
+      - native-p2p
       - core
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -192,10 +207,11 @@ jobs:
           MACOS_RESULT: ${{ needs.macos-release.result }}
           WINDOWS_RESULT: ${{ needs.windows-release.result }}
           WORKER_RESULT: ${{ needs.worker.result }}
+          NATIVE_P2P_RESULT: ${{ needs.native-p2p.result }}
           CORE_RESULT: ${{ needs.core.result }}
         run: |
           for result in \
             "$CLIENT_RESULT" "$ANDROID_RESULT" "$MACOS_RESULT" \
-            "$WINDOWS_RESULT" "$WORKER_RESULT" "$CORE_RESULT"; do
+            "$WINDOWS_RESULT" "$WORKER_RESULT" "$NATIVE_P2P_RESULT" "$CORE_RESULT"; do
             test "$result" = success
           done
