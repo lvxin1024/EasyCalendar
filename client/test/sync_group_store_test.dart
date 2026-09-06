@@ -52,6 +52,34 @@ void main() {
       throwsFormatException,
     );
   });
+
+  test('automatic join creates and reuses a local endpoint identity', () async {
+    final source = SyncGroupProfile.createPrimary(
+      primaryEndpointId: 'endpoint-primary',
+      endpointTicket: 'ticket-primary',
+    );
+    final profileStore = _MemoryGroupStore();
+    final endpointStore = _MemoryEndpointIdentityStore();
+    final setup = SyncGroupSetupController(
+      profileStore,
+      endpointIdentityStore: endpointStore,
+    );
+
+    final first = await setup.joinAutomatically(
+      code: source.encode(),
+      fallbackDeviceId: 'device-phone',
+    );
+    final second = await setup.joinAutomatically(
+      code: source.encode(),
+      fallbackDeviceId: 'device-phone-renamed',
+    );
+
+    expect(first.role, SyncGroupRole.replica);
+    expect(second.groupId, first.groupId);
+    expect(second.groupSecret, first.groupSecret);
+    expect(second.primaryEndpointId, first.primaryEndpointId);
+    expect(await endpointStore.read(), 'device-phone');
+  });
 }
 
 class _MemoryGroupStore implements SyncGroupProfileStore {
@@ -62,6 +90,19 @@ class _MemoryGroupStore implements SyncGroupProfileStore {
 
   @override
   Future<void> write(SyncGroupProfile profile) async => value = profile;
+
+  @override
+  Future<void> clear() async => value = null;
+}
+
+class _MemoryEndpointIdentityStore implements SyncEndpointIdentityStore {
+  String? value;
+
+  @override
+  Future<String?> read() async => value;
+
+  @override
+  Future<void> write(String endpointId) async => value = endpointId;
 
   @override
   Future<void> clear() async => value = null;

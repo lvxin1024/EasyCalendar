@@ -1,4 +1,5 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:uuid/uuid.dart';
 
 import '../platform/secure_storage.dart';
 import 'sync_group.dart';
@@ -9,6 +10,36 @@ abstract interface class SyncGroupProfileStore {
   Future<void> write(SyncGroupProfile profile);
 
   Future<void> clear();
+}
+
+abstract interface class SyncEndpointIdentityStore {
+  Future<String?> read();
+
+  Future<void> write(String endpointId);
+
+  Future<void> clear();
+}
+
+class SecureSyncEndpointIdentityStore implements SyncEndpointIdentityStore {
+  SecureSyncEndpointIdentityStore({FlutterSecureStorage? storage})
+    : _storage = storage ?? easyCalendarSecureStorage;
+
+  static const _key = 'easycalendar_sync_endpoint_id';
+  final FlutterSecureStorage _storage;
+
+  @override
+  Future<String?> read() async {
+    final value = await _storage.read(key: _key);
+    final normalized = value?.trim() ?? '';
+    return normalized.isEmpty ? null : normalized;
+  }
+
+  @override
+  Future<void> write(String endpointId) =>
+      _storage.write(key: _key, value: endpointId.trim());
+
+  @override
+  Future<void> clear() => _storage.delete(key: _key);
 }
 
 class SecureSyncGroupProfileStore implements SyncGroupProfileStore {
@@ -34,9 +65,30 @@ class SecureSyncGroupProfileStore implements SyncGroupProfileStore {
 }
 
 class SyncGroupSetupController {
-  const SyncGroupSetupController(this.store);
+  SyncGroupSetupController(
+    this.store, {
+    SyncEndpointIdentityStore? endpointIdentityStore,
+    Uuid? uuid,
+  }) : endpointIdentityStore =
+           endpointIdentityStore ?? SecureSyncEndpointIdentityStore(),
+       _uuid = uuid ?? Uuid();
 
   final SyncGroupProfileStore store;
+  final SyncEndpointIdentityStore endpointIdentityStore;
+  final Uuid _uuid;
+
+  Future<String> ensureLocalEndpointId({
+    required String fallbackDeviceId,
+  }) async {
+    final existing = await endpointIdentityStore.read();
+    if (existing != null && _validEndpointId(existing)) return existing;
+    final fallback = fallbackDeviceId.trim();
+    final endpointId = _validEndpointId(fallback)
+        ? fallback
+        : 'endpoint-${_uuid.v4()}';
+    await endpointIdentityStore.write(endpointId);
+    return endpointId;
+  }
 
   Future<SyncGroupProfile> createPrimary({
     required String primaryEndpointId,
@@ -77,9 +129,22 @@ class SyncGroupSetupController {
     return profile;
   }
 
+  Future<SyncGroupProfile> joinAutomatically({
+    required String code,
+    required String fallbackDeviceId,
+  }) async {
+    final endpointId = await ensureLocalEndpointId(
+      fallbackDeviceId: fallbackDeviceId,
+    );
+    return join(code: code, localEndpointId: endpointId);
+  }
+
   Future<SyncGroupProfile?> load() => store.read();
 
   Future<String?> exportCode() async => (await store.read())?.encode();
 
   Future<void> clear() => store.clear();
+
+  static bool _validEndpointId(String value) =>
+      RegExp(r'^[A-Za-z0-9][A-Za-z0-9._:-]{1,199}$').hasMatch(value.trim());
 }
