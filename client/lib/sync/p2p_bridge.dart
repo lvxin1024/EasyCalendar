@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
+import 'package:path/path.dart' as path;
 
 import 'sync_transport.dart';
 
@@ -479,7 +480,19 @@ class FfiP2pNativeApi implements P2pNativeApi {
     if (Platform.isAndroid || Platform.isLinux) {
       return ffi.DynamicLibrary.open('libeasycalendar_p2p.so');
     }
-    if (Platform.isMacOS) return ffi.DynamicLibrary.open('libeasycalendar_p2p.dylib');
+    if (Platform.isMacOS) {
+      final executable = File(Platform.resolvedExecutable);
+      final bundleLibrary = path.join(
+        executable.parent.parent.path,
+        'Frameworks',
+        'libeasycalendar_p2p.dylib',
+      );
+      try {
+        return ffi.DynamicLibrary.open(bundleLibrary);
+      } on Object {
+        return ffi.DynamicLibrary.open('libeasycalendar_p2p.dylib');
+      }
+    }
     return ffi.DynamicLibrary.process();
   }
 }

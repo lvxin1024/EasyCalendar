@@ -43,6 +43,22 @@ jobs:
           flutter-version: "3.44.9"
           channel: stable
           cache: true
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android,i686-linux-android
+      - name: Install cargo-ndk
+        shell: bash
+        run: cargo install cargo-ndk --locked
+      - name: Configure Android NDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:?ANDROID_HOME is not set}}"
+          ndk_dir="$(find "$sdk_root/ndk" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          test -n "$ndk_dir"
+          echo "ANDROID_NDK_HOME=$ndk_dir" >> "$GITHUB_ENV"
+      - name: Build native P2P bridge
+        run: bash scripts/build_native_p2p.sh android client/android/app/src/main/jniLibs
       - name: Configure ephemeral CI signing
         shell: bash
         run: |
@@ -74,6 +90,12 @@ jobs:
           flutter-version: "3.44.9"
           channel: stable
           cache: true
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - name: Build native P2P bridge
+        shell: bash
+        run: bash scripts/build_native_p2p.sh macos "$RUNNER_TEMP/easycalendar-p2p"
       - run: flutter pub get
         working-directory: client
       - name: Configure macOS release build
@@ -99,6 +121,15 @@ jobs:
           REGISTER_APP_GROUPS=NO
           build
         working-directory: client
+      - name: Add native P2P bridge to app bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="client/build/macos/Build/Products/Release/EasyCalendar.app"
+          mkdir -p "$app/Contents/Frameworks"
+          cp "$RUNNER_TEMP/easycalendar-p2p/libeasycalendar_p2p.dylib" \
+            "$app/Contents/Frameworks/libeasycalendar_p2p.dylib"
+          test -f "$app/Contents/Frameworks/libeasycalendar_p2p.dylib"
       - name: Verify macOS artifact
         run: >-
           test -x
@@ -130,6 +161,12 @@ jobs:
           flutter-version: "3.44.9"
           channel: stable
           cache: true
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build native P2P bridge
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "client\build\native\windows" | Out-Null
+          & .\scripts\build_native_p2p.ps1 -OutputDirectory "client\build\native\windows"
       - run: flutter pub get
         working-directory: client
       - name: Build Windows release application
@@ -141,6 +178,9 @@ jobs:
           if (-not (Test-Path
           "client\build\windows\x64\runner\Release\EasyCalendar.exe"))
           { throw "EasyCalendar.exe was not built" }
+          if (-not (Test-Path
+          "client\build\windows\x64\runner\Release\easycalendar_p2p.dll"))
+          { throw "easycalendar_p2p.dll was not packaged" }
 
   worker:
     runs-on: ubuntu-latest
