@@ -9,6 +9,7 @@ import 'sync_models.dart';
 import 'sync_repository.dart';
 import 'sync_platform_lifecycle.dart';
 import 'sync_transport.dart';
+import 'sync_transport_selector.dart';
 import 'token_store.dart';
 
 class SyncCoordinator extends ChangeNotifier {
@@ -97,6 +98,9 @@ class SyncCoordinator extends ChangeNotifier {
   }) {
     _enabled = enabled;
     _mode = mode;
+    if (transport case final SyncTransportSelector selector) {
+      unawaited(selector.setMode(mode));
+    }
     _serverUrl = Uri.tryParse(serverUrl);
     _retryTimer?.cancel();
     _periodicSyncTimer?.cancel();
