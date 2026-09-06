@@ -1,6 +1,7 @@
 package io.easycalendar.easy_calendar
 
 import android.content.Intent
+import android.os.Build
 import io.easycalendar.easy_calendar.widget.EasyCalendarWidgetUpdater
 import io.easycalendar.easy_calendar.widget.WidgetSnapshotStore
 import io.flutter.embedding.android.FlutterActivity
@@ -9,6 +10,7 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     private var widgetChannel: MethodChannel? = null
+    private var syncLifecycleChannel: MethodChannel? = null
     private var dartReady = false
     private var pendingWidgetUrl: String? = null
 
@@ -53,6 +55,31 @@ class MainActivity : FlutterActivity() {
                 }
             }
         }
+        syncLifecycleChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            SYNC_LIFECYCLE_CHANNEL,
+        ).also { channel ->
+            channel.setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "startForegroundSync" -> {
+                        val intent = Intent(this, SyncForegroundService::class.java)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            startForegroundService(intent)
+                        } else {
+                            startService(intent)
+                        }
+                        result.success(null)
+                    }
+
+                    "stopForegroundSync" -> {
+                        stopService(Intent(this, SyncForegroundService::class.java))
+                        result.success(null)
+                    }
+
+                    else -> result.notImplemented()
+                }
+            }
+        }
         captureWidgetUrl(intent)
     }
 
@@ -78,5 +105,6 @@ class MainActivity : FlutterActivity() {
 
     private companion object {
         const val WIDGET_CHANNEL = "io.easycalendar/widget"
+        const val SYNC_LIFECYCLE_CHANNEL = "io.easycalendar/sync_lifecycle"
     }
 }

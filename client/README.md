@@ -35,3 +35,13 @@ Analyzer and unit tests run on any Flutter-capable development machine; native
 build acceptance additionally requires that platform's SDK and toolchain.
 Release identifiers and the compatibility rules for changing native metadata
 are documented in [`APP_IDENTITY.md`](APP_IDENTITY.md).
+
+Group-sync lifecycle policy:
+
+- Android starts an optional foreground `dataSync` service while a group primary
+  is active. The service owns only the process-liveness notification; sync data
+  remains in the Flutter authority store.
+- macOS and Windows stop the endpoint when the application exits.
+- This checkout does not include an iOS runner. iOS support must therefore be
+  treated as foreground plus resume/short-task synchronization, never as a
+  continuously available primary node.

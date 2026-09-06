@@ -7,6 +7,7 @@ import 'connectivity_monitor.dart';
 import '../domain/sync_mode.dart';
 import 'sync_models.dart';
 import 'sync_repository.dart';
+import 'sync_platform_lifecycle.dart';
 import 'sync_transport.dart';
 import 'token_store.dart';
 
@@ -18,6 +19,7 @@ class SyncCoordinator extends ChangeNotifier {
     required this.connectivityMonitor,
     required this.deviceId,
     required this.retryLimit,
+    this.platformLifecycle,
     Uuid? uuid,
     DateTime Function()? clock,
   }) : _uuid = uuid ?? Uuid(),
@@ -29,6 +31,7 @@ class SyncCoordinator extends ChangeNotifier {
   final ConnectivityMonitor connectivityMonitor;
   String deviceId;
   final int retryLimit;
+  final SyncPlatformLifecycle? platformLifecycle;
   final Uuid _uuid;
   final DateTime Function() _clock;
 
@@ -70,6 +73,13 @@ class SyncCoordinator extends ChangeNotifier {
         _handleTransportEvent,
       );
       await lifecycle.start();
+    }
+    if (enabled && mode == SyncMode.group) {
+      try {
+        await platformLifecycle?.start();
+      } catch (_) {
+        // Foreground service support is optional; local-first startup continues.
+      }
     }
     _connectivitySubscription ??= connectivityMonitor.onlineChanges.listen((
       online,
@@ -335,6 +345,7 @@ class SyncCoordinator extends ChangeNotifier {
     if (transport case final SyncTransportLifecycle lifecycle) {
       unawaited(lifecycle.close());
     }
+    unawaited(platformLifecycle?.close());
     super.dispose();
   }
 }

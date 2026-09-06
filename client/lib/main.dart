@@ -18,6 +18,7 @@ import 'platform/application_identity.dart';
 import 'sync/connectivity_monitor.dart';
 import 'sync/http_sync_transport.dart';
 import 'sync/sync_coordinator.dart';
+import 'sync/sync_platform_lifecycle.dart';
 import 'sync/token_store.dart';
 import 'widget/widget_deep_link_controller.dart';
 import 'widget/widget_snapshot_writer.dart';
@@ -58,6 +59,7 @@ Future<void> main() async {
     connectivityMonitor: PlatformConnectivityMonitor(),
     deviceId: config.deviceId,
     retryLimit: config.syncRetryLimit,
+    platformLifecycle: const MethodChannelSyncPlatformLifecycle(),
   );
   syncCoordinator.addListener(() {
     if (syncCoordinator.snapshot.localDataChanged &&
