@@ -80,6 +80,34 @@ void main() {
     expect(second.primaryEndpointId, first.primaryEndpointId);
     expect(await endpointStore.read(), 'device-phone');
   });
+
+  test('endpoint key is generated once and survives device renaming', () async {
+    final keyStore = _MemoryEndpointKeyStore();
+    final setup = SyncGroupSetupController(
+      _MemoryGroupStore(),
+      endpointKeyStore: keyStore,
+    );
+
+    final first = await setup.ensureLocalEndpointKey();
+    final second = await setup.ensureLocalEndpointKey();
+
+    expect(first, second);
+    expect(first.length, greaterThan(40));
+    expect(await keyStore.read(), first);
+  });
+
+  test('invalid stored endpoint key is replaced', () async {
+    final keyStore = _MemoryEndpointKeyStore()..value = 'invalid';
+    final setup = SyncGroupSetupController(
+      _MemoryGroupStore(),
+      endpointKeyStore: keyStore,
+    );
+
+    final key = await setup.ensureLocalEndpointKey();
+
+    expect(key, isNot('invalid'));
+    expect(keyStore.value, key);
+  });
 }
 
 class _MemoryGroupStore implements SyncGroupProfileStore {
@@ -103,6 +131,19 @@ class _MemoryEndpointIdentityStore implements SyncEndpointIdentityStore {
 
   @override
   Future<void> write(String endpointId) async => value = endpointId;
+
+  @override
+  Future<void> clear() async => value = null;
+}
+
+class _MemoryEndpointKeyStore implements SyncEndpointKeyStore {
+  String? value;
+
+  @override
+  Future<String?> read() async => value;
+
+  @override
+  Future<void> write(String encodedKey) async => value = encodedKey;
 
   @override
   Future<void> clear() async => value = null;

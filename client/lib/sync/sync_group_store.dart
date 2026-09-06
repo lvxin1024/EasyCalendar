@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:math';
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:uuid/uuid.dart';
 
@@ -20,6 +23,14 @@ abstract interface class SyncEndpointIdentityStore {
   Future<void> clear();
 }
 
+abstract interface class SyncEndpointKeyStore {
+  Future<String?> read();
+
+  Future<void> write(String encodedKey);
+
+  Future<void> clear();
+}
+
 class SecureSyncEndpointIdentityStore implements SyncEndpointIdentityStore {
   SecureSyncEndpointIdentityStore({FlutterSecureStorage? storage})
     : _storage = storage ?? easyCalendarSecureStorage;
@@ -37,6 +48,40 @@ class SecureSyncEndpointIdentityStore implements SyncEndpointIdentityStore {
   @override
   Future<void> write(String endpointId) =>
       _storage.write(key: _key, value: endpointId.trim());
+
+  @override
+  Future<void> clear() => _storage.delete(key: _key);
+}
+
+class SecureSyncEndpointKeyStore implements SyncEndpointKeyStore {
+  SecureSyncEndpointKeyStore({FlutterSecureStorage? storage})
+    : _storage = storage ?? easyCalendarSecureStorage;
+
+  static const _key = 'easycalendar_sync_endpoint_secret';
+  final FlutterSecureStorage _storage;
+
+  @override
+  Future<String?> read() async {
+    final value = await _storage.read(key: _key);
+    final normalized = value?.trim() ?? '';
+    if (normalized.isEmpty) return null;
+    try {
+      final bytes = base64Url.decode(base64Url.normalize(normalized));
+      return bytes.length == 32 ? normalized : null;
+    } on FormatException {
+      return null;
+    }
+  }
+
+  @override
+  Future<void> write(String encodedKey) async {
+    final normalized = encodedKey.trim();
+    final bytes = base64Url.decode(base64Url.normalize(normalized));
+    if (bytes.length != 32) {
+      throw const FormatException('endpoint 私钥必须是 32 字节');
+    }
+    await _storage.write(key: _key, value: normalized.replaceAll('=', ''));
+  }
 
   @override
   Future<void> clear() => _storage.delete(key: _key);
@@ -68,14 +113,26 @@ class SyncGroupSetupController {
   SyncGroupSetupController(
     this.store, {
     SyncEndpointIdentityStore? endpointIdentityStore,
+    SyncEndpointKeyStore? endpointKeyStore,
     Uuid? uuid,
   }) : endpointIdentityStore =
            endpointIdentityStore ?? SecureSyncEndpointIdentityStore(),
+       endpointKeyStore = endpointKeyStore ?? SecureSyncEndpointKeyStore(),
        _uuid = uuid ?? Uuid();
 
   final SyncGroupProfileStore store;
   final SyncEndpointIdentityStore endpointIdentityStore;
+  final SyncEndpointKeyStore endpointKeyStore;
   final Uuid _uuid;
+
+  Future<String> ensureLocalEndpointKey() async {
+    final existing = await endpointKeyStore.read();
+    if (existing != null && _validEndpointKey(existing)) return existing;
+    final bytes = List<int>.generate(32, (_) => Random.secure().nextInt(256));
+    final encoded = base64Url.encode(bytes).replaceAll('=', '');
+    await endpointKeyStore.write(encoded);
+    return encoded;
+  }
 
   Future<String> ensureLocalEndpointId({
     required String fallbackDeviceId,
@@ -147,4 +204,12 @@ class SyncGroupSetupController {
 
   static bool _validEndpointId(String value) =>
       RegExp(r'^[A-Za-z0-9][A-Za-z0-9._:-]{1,199}$').hasMatch(value.trim());
+
+  static bool _validEndpointKey(String value) {
+    try {
+      return base64Url.decode(base64Url.normalize(value)).length == 32;
+    } on FormatException {
+      return false;
+    }
+  }
 }
