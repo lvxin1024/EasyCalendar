@@ -65,6 +65,7 @@ void main() {
       expect(result.accepted, ['change_01']);
       expect(result.rejected.single.code, 'constraint_violation');
       expect(result.conflicts.single.winner.changeId, 'change_winner');
+      expect(result.serverCursor, 'cur_1');
     },
   );
 

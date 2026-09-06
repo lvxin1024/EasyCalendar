@@ -1,7 +1,7 @@
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 abstract final class LocalDatabaseSchema {
-  static const version = 8;
+  static const version = 9;
 
   static Future<void> create(Database database, int version) async {
     await database.execute('''
@@ -190,7 +190,7 @@ abstract final class LocalDatabaseSchema {
             "AND last_error LIKE '%entity_type is invalid%'",
       );
     }
-    if (oldVersion < 8) {
+    if (oldVersion < 9) {
       await _createAuthoritySchema(database);
     }
   }
@@ -315,6 +315,14 @@ abstract final class LocalDatabaseSchema {
         request_hash TEXT NOT NULL,
         response_json TEXT NOT NULL CHECK (json_valid(response_json)),
         created_at TEXT NOT NULL
+      )
+    ''');
+    await database.execute('''
+      CREATE TABLE IF NOT EXISTS sync_authority_applied_changes (
+        change_id TEXT PRIMARY KEY NOT NULL,
+        request_hash TEXT NOT NULL,
+        result_json TEXT NOT NULL CHECK (json_valid(result_json)),
+        applied_at TEXT NOT NULL
       )
     ''');
     await database.execute('''

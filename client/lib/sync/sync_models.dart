@@ -171,11 +171,13 @@ class PushSyncResult {
     required this.accepted,
     required this.rejected,
     this.conflicts = const [],
+    this.serverCursor,
   });
 
   final List<String> accepted;
   final List<SyncRejection> rejected;
   final List<SyncConflictSummary> conflicts;
+  final String? serverCursor;
 }
 
 class PullSyncPage {
