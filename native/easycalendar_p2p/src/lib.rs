@@ -27,6 +27,19 @@ fn copy_string(value: &str, output: *mut u8, capacity: usize) -> Result<usize, P
     Ok(value.len())
 }
 
+fn copy_bytes(value: &[u8], output: *mut u8, capacity: usize) -> Result<(), P2pError> {
+    if value.len() > capacity {
+        return Err(P2pError::BufferTooSmall);
+    }
+    if !value.is_empty() && output.is_null() {
+        return Err(P2pError::InvalidArgument("output buffer is null"));
+    }
+    if !value.is_empty() {
+        unsafe { ptr::copy_nonoverlapping(value.as_ptr(), output, value.len()) };
+    }
+    Ok(())
+}
+
 /// Creates an Iroh endpoint with a stable secret key.
 ///
 /// The returned pointer is owned by the caller and must be released with
@@ -104,8 +117,106 @@ pub unsafe extern "C" fn easycalendar_p2p_endpoint_connect(
     let Ok(ticket) = std::str::from_utf8(ticket) else {
         return ErrorCode::InvalidArgument as i32;
     };
+    match handle.connect(ticket) {
+        Ok(_) => ErrorCode::Ok as i32,
+        Err(error) => error.code() as i32,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn easycalendar_p2p_endpoint_connect_id(
+    handle: *const IrohEndpointHandle,
+    ticket_ptr: *const u8,
+    ticket_len: usize,
+) -> i64 {
+    let Some(handle) = handle.as_ref() else {
+        return -(ErrorCode::InvalidArgument as i64);
+    };
+    let Some(ticket) = read_bytes(ticket_ptr, ticket_len) else {
+        return -(ErrorCode::InvalidArgument as i64);
+    };
+    let Ok(ticket) = std::str::from_utf8(ticket) else {
+        return -(ErrorCode::InvalidArgument as i64);
+    };
+    match handle.connect(ticket) {
+        Ok(id) => id as i64,
+        Err(error) => -(error.code() as i64),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn easycalendar_p2p_endpoint_accept(
+    handle: *const IrohEndpointHandle,
+    timeout_ms: u64,
+) -> i64 {
+    let Some(handle) = handle.as_ref() else {
+        return -(ErrorCode::InvalidArgument as i64);
+    };
+    match handle.accept(std::time::Duration::from_millis(timeout_ms)) {
+        Ok(Some(id)) => id as i64,
+        Ok(None) => 0,
+        Err(error) => -(error.code() as i64),
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn easycalendar_p2p_endpoint_request(
+    handle: *const IrohEndpointHandle,
+    connection_id: u64,
+    request_ptr: *const u8,
+    request_len: usize,
+    output: *mut u8,
+    capacity: usize,
+) -> i32 {
+    let Some(handle) = handle.as_ref() else {
+        return ErrorCode::InvalidArgument as i32;
+    };
+    let Some(request) = read_bytes(request_ptr, request_len) else {
+        return ErrorCode::InvalidArgument as i32;
+    };
+    let response = match handle.request(connection_id, request) {
+        Ok(response) => response,
+        Err(error) => return error.code() as i32,
+    };
+    copy_bytes(&response, output, capacity)
+        .map(|_| ErrorCode::Ok as i32)
+        .unwrap_or_else(|error| error.code() as i32)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn easycalendar_p2p_endpoint_receive_request(
+    handle: *const IrohEndpointHandle,
+    connection_id: u64,
+    output: *mut u8,
+    capacity: usize,
+) -> i32 {
+    let Some(handle) = handle.as_ref() else {
+        return ErrorCode::InvalidArgument as i32;
+    };
+    let request = match handle.receive_request(connection_id) {
+        Ok(request) => request,
+        Err(error) => return error.code() as i32,
+    };
+    copy_bytes(&request, output, capacity)
+        .map(|_| ErrorCode::Ok as i32)
+        .unwrap_or_else(|error| error.code() as i32)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn easycalendar_p2p_endpoint_respond(
+    handle: *const IrohEndpointHandle,
+    connection_id: u64,
+    response_ptr: *const u8,
+    response_len: usize,
+) -> i32 {
+    let Some(handle) = handle.as_ref() else {
+        return ErrorCode::InvalidArgument as i32;
+    };
+    let Some(response) = read_bytes(response_ptr, response_len) else {
+        return ErrorCode::InvalidArgument as i32;
+    };
     handle
-        .connect(ticket)
+        .respond(connection_id, response)
         .map(|_| ErrorCode::Ok as i32)
         .unwrap_or_else(|error| error.code() as i32)
 }
