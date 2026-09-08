@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:ffi' as ffi;
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
@@ -37,10 +39,7 @@ abstract interface class P2pBridge {
 
   Future<Uint8List> receiveRequest({required int connectionId});
 
-  Future<void> respond({
-    required int connectionId,
-    required Uint8List frame,
-  });
+  Future<void> respond({required int connectionId, required Uint8List frame});
 
   Future<void> close();
 }
@@ -105,13 +104,11 @@ class NativeP2pBridge implements P2pBridge {
         permanent: true,
       );
     }
-    final secret = _decodeSecret(encoded);
+    final secret = _decodeP2pSecret(encoded);
     _handle = api.bind(secret);
     if (_handle == 0) {
       _handle = null;
-      throw const SyncTransportException(
-        'P2P endpoint could not be started.',
-      );
+      throw const SyncTransportException('P2P endpoint could not be started.');
     }
   }
 
@@ -126,8 +123,9 @@ class NativeP2pBridge implements P2pBridge {
       api.connect(_requireHandle(), ticket);
 
   @override
-  Future<int?> accept({Duration timeout = const Duration(milliseconds: 250)}) async =>
-      api.accept(_requireHandle(), timeout);
+  Future<int?> accept({
+    Duration timeout = const Duration(milliseconds: 250),
+  }) async => api.accept(_requireHandle(), timeout);
 
   @override
   Future<Uint8List> request({
@@ -159,24 +157,307 @@ class NativeP2pBridge implements P2pBridge {
     if (handle == null) {
       throw const SyncTransportException(
         'P2P native bridge has not been started.',
-        permanent: true,
       );
     }
     return handle;
   }
+}
 
-  static Uint8List _decodeSecret(String value) {
-    try {
-      final decoded = base64Url.decode(base64Url.normalize(value));
-      if (decoded.length != 32) throw const FormatException();
-      return Uint8List.fromList(decoded);
-    } on FormatException {
+/// Runs synchronous FFI calls away from Flutter's UI isolate.
+class IsolateP2pBridge implements P2pBridge {
+  _P2pWorker? _worker;
+
+  @override
+  int get protocolVersion => 1;
+
+  @override
+  int get maxFrameBytes => 1024 * 1024;
+
+  @override
+  Future<void> start({
+    required String endpointId,
+    required String groupId,
+    String? endpointSecret,
+  }) async {
+    if (_worker != null) return;
+    final encoded = endpointSecret?.trim() ?? '';
+    if (encoded.isEmpty) {
       throw const SyncTransportException(
-        'P2P endpoint private key is invalid.',
+        'P2P endpoint private key is not configured.',
         permanent: true,
       );
     }
+    final secret = _decodeP2pSecret(encoded);
+    final worker = await _P2pWorker.spawn();
+    _worker = worker;
+    try {
+      await _invoke<void>('bind', secret);
+    } catch (_) {
+      _worker = null;
+      await worker.close();
+      rethrow;
+    }
   }
+
+  @override
+  Future<String> endpointId() => _invoke<String>('endpoint_id');
+
+  @override
+  Future<String> exportTicket() => _invoke<String>('endpoint_ticket');
+
+  @override
+  Future<int> connect(String ticket) => _invoke<int>('connect', ticket);
+
+  @override
+  Future<int?> accept({Duration timeout = const Duration(milliseconds: 250)}) =>
+      _invoke<int?>('accept', timeout.inMilliseconds);
+
+  @override
+  Future<Uint8List> request({
+    required int connectionId,
+    required Uint8List frame,
+  }) => _invoke<Uint8List>('request', <Object?>[connectionId, frame]);
+
+  @override
+  Future<Uint8List> receiveRequest({required int connectionId}) =>
+      _invoke<Uint8List>('receive_request', connectionId);
+
+  @override
+  Future<void> respond({required int connectionId, required Uint8List frame}) =>
+      _invoke<void>('respond', <Object?>[connectionId, frame]);
+
+  @override
+  Future<void> close() async {
+    final worker = _worker;
+    _worker = null;
+    if (worker != null) await worker.close();
+  }
+
+  Future<T> _invoke<T>(String operation, [Object? argument]) async {
+    final worker = _worker;
+    if (worker == null) {
+      throw const SyncTransportException(
+        'P2P native bridge has not been started.',
+      );
+    }
+    try {
+      return await worker.call<T>(operation, argument);
+    } on P2pNativeException catch (error) {
+      throw _syncException(error);
+    }
+  }
+
+  static SyncTransportException _syncException(P2pNativeException error) {
+    final permanent = switch (error.code) {
+      1 || 2 || 3 || 4 || 6 || 7 || 8 || 10 || 12 => true,
+      _ => false,
+    };
+    return SyncTransportException(
+      'P2P operation failed (${error.code}): ${error.message}',
+      permanent: permanent,
+    );
+  }
+}
+
+Uint8List _decodeP2pSecret(String value) {
+  try {
+    final decoded = base64Url.decode(base64Url.normalize(value));
+    if (decoded.length != 32) throw const FormatException();
+    return Uint8List.fromList(decoded);
+  } on FormatException {
+    throw const SyncTransportException(
+      'P2P endpoint private key is invalid.',
+      permanent: true,
+    );
+  }
+}
+
+class _P2pWorker {
+  _P2pWorker({
+    required this.isolate,
+    required this.responses,
+    required this.commands,
+  });
+
+  final Isolate isolate;
+  final ReceivePort responses;
+  final SendPort commands;
+  final _pending = <int, Completer<Object?>>{};
+  StreamSubscription<Object?>? _subscription;
+  int _nextRequestId = 1;
+  bool _closed = false;
+
+  static Future<_P2pWorker> spawn() async {
+    final responses = ReceivePort();
+    final isolate = await Isolate.spawn<Object?>(
+      _p2pWorkerMain,
+      responses.sendPort,
+      errorsAreFatal: false,
+    );
+    final stream = responses.asBroadcastStream();
+    final ready = await stream.first;
+    if (ready is! List<Object?> ||
+        ready.length != 2 ||
+        ready[0] != 'ready' ||
+        ready[1] is! SendPort) {
+      isolate.kill(priority: Isolate.immediate);
+      responses.close();
+      throw const P2pNativeException(9, 'native worker failed to start');
+    }
+    final worker = _P2pWorker(
+      isolate: isolate,
+      responses: responses,
+      commands: ready[1] as SendPort,
+    );
+    worker._subscription = stream.listen(worker._handleMessage);
+    return worker;
+  }
+
+  Future<T> call<T>(String operation, [Object? argument]) {
+    if (_closed) return Future<T>.error(StateError('P2P worker is closed'));
+    final id = _nextRequestId++;
+    final completer = Completer<Object?>();
+    _pending[id] = completer;
+    commands.send(<Object?>[id, operation, argument]);
+    return completer.future.then((value) => value as T);
+  }
+
+  Future<void> close() async {
+    if (_closed) return;
+    try {
+      await call<void>('close');
+    } catch (_) {}
+    _closed = true;
+    for (final completer in _pending.values) {
+      if (!completer.isCompleted) {
+        completer.completeError(StateError('P2P worker closed'));
+      }
+    }
+    _pending.clear();
+    await _subscription?.cancel();
+    responses.close();
+    isolate.kill(priority: Isolate.immediate);
+  }
+
+  void _handleMessage(Object? message) {
+    if (message is! List<Object?> || message.length < 3) return;
+    final id = message[0];
+    if (id is! int || id == 0) return;
+    final completer = _pending.remove(id);
+    if (completer == null || completer.isCompleted) return;
+    if (message[1] == true) {
+      completer.complete(message[2]);
+    } else {
+      completer.completeError(
+        P2pNativeException(message[2] as int, message[3] as String),
+      );
+    }
+  }
+}
+
+void _p2pWorkerMain(Object? message) {
+  final response = message as SendPort;
+  final commands = ReceivePort();
+  response.send(<Object?>['ready', commands.sendPort]);
+  final api = FfiP2pNativeApi.tryLoad();
+  int? handle;
+  Future<void> handleCommand(Object? message) async {
+    if (message is! List<Object?> || message.length < 3) return;
+    final id = message[0];
+    final operation = message[1];
+    if (id is! int || operation is! String) return;
+    try {
+      if (operation == 'close') {
+        if (api != null && handle != null) api.close(handle!);
+        handle = null;
+        response.send(<Object?>[id, true, null]);
+        return;
+      }
+      if (api == null) {
+        throw const P2pNativeException(
+          9,
+          'native P2P bridge is not available on this build',
+        );
+      }
+      final argument = message[2];
+      if (operation == 'bind') {
+        handle = api.bind(argument as Uint8List);
+        response.send(<Object?>[id, true, handle]);
+        return;
+      }
+      final operationResult = await Isolate.run<List<Object?>>(
+        () =>
+            _runP2pNativeOperation(_workerHandle(handle), operation, argument),
+      );
+      if (operationResult[0] != true) {
+        throw P2pNativeException(
+          operationResult[1] as int,
+          operationResult[2] as String,
+        );
+      }
+      final result = operationResult[1];
+      response.send(<Object?>[id, true, result]);
+    } on P2pNativeException catch (error) {
+      response.send(<Object?>[id, false, error.code, error.message]);
+    } catch (error) {
+      response.send(<Object?>[id, false, 9, '$error']);
+    }
+  }
+
+  commands.listen((message) {
+    unawaited(handleCommand(message));
+  });
+}
+
+int _workerHandle(int? handle) =>
+    handle ?? (throw const P2pNativeException(11, 'P2P endpoint is closed'));
+
+List<Object?> _runP2pNativeOperation(
+  int handle,
+  String operation,
+  Object? argument,
+) {
+  try {
+    final api = FfiP2pNativeApi.tryLoad();
+    if (api == null) {
+      return const [
+        false,
+        9,
+        'native P2P bridge is not available on this build',
+      ];
+    }
+    final pair = argument is List<Object?> ? argument : const <Object?>[];
+    final result = switch (operation) {
+      'endpoint_id' => api.endpointId(handle),
+      'endpoint_ticket' => api.endpointTicket(handle),
+      'connect' => api.connect(handle, argument as String),
+      'accept' => api.accept(handle, Duration(milliseconds: argument as int)),
+      'request' => api.request(handle, pair[0] as int, pair[1] as Uint8List),
+      'receive_request' => api.receiveRequest(handle, argument as int),
+      'respond' => _respondWorker(
+        api,
+        handle,
+        pair[0] as int,
+        pair[1] as Uint8List,
+      ),
+      _ => throw const P2pNativeException(10, 'unknown native P2P operation'),
+    };
+    return <Object?>[true, result];
+  } on P2pNativeException catch (error) {
+    return <Object?>[false, error.code, error.message];
+  } catch (error) {
+    return <Object?>[false, 9, '$error'];
+  }
+}
+
+Object? _respondWorker(
+  P2pNativeApi api,
+  int handle,
+  int connectionId,
+  Uint8List frame,
+) {
+  api.respond(handle, connectionId, frame);
+  return null;
 }
 
 class UnavailableP2pBridge implements P2pBridge {
@@ -217,18 +498,14 @@ class UnavailableP2pBridge implements P2pBridge {
   Future<Uint8List> request({
     required int connectionId,
     required Uint8List frame,
-  }) =>
-      _unavailable();
+  }) => _unavailable();
 
   @override
   Future<Uint8List> receiveRequest({required int connectionId}) =>
       _unavailable();
 
   @override
-  Future<void> respond({
-    required int connectionId,
-    required Uint8List frame,
-  }) =>
+  Future<void> respond({required int connectionId, required Uint8List frame}) =>
       _unavailable();
 
   @override
@@ -271,10 +548,10 @@ class FfiP2pNativeApi implements P2pNativeApi {
       _request = library.lookupFunction<_RequestNative, _RequestDart>(
         'easycalendar_p2p_endpoint_request',
       ),
-      _receiveRequest = library.lookupFunction<
-        _ReceiveRequestNative,
-        _ReceiveRequestDart
-      >('easycalendar_p2p_endpoint_receive_request'),
+      _receiveRequest = library
+          .lookupFunction<_ReceiveRequestNative, _ReceiveRequestDart>(
+            'easycalendar_p2p_endpoint_receive_request',
+          ),
       _respond = library.lookupFunction<_RespondNative, _RespondDart>(
         'easycalendar_p2p_endpoint_respond',
       ),
@@ -387,11 +664,8 @@ class FfiP2pNativeApi implements P2pNativeApi {
       _requestBytes(handle, connectionId, frame, _request);
 
   @override
-  Uint8List receiveRequest(int handle, int connectionId) => _receiveBytes(
-    handle,
-    connectionId,
-    _receiveRequest,
-  );
+  Uint8List receiveRequest(int handle, int connectionId) =>
+      _receiveBytes(handle, connectionId, _receiveRequest);
 
   @override
   void respond(int handle, int connectionId, Uint8List frame) {
@@ -465,18 +739,36 @@ class FfiP2pNativeApi implements P2pNativeApi {
   }
 
   static void _check(int code) {
-    if (code != 0) throw P2pNativeException(code, 'native P2P operation failed');
+    if (code != 0) throw P2pNativeException(code, _nativeErrorMessage(code));
   }
 
   static void _checkLength(int result) {
     if (result < 0) {
       final code = -result;
-      throw P2pNativeException(code, 'native P2P operation failed');
+      throw P2pNativeException(code, _nativeErrorMessage(code));
     }
   }
 
+  static String _nativeErrorMessage(int code) => switch (code) {
+    1 => 'invalid P2P frame code',
+    2 => 'unsupported P2P protocol',
+    3 => 'P2P authentication failed',
+    4 => 'P2P member revoked',
+    5 => 'primary endpoint unavailable',
+    6 => 'P2P frame is too large',
+    7 => 'invalid sync change',
+    8 => 'invalid sync cursor',
+    9 => 'P2P transport unavailable; the relay or network may be unreachable',
+    10 => 'invalid P2P argument',
+    11 => 'P2P endpoint is closed',
+    12 => 'P2P output buffer is too small',
+    _ => 'native P2P operation failed',
+  };
+
   static ffi.DynamicLibrary _openDefaultLibrary() {
-    if (Platform.isWindows) return ffi.DynamicLibrary.open('easycalendar_p2p.dll');
+    if (Platform.isWindows) {
+      return ffi.DynamicLibrary.open('easycalendar_p2p.dll');
+    }
     if (Platform.isAndroid || Platform.isLinux) {
       return ffi.DynamicLibrary.open('libeasycalendar_p2p.so');
     }
@@ -499,87 +791,72 @@ class FfiP2pNativeApi implements P2pNativeApi {
 
 typedef _VersionNative = ffi.Uint32 Function();
 typedef _VersionDart = int Function();
-typedef _BindNative = ffi.Pointer<ffi.Void> Function(
-  ffi.Pointer<ffi.Uint8>,
-  ffi.UintPtr,
-);
-typedef _BindDart = ffi.Pointer<ffi.Void> Function(
-  ffi.Pointer<ffi.Uint8>,
-  int,
-);
+typedef _BindNative =
+    ffi.Pointer<ffi.Void> Function(ffi.Pointer<ffi.Uint8>, ffi.UintPtr);
+typedef _BindDart = ffi.Pointer<ffi.Void> Function(ffi.Pointer<ffi.Uint8>, int);
 typedef _IdLengthNative = ffi.UintPtr Function(ffi.Pointer<ffi.Void>);
 typedef _IdLengthDart = int Function(ffi.Pointer<ffi.Void>);
-typedef _IdCopyNative = ffi.Int32 Function(
-  ffi.Pointer<ffi.Void>,
-  ffi.Pointer<ffi.Uint8>,
-  ffi.UintPtr,
-);
-typedef _IdCopyDart = int Function(
-  ffi.Pointer<ffi.Void>,
-  ffi.Pointer<ffi.Uint8>,
-  int,
-);
-typedef _TicketNative = ffi.Int64 Function(
-  ffi.Pointer<ffi.Void>,
-  ffi.Pointer<ffi.Uint8>,
-  ffi.UintPtr,
-);
-typedef _TicketDart = int Function(
-  ffi.Pointer<ffi.Void>,
-  ffi.Pointer<ffi.Uint8>,
-  int,
-);
-typedef _ConnectNative = ffi.Int64 Function(
-  ffi.Pointer<ffi.Void>,
-  ffi.Pointer<ffi.Uint8>,
-  ffi.UintPtr,
-);
-typedef _ConnectDart = int Function(
-  ffi.Pointer<ffi.Void>,
-  ffi.Pointer<ffi.Uint8>,
-  int,
-);
+typedef _IdCopyNative =
+    ffi.Int32 Function(
+      ffi.Pointer<ffi.Void>,
+      ffi.Pointer<ffi.Uint8>,
+      ffi.UintPtr,
+    );
+typedef _IdCopyDart =
+    int Function(ffi.Pointer<ffi.Void>, ffi.Pointer<ffi.Uint8>, int);
+typedef _TicketNative =
+    ffi.Int64 Function(
+      ffi.Pointer<ffi.Void>,
+      ffi.Pointer<ffi.Uint8>,
+      ffi.UintPtr,
+    );
+typedef _TicketDart =
+    int Function(ffi.Pointer<ffi.Void>, ffi.Pointer<ffi.Uint8>, int);
+typedef _ConnectNative =
+    ffi.Int64 Function(
+      ffi.Pointer<ffi.Void>,
+      ffi.Pointer<ffi.Uint8>,
+      ffi.UintPtr,
+    );
+typedef _ConnectDart =
+    int Function(ffi.Pointer<ffi.Void>, ffi.Pointer<ffi.Uint8>, int);
 typedef _AcceptNative = ffi.Int64 Function(ffi.Pointer<ffi.Void>, ffi.Uint64);
 typedef _AcceptDart = int Function(ffi.Pointer<ffi.Void>, int);
-typedef _RequestNative = ffi.Int64 Function(
-  ffi.Pointer<ffi.Void>,
-  ffi.Uint64,
-  ffi.Pointer<ffi.Uint8>,
-  ffi.UintPtr,
-  ffi.Pointer<ffi.Uint8>,
-  ffi.UintPtr,
-);
-typedef _RequestDart = int Function(
-  ffi.Pointer<ffi.Void>,
-  int,
-  ffi.Pointer<ffi.Uint8>,
-  int,
-  ffi.Pointer<ffi.Uint8>,
-  int,
-);
-typedef _ReceiveRequestNative = ffi.Int64 Function(
-  ffi.Pointer<ffi.Void>,
-  ffi.Uint64,
-  ffi.Pointer<ffi.Uint8>,
-  ffi.UintPtr,
-);
-typedef _ReceiveRequestDart = int Function(
-  ffi.Pointer<ffi.Void>,
-  int,
-  ffi.Pointer<ffi.Uint8>,
-  int,
-);
-typedef _RespondNative = ffi.Int32 Function(
-  ffi.Pointer<ffi.Void>,
-  ffi.Uint64,
-  ffi.Pointer<ffi.Uint8>,
-  ffi.UintPtr,
-);
-typedef _RespondDart = int Function(
-  ffi.Pointer<ffi.Void>,
-  int,
-  ffi.Pointer<ffi.Uint8>,
-  int,
-);
+typedef _RequestNative =
+    ffi.Int64 Function(
+      ffi.Pointer<ffi.Void>,
+      ffi.Uint64,
+      ffi.Pointer<ffi.Uint8>,
+      ffi.UintPtr,
+      ffi.Pointer<ffi.Uint8>,
+      ffi.UintPtr,
+    );
+typedef _RequestDart =
+    int Function(
+      ffi.Pointer<ffi.Void>,
+      int,
+      ffi.Pointer<ffi.Uint8>,
+      int,
+      ffi.Pointer<ffi.Uint8>,
+      int,
+    );
+typedef _ReceiveRequestNative =
+    ffi.Int64 Function(
+      ffi.Pointer<ffi.Void>,
+      ffi.Uint64,
+      ffi.Pointer<ffi.Uint8>,
+      ffi.UintPtr,
+    );
+typedef _ReceiveRequestDart =
+    int Function(ffi.Pointer<ffi.Void>, int, ffi.Pointer<ffi.Uint8>, int);
+typedef _RespondNative =
+    ffi.Int32 Function(
+      ffi.Pointer<ffi.Void>,
+      ffi.Uint64,
+      ffi.Pointer<ffi.Uint8>,
+      ffi.UintPtr,
+    );
+typedef _RespondDart =
+    int Function(ffi.Pointer<ffi.Void>, int, ffi.Pointer<ffi.Uint8>, int);
 typedef _CloseNative = ffi.Void Function(ffi.Pointer<ffi.Void>);
 typedef _CloseDart = void Function(ffi.Pointer<ffi.Void>);

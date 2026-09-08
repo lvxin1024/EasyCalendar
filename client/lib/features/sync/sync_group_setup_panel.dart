@@ -213,12 +213,7 @@ class _SyncGroupSetupPanelState extends State<SyncGroupSetupPanel> {
   }
 
   P2pBridge? _loadBridge() {
-    final api = FfiP2pNativeApi.tryLoad();
-    if (api == null) {
-      setState(() => _error = '当前安装包未包含 native P2P bridge，暂时无法使用群组同步。');
-      return null;
-    }
-    return NativeP2pBridge(api: api);
+    return IsolateP2pBridge();
   }
 
   Future<void> _run(Future<SyncGroupProfile> Function() operation) async {

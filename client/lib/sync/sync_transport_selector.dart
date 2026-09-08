@@ -114,10 +114,7 @@ class SyncTransportSelector implements SyncTransport, SyncTransportLifecycle {
   SyncTransport _requireActive() {
     final active = _active;
     if (!_started || active == null) {
-      throw const SyncTransportException(
-        '同步 transport 尚未启动。',
-        permanent: true,
-      );
+      throw const SyncTransportException('同步 transport 尚未启动。');
     }
     return active;
   }

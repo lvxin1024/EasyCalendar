@@ -437,9 +437,10 @@ class ItemController extends ChangeNotifier {
         ),
       );
       await _applyRuntimeSettings(_preferences!);
-      syncCoordinator?.configure(
+      await syncCoordinator?.configure(
         enabled: _preferences!.syncEnabled,
         serverUrl: _preferences!.apiUrl,
+        mode: _preferences!.effectiveSyncMode,
       );
       _initialized = true;
     });
@@ -589,7 +590,7 @@ class ItemController extends ChangeNotifier {
       } catch (_) {
         // A platform window adapter may be unavailable while the app is starting.
       }
-      syncCoordinator?.configure(
+      await syncCoordinator?.configure(
         enabled: value.syncEnabled,
         serverUrl: value.apiUrl,
         mode: value.effectiveSyncMode,
@@ -602,7 +603,7 @@ class ItemController extends ChangeNotifier {
           await notificationService?.cancelAll();
         }
       }
-      if (value.syncEnabled) unawaited(syncCoordinator?.synchronize());
+      if (value.syncEnabled) await syncCoordinator?.synchronize();
     }, reloadItems: false);
   }
 

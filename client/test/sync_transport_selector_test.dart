@@ -7,52 +7,87 @@ import 'package:easy_calendar/sync/sync_transport_selector.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('starts with cloud transport and switches lifecycle transports by mode', () async {
+  test(
+    'starts with cloud transport and switches lifecycle transports by mode',
+    () async {
+      final cloud = _RecordingTransport();
+      final group = _RecordingTransport();
+      final selector = SyncTransportSelector(
+        cloudTransport: cloud,
+        groupTransportFactory: () async => group,
+      );
+
+      await selector.start();
+      expect(cloud.startCount, 1);
+      expect(group.startCount, 0);
+
+      await selector.setMode(SyncMode.group);
+      expect(cloud.closeCount, 1);
+      expect(group.startCount, 1);
+
+      await selector.setMode(SyncMode.cloud);
+      expect(group.closeCount, 1);
+      expect(cloud.startCount, 2);
+
+      await selector.close();
+      expect(cloud.closeCount, 2);
+    },
+  );
+
+  test(
+    'reports a permanent error when group mode has no configured transport',
+    () async {
+      final selector = SyncTransportSelector(
+        cloudTransport: _RecordingTransport(),
+        groupTransportFactory: () async => null,
+      );
+
+      await selector.start();
+      await expectLater(
+        selector.setMode(SyncMode.group),
+        throwsA(
+          isA<SyncTransportException>().having(
+            (error) => error.permanent,
+            'permanent',
+            isTrue,
+          ),
+        ),
+      );
+      await selector.close();
+    },
+  );
+
+  test('waits for a mode switch before exposing the new transport', () async {
     final cloud = _RecordingTransport();
-    final group = _RecordingTransport();
+    final group = _RecordingTransport(
+      startDelay: const Duration(milliseconds: 20),
+    );
     final selector = SyncTransportSelector(
       cloudTransport: cloud,
       groupTransportFactory: () async => group,
     );
 
     await selector.start();
-    expect(cloud.startCount, 1);
+    final switching = selector.setMode(SyncMode.group);
     expect(group.startCount, 0);
+    await switching;
 
-    await selector.setMode(SyncMode.group);
-    expect(cloud.closeCount, 1);
     expect(group.startCount, 1);
-
-    await selector.setMode(SyncMode.cloud);
-    expect(group.closeCount, 1);
-    expect(cloud.startCount, 2);
-
-    await selector.close();
-    expect(cloud.closeCount, 2);
-  });
-
-  test('reports a permanent error when group mode has no configured transport', () async {
-    final selector = SyncTransportSelector(
-      cloudTransport: _RecordingTransport(),
-      groupTransportFactory: () async => null,
-    );
-
-    await selector.start();
-    await expectLater(
-      selector.setMode(SyncMode.group),
-      throwsA(
-        isA<SyncTransportException>().having(
-          (error) => error.permanent,
-          'permanent',
-          isTrue,
-        ),
-      ),
+    await selector.push(
+      serverUrl: Uri.parse('group://primary'),
+      token: '',
+      deviceId: 'device',
+      idempotencyKey: 'key',
+      changes: const [],
     );
     await selector.close();
   });
 }
 
 class _RecordingTransport implements SyncTransport, SyncTransportLifecycle {
+  _RecordingTransport({this.startDelay = Duration.zero});
+
+  final Duration startDelay;
   final _events = StreamController<SyncTransportEvent>.broadcast();
   int startCount = 0;
   int closeCount = 0;
@@ -61,7 +96,10 @@ class _RecordingTransport implements SyncTransport, SyncTransportLifecycle {
   Stream<SyncTransportEvent> get events => _events.stream;
 
   @override
-  Future<void> start() async => startCount++;
+  Future<void> start() async {
+    if (startDelay > Duration.zero) await Future<void>.delayed(startDelay);
+    startCount++;
+  }
 
   @override
   Future<void> close() async {

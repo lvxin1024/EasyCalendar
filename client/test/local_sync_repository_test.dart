@@ -335,6 +335,35 @@ void main() {
     );
   });
 
+  test('recovers an outbox blocked by a transport startup race', () async {
+    final created = await repository.createItem(
+      const ItemDraft(
+        type: ItemType.task,
+        title: 'Startup race',
+        timezone: 'Asia/Shanghai',
+      ),
+    );
+    final change = (await repository.listPendingChanges(
+      now: DateTime.now(),
+    )).firstWhere((value) => value.entityId == created.id);
+
+    await repository.recordPermanentFailures([
+      SyncRejection(
+        changeId: change.changeId,
+        code: 'transport_rejected',
+        message: '同步 transport 尚未启动。',
+      ),
+    ]);
+
+    expect(await repository.resetRetryablePermanentFailures(), 1);
+    expect(
+      (await repository.listPendingChanges(
+        now: DateTime.now(),
+      )).map((value) => value.changeId),
+      contains(change.changeId),
+    );
+  });
+
   test('a winning unsent local edit is not overwritten by pull', () async {
     final local = await repository.createItem(
       const ItemDraft(

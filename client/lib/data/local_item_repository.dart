@@ -1858,6 +1858,10 @@ class LocalItemRepository
         'last_error IN ('
         "'constraint_violation: Change could not be applied', "
         "'constraint_violation: Referenced collection does not exist'"
+        ') OR last_error IN ('
+        "'transport_rejected: 同步 transport 尚未启动。', "
+        "'transport_rejected: Group transport has not been started.', "
+        "'transport_rejected: P2P native bridge has not been started.'"
         '))',
   );
 
