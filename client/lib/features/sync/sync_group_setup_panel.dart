@@ -24,6 +24,7 @@ class _SyncGroupSetupPanelState extends State<SyncGroupSetupPanel> {
   SyncGroupProfile? _profile;
   bool _loading = true;
   bool _working = false;
+  bool _showJoinForm = false;
   String? _error;
 
   @override
@@ -108,29 +109,44 @@ class _SyncGroupSetupPanelState extends State<SyncGroupSetupPanel> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                FilledButton.icon(
-                  onPressed: _working || _loading ? null : _create,
-                  icon: const Icon(Icons.add_link),
-                  label: const Text('创建同步组'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _working || _loading ? null : _join,
-                  icon: const Icon(Icons.login_outlined),
-                  label: const Text('加入同步组'),
-                ),
+                if (_showJoinForm) ...[
+                  OutlinedButton.icon(
+                    onPressed: _working || _loading ? null : _cancelJoin,
+                    icon: const Icon(Icons.close),
+                    label: const Text('取消加入'),
+                  ),
+                  FilledButton.icon(
+                    onPressed: _working || _loading ? null : _join,
+                    icon: const Icon(Icons.login_outlined),
+                    label: const Text('加入同步组'),
+                  ),
+                ] else ...[
+                  FilledButton.icon(
+                    onPressed: _working || _loading ? null : _create,
+                    icon: const Icon(Icons.add_link),
+                    label: const Text('创建同步组'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _working || _loading ? null : _showJoin,
+                    icon: const Icon(Icons.login_outlined),
+                    label: const Text('加入同步组'),
+                  ),
+                ],
               ],
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _codeController,
-              minLines: 2,
-              maxLines: 4,
-              decoration: const InputDecoration(
-                labelText: '粘贴 ECG1 同步码',
-                hintText: 'ECG1-...',
-                prefixIcon: Icon(Icons.qr_code_2_outlined),
+            if (_showJoinForm) ...[
+              const SizedBox(height: 12),
+              TextField(
+                controller: _codeController,
+                minLines: 2,
+                maxLines: 4,
+                decoration: const InputDecoration(
+                  labelText: '粘贴 ECG1 同步码',
+                  hintText: 'ECG1-...',
+                  prefixIcon: Icon(Icons.qr_code_2_outlined),
+                ),
               ),
-            ),
+            ],
           ],
           if (_error != null) ...[
             const SizedBox(height: 8),
@@ -176,7 +192,24 @@ class _SyncGroupSetupPanelState extends State<SyncGroupSetupPanel> {
     }
     final bridge = _loadBridge();
     if (bridge == null) return;
-    await _run(() => widget.controller.joinSyncGroupAutomatically(code, bridge));
+    await _run(
+      () => widget.controller.joinSyncGroupAutomatically(code, bridge),
+    );
+  }
+
+  void _showJoin() {
+    setState(() {
+      _showJoinForm = true;
+      _error = null;
+    });
+  }
+
+  void _cancelJoin() {
+    setState(() {
+      _showJoinForm = false;
+      _codeController.clear();
+      _error = null;
+    });
   }
 
   P2pBridge? _loadBridge() {
@@ -235,9 +268,9 @@ class _SyncGroupSetupPanelState extends State<SyncGroupSetupPanel> {
   Future<void> _copy(String code) async {
     await Clipboard.setData(ClipboardData(text: code));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('同步码已复制')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('同步码已复制')));
   }
 }
 
