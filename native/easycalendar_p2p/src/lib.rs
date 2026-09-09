@@ -86,30 +86,6 @@ pub unsafe extern "C" fn easycalendar_p2p_endpoint_id_copy(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn easycalendar_p2p_endpoint_last_error_len(
-    handle: *const IrohEndpointHandle,
-) -> usize {
-    let Some(handle) = handle.as_ref() else {
-        return 0;
-    };
-    handle.last_error().len()
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn easycalendar_p2p_endpoint_last_error_copy(
-    handle: *const IrohEndpointHandle,
-    output: *mut u8,
-    capacity: usize,
-) -> i32 {
-    let Some(handle) = handle.as_ref() else {
-        return ErrorCode::InvalidArgument as i32;
-    };
-    copy_string(&handle.last_error(), output, capacity)
-        .map(|_| ErrorCode::Ok as i32)
-        .unwrap_or_else(|error| error.code() as i32)
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn easycalendar_p2p_endpoint_ticket(
     handle: *const IrohEndpointHandle,
     output: *mut u8,

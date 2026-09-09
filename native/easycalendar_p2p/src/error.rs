@@ -30,7 +30,6 @@ pub enum P2pError {
     InvalidChange,
     CursorInvalid,
     TransportUnavailable,
-    Transport(String),
     InvalidArgument(&'static str),
     EndpointClosed,
     BufferTooSmall,
@@ -48,7 +47,6 @@ impl P2pError {
             Self::InvalidChange => ErrorCode::InvalidChange,
             Self::CursorInvalid => ErrorCode::CursorInvalid,
             Self::TransportUnavailable => ErrorCode::TransportUnavailable,
-            Self::Transport(_) => ErrorCode::TransportUnavailable,
             Self::InvalidArgument(_) => ErrorCode::InvalidArgument,
             Self::EndpointClosed => ErrorCode::EndpointClosed,
             Self::BufferTooSmall => ErrorCode::BufferTooSmall,
@@ -60,7 +58,6 @@ impl fmt::Display for P2pError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::InvalidArgument(message) => formatter.write_str(message),
-            Self::Transport(message) => formatter.write_str(message),
             _ => formatter.write_str(match self.code() {
                 ErrorCode::InvalidCode => "invalid_code",
                 ErrorCode::UnsupportedProtocol => "unsupported_protocol",
@@ -80,22 +77,4 @@ impl fmt::Display for P2pError {
     }
 }
 
-impl P2pError {
-    pub fn transport(error: impl fmt::Display) -> Self {
-        Self::Transport(format!("{error:#}"))
-    }
-}
-
 impl std::error::Error for P2pError {}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn transport_errors_preserve_the_native_message() {
-        let error = P2pError::transport("connection terminated during handshake");
-        assert_eq!(error.code(), ErrorCode::TransportUnavailable);
-        assert_eq!(error.to_string(), "connection terminated during handshake");
-    }
-}
