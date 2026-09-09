@@ -1,5 +1,4 @@
 use iroh::endpoint::{Connection, RecvStream, SendStream};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use crate::error::P2pError;
 use crate::protocol::{Frame, MAX_FRAME_BYTES};
@@ -11,8 +10,8 @@ pub async fn send_frame(stream: &mut SendStream, frame: &Frame) -> Result<(), P2
     stream
         .write_all(&frame.encode())
         .await
-        .map_err(|_| P2pError::TransportUnavailable)?;
-    stream.finish().map_err(|_| P2pError::TransportUnavailable)
+        .map_err(P2pError::transport)?;
+    stream.finish().map_err(P2pError::transport)
 }
 
 /// Reads exactly one bounded protocol frame from a QUIC bidirectional stream.
@@ -21,7 +20,7 @@ pub async fn receive_frame(stream: &mut RecvStream) -> Result<Frame, P2pError> {
     stream
         .read_exact(&mut header)
         .await
-        .map_err(|_| P2pError::TransportUnavailable)?;
+        .map_err(P2pError::transport)?;
     let payload_len = u32::from_be_bytes([header[6], header[7], header[8], header[9]]) as usize;
     if payload_len > MAX_FRAME_BYTES - HEADER_BYTES {
         return Err(P2pError::FrameTooLarge);
@@ -32,7 +31,7 @@ pub async fn receive_frame(stream: &mut RecvStream) -> Result<Frame, P2pError> {
     stream
         .read_exact(&mut encoded[HEADER_BYTES..])
         .await
-        .map_err(|_| P2pError::TransportUnavailable)?;
+        .map_err(P2pError::transport)?;
     Frame::decode(&encoded)
 }
 
@@ -41,7 +40,7 @@ pub async fn request(connection: &Connection, frame: Frame) -> Result<Frame, P2p
     let (mut send, mut receive) = connection
         .open_bi()
         .await
-        .map_err(|_| P2pError::TransportUnavailable)?;
+        .map_err(P2pError::transport)?;
     send_frame(&mut send, &frame).await?;
     receive_frame(&mut receive).await
 }

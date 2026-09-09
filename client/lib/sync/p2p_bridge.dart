@@ -385,9 +385,11 @@ void _p2pWorkerMain(Object? message) {
         response.send(<Object?>[id, true, handle]);
         return;
       }
-      final operationResult = await Isolate.run<List<Object?>>(
-        () =>
-            _runP2pNativeOperation(_workerHandle(handle), operation, argument),
+      final operationResult = _runP2pNativeOperation(
+        api,
+        _workerHandle(handle),
+        operation,
+        argument,
       );
       if (operationResult[0] != true) {
         throw P2pNativeException(
@@ -404,28 +406,28 @@ void _p2pWorkerMain(Object? message) {
     }
   }
 
-  commands.listen((message) {
-    unawaited(handleCommand(message));
-  });
+  unawaited(_consumeP2pCommands(commands, handleCommand));
+}
+
+Future<void> _consumeP2pCommands(
+  ReceivePort commands,
+  Future<void> Function(Object?) handleCommand,
+) async {
+  await for (final message in commands) {
+    await handleCommand(message);
+  }
 }
 
 int _workerHandle(int? handle) =>
     handle ?? (throw const P2pNativeException(11, 'P2P endpoint is closed'));
 
 List<Object?> _runP2pNativeOperation(
+  FfiP2pNativeApi api,
   int handle,
   String operation,
   Object? argument,
 ) {
   try {
-    final api = FfiP2pNativeApi.tryLoad();
-    if (api == null) {
-      return const [
-        false,
-        9,
-        'native P2P bridge is not available on this build',
-      ];
-    }
     final pair = argument is List<Object?> ? argument : const <Object?>[];
     final result = switch (operation) {
       'endpoint_id' => api.endpointId(handle),
@@ -444,7 +446,10 @@ List<Object?> _runP2pNativeOperation(
     };
     return <Object?>[true, result];
   } on P2pNativeException catch (error) {
-    return <Object?>[false, error.code, error.message];
+    final message = error.code == 9
+        ? (api.lastError(handle) ?? error.message)
+        : error.message;
+    return <Object?>[false, error.code, message];
   } catch (error) {
     return <Object?>[false, 9, '$error'];
   }
@@ -536,6 +541,14 @@ class FfiP2pNativeApi implements P2pNativeApi {
       _idCopy = library.lookupFunction<_IdCopyNative, _IdCopyDart>(
         'easycalendar_p2p_endpoint_id_copy',
       ),
+      _lastErrorLength = library
+          .lookupFunction<_IdLengthNative, _IdLengthDart>(
+            'easycalendar_p2p_endpoint_last_error_len',
+          ),
+      _lastErrorCopy = library
+          .lookupFunction<_IdCopyNative, _IdCopyDart>(
+            'easycalendar_p2p_endpoint_last_error_copy',
+          ),
       _ticket = library.lookupFunction<_TicketNative, _TicketDart>(
         'easycalendar_p2p_endpoint_ticket',
       ),
@@ -565,6 +578,8 @@ class FfiP2pNativeApi implements P2pNativeApi {
   final _BindDart _bind;
   final _IdLengthDart _idLength;
   final _IdCopyDart _idCopy;
+  final _IdLengthDart _lastErrorLength;
+  final _IdCopyDart _lastErrorCopy;
   final _TicketDart _ticket;
   final _ConnectDart _connect;
   final _AcceptDart _accept;
@@ -609,6 +624,19 @@ class FfiP2pNativeApi implements P2pNativeApi {
     final memory = calloc<ffi.Uint8>(length);
     try {
       _check(_idCopy(pointer, memory, length));
+      return utf8.decode(memory.asTypedList(length));
+    } finally {
+      calloc.free(memory);
+    }
+  }
+
+  String? lastError(int handle) {
+    final pointer = ffi.Pointer<ffi.Void>.fromAddress(handle);
+    final length = _lastErrorLength(pointer);
+    if (length == 0) return null;
+    final memory = calloc<ffi.Uint8>(length);
+    try {
+      _check(_lastErrorCopy(pointer, memory, length));
       return utf8.decode(memory.asTypedList(length));
     } finally {
       calloc.free(memory);

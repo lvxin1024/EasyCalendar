@@ -35,20 +35,16 @@ void main() {
   );
 
   test(
-    'keeps the selector usable when group transport is temporarily unavailable',
+    'reports a permanent error when group mode has no configured transport',
     () async {
       final selector = SyncTransportSelector(
         cloudTransport: _RecordingTransport(),
         groupTransportFactory: () async => null,
       );
-      final event = selector.events.first;
 
       await selector.start();
-      await selector.setMode(SyncMode.group);
-
-      expect((await event).message, '同步组尚未配置或 native P2P bridge 不可用。');
       await expectLater(
-        selector.pull(serverUrl: Uri.parse('group://primary'), token: ''),
+        selector.setMode(SyncMode.group),
         throwsA(
           isA<SyncTransportException>().having(
             (error) => error.permanent,

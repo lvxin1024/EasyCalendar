@@ -22,17 +22,15 @@ class SyncTransportSelector implements SyncTransport, SyncTransportLifecycle {
   SyncMode _mode = SyncMode.cloud;
   SyncTransport? _active;
   StreamSubscription<SyncTransportEvent>? _eventsSubscription;
-  Future<void>? _activation;
   bool _started = false;
 
   SyncMode get mode => _mode;
 
   Future<void> setMode(SyncMode mode) async {
-    final changed = _mode != mode;
     if (_mode == mode && (!_started || _active != null)) return;
     _mode = mode;
     if (!_started) return;
-    await _activateIfAvailable(force: changed);
+    await _activate();
   }
 
   @override
@@ -42,7 +40,12 @@ class SyncTransportSelector implements SyncTransport, SyncTransportLifecycle {
   Future<void> start() async {
     if (_started) return;
     _started = true;
-    await _activateIfAvailable();
+    try {
+      await _activate();
+    } catch (_) {
+      _started = false;
+      rethrow;
+    }
   }
 
   @override
@@ -52,16 +55,13 @@ class SyncTransportSelector implements SyncTransport, SyncTransportLifecycle {
     required String deviceId,
     required String idempotencyKey,
     required List<PendingSyncChange> changes,
-  }) async {
-    await _ensureActive();
-    return _requireActive().push(
-      serverUrl: serverUrl,
-      token: token,
-      deviceId: deviceId,
-      idempotencyKey: idempotencyKey,
-      changes: changes,
-    );
-  }
+  }) => _requireActive().push(
+    serverUrl: serverUrl,
+    token: token,
+    deviceId: deviceId,
+    idempotencyKey: idempotencyKey,
+    changes: changes,
+  );
 
   @override
   Future<PullSyncPage> pull({
@@ -69,15 +69,12 @@ class SyncTransportSelector implements SyncTransport, SyncTransportLifecycle {
     required String token,
     String? cursor,
     int limit = 200,
-  }) async {
-    await _ensureActive();
-    return _requireActive().pull(
-      serverUrl: serverUrl,
-      token: token,
-      cursor: cursor,
-      limit: limit,
-    );
-  }
+  }) => _requireActive().pull(
+    serverUrl: serverUrl,
+    token: token,
+    cursor: cursor,
+    limit: limit,
+  );
 
   @override
   Future<void> close() async {
@@ -98,45 +95,9 @@ class SyncTransportSelector implements SyncTransport, SyncTransportLifecycle {
       );
     }
     _active = next;
-    try {
-      if (next case final SyncTransportLifecycle lifecycle) {
-        _eventsSubscription = lifecycle.events.listen(_eventsController.add);
-        await lifecycle.start();
-      }
-    } catch (_) {
-      await _closeActive();
-      rethrow;
-    }
-  }
-
-  Future<void> _activateIfAvailable({bool force = false}) async {
-    try {
-      await _ensureActive(force: force);
-    } catch (error) {
-      if (!_eventsController.isClosed) {
-        _eventsController.add(
-          SyncTransportEvent(
-            kind: SyncTransportEventKind.error,
-            message: error is SyncTransportException ? error.message : '$error',
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _ensureActive({bool force = false}) async {
-    if (!_started) {
-      throw const SyncTransportException('同步 transport 尚未启动。');
-    }
-    final pending = _activation;
-    if (pending != null) return pending;
-    if (_active != null && !force) return;
-    final activation = _activate();
-    _activation = activation;
-    try {
-      await activation;
-    } finally {
-      if (identical(_activation, activation)) _activation = null;
+    if (next case final SyncTransportLifecycle lifecycle) {
+      _eventsSubscription = lifecycle.events.listen(_eventsController.add);
+      await lifecycle.start();
     }
   }
 

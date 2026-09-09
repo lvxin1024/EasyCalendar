@@ -19,7 +19,6 @@ import '../device/device_identity.dart';
 import '../domain/item.dart';
 import '../domain/cycle_prediction.dart';
 import '../domain/subscription.dart';
-import '../domain/sync_mode.dart';
 import '../notification/notification_service.dart';
 import '../sync/sync_coordinator.dart';
 import '../sync/sync_group.dart';
@@ -121,29 +120,20 @@ class ItemController extends ChangeNotifier {
   Future<SyncGroupProfile> joinSyncGroup(String code) => _syncGroupSetup
       .joinAutomatically(code: code, fallbackDeviceId: preferences.deviceId);
 
-  Future<SyncGroupProfile> createSyncGroupAutomatically(
-    P2pBridge bridge,
-  ) async {
-    final profile = await _syncGroupSetup.createPrimaryAutomatically(
-      bridge: bridge,
-      fallbackDeviceId: preferences.deviceId,
-    );
-    await _enableGroupSync();
-    return profile;
-  }
+  Future<SyncGroupProfile> createSyncGroupAutomatically(P2pBridge bridge) =>
+      _syncGroupSetup.createPrimaryAutomatically(
+        bridge: bridge,
+        fallbackDeviceId: preferences.deviceId,
+      );
 
   Future<SyncGroupProfile> joinSyncGroupAutomatically(
     String code,
     P2pBridge bridge,
-  ) async {
-    final profile = await _syncGroupSetup.joinAutomaticallyWithBridge(
-      code: code,
-      fallbackDeviceId: preferences.deviceId,
-      bridge: bridge,
-    );
-    await _enableGroupSync();
-    return profile;
-  }
+  ) => _syncGroupSetup.joinAutomaticallyWithBridge(
+    code: code,
+    fallbackDeviceId: preferences.deviceId,
+    bridge: bridge,
+  );
 
   Future<void> clearSyncGroup() => _syncGroupSetup.clear();
 
@@ -271,27 +261,12 @@ class ItemController extends ChangeNotifier {
         loadedPreferences.deviceName,
         deviceId: deviceId,
       );
-      var effectivePreferences = loadedPreferences.copyWith(
+      _preferences = loadedPreferences.copyWith(
         deviceId: deviceId,
         deviceName: deviceName,
       );
-      SyncGroupProfile? configuredGroup;
-      try {
-        configuredGroup = await _syncGroupSetup.load();
-      } catch (_) {
-        // A malformed optional group profile must not block local startup.
-      }
-      if (configuredGroup != null &&
-          effectivePreferences.syncEnabled &&
-          effectivePreferences.syncMode != SyncMode.group) {
-        effectivePreferences = effectivePreferences.copyWith(
-          syncMode: SyncMode.group,
-        );
-      }
-      _preferences = effectivePreferences;
       if (deviceId != loadedPreferences.deviceId ||
-          deviceName != loadedPreferences.deviceName ||
-          effectivePreferences.syncMode != loadedPreferences.syncMode) {
+          deviceName != loadedPreferences.deviceName) {
         await repository.savePreferences(_preferences!);
       }
       await _applyRuntimeSettings(_preferences!);
@@ -628,16 +603,8 @@ class ItemController extends ChangeNotifier {
           await notificationService?.cancelAll();
         }
       }
-      if (value.syncEnabled) unawaited(syncCoordinator?.synchronize());
+      if (value.syncEnabled) await syncCoordinator?.synchronize();
     }, reloadItems: false);
-  }
-
-  Future<void> _enableGroupSync() async {
-    final current = preferences;
-    if (current.syncEnabled && current.syncMode == SyncMode.group) return;
-    await savePreferences(
-      current.copyWith(syncEnabled: true, syncMode: SyncMode.group),
-    );
   }
 
   Future<ClientPreferences> regenerateDeviceIdentity() async {

@@ -26,6 +26,7 @@ pub struct IrohEndpointHandle {
     endpoint: IrohEndpoint,
     connections: Mutex<HashMap<u64, Connection>>,
     pending: Mutex<HashMap<u64, PendingRequest>>,
+    last_error: Mutex<String>,
     next_connection_id: AtomicU64,
 }
 
@@ -52,8 +53,16 @@ impl IrohEndpointHandle {
             endpoint,
             connections: Mutex::new(HashMap::new()),
             pending: Mutex::new(HashMap::new()),
+            last_error: Mutex::new(String::new()),
             next_connection_id: AtomicU64::new(1),
         })
+    }
+
+    pub fn last_error(&self) -> String {
+        self.last_error
+            .lock()
+            .map(|error| error.clone())
+            .unwrap_or_else(|_| "transport error details are unavailable".to_owned())
     }
 
     pub fn endpoint_id(&self) -> String {
@@ -70,10 +79,12 @@ impl IrohEndpointHandle {
         let address = self.runtime.block_on(async {
             tokio::time::timeout(Duration::from_secs(15), self.endpoint.online())
                 .await
-                .map_err(|_| P2pError::TransportUnavailable)?;
+                .map_err(|_| P2pError::transport("relay did not become online before timeout"))?;
             Ok::<EndpointAddr, P2pError>(self.endpoint.addr())
-        })?;
-        serde_json::to_string(&address).map_err(|_| P2pError::TransportUnavailable)
+        });
+        let address = address.map_err(|error| self.record_error(error))?;
+        serde_json::to_string(&address)
+            .map_err(|error| self.record_transport(error))
     }
 
     pub fn connect(&self, ticket: &str) -> Result<u64, P2pError> {
@@ -82,7 +93,7 @@ impl IrohEndpointHandle {
         let connection = self
             .runtime
             .block_on(self.endpoint.connect(address, ALPN))
-            .map_err(|_| P2pError::TransportUnavailable)?;
+            .map_err(|error| self.record_transport(error))?;
         Ok(self.insert_connection(connection))
     }
 
@@ -99,7 +110,7 @@ impl IrohEndpointHandle {
         let connection = self
             .runtime
             .block_on(incoming.into_future())
-            .map_err(|_| P2pError::TransportUnavailable)?;
+            .map_err(|error| self.record_transport(error))?;
         Ok(Some(self.insert_connection(connection)))
     }
 
@@ -108,7 +119,9 @@ impl IrohEndpointHandle {
         let connection = self.take_connection(connection_id)?;
         let result = self.runtime.block_on(request(&connection, frame));
         self.put_connection(connection_id, connection)?;
-        result.map(|response| response.encode())
+        result
+            .map(|response| response.encode())
+            .map_err(|error| self.record_error(error))
     }
 
     pub fn receive_request(&self, connection_id: u64) -> Result<Vec<u8>, P2pError> {
@@ -116,16 +129,16 @@ impl IrohEndpointHandle {
         let accepted = self.runtime.block_on(connection.accept_bi());
         let (send, mut receive) = match accepted {
             Ok(streams) => streams,
-            Err(_) => {
+            Err(error) => {
                 self.put_connection(connection_id, connection)?;
-                return Err(P2pError::TransportUnavailable);
+                return Err(self.record_transport(error));
             }
         };
         let frame = match self.runtime.block_on(receive_frame(&mut receive)) {
             Ok(frame) => frame,
             Err(error) => {
                 self.put_connection(connection_id, connection)?;
-                return Err(error);
+                return Err(self.record_error(error));
             }
         };
         self.pending
@@ -151,7 +164,9 @@ impl IrohEndpointHandle {
             .ok_or(P2pError::InvalidArgument(
                 "connection has no pending request",
             ))?;
-        self.runtime.block_on(send_frame(&mut pending.send, &frame))
+        self.runtime
+            .block_on(send_frame(&mut pending.send, &frame))
+            .map_err(|error| self.record_error(error))
     }
 
     fn insert_connection(&self, connection: Connection) -> u64 {
@@ -178,6 +193,20 @@ impl IrohEndpointHandle {
         Ok(())
     }
 
+    fn record_transport(&self, error: impl std::fmt::Display) -> P2pError {
+        let error = P2pError::transport(error);
+        self.record_error(error)
+    }
+
+    fn record_error(&self, error: P2pError) -> P2pError {
+        if error.code() == crate::error::ErrorCode::TransportUnavailable {
+            if let Ok(mut last_error) = self.last_error.lock() {
+                *last_error = error.to_string();
+            }
+        }
+        error
+    }
+
     pub fn close(&self) {
         if let Ok(mut connections) = self.connections.lock() {
             connections.clear();
@@ -200,6 +229,7 @@ impl Drop for IrohEndpointHandle {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use iroh::TransportAddr;
 
     #[test]
     fn alpn_is_stable() {
@@ -216,5 +246,45 @@ mod tests {
             );
             endpoint.close();
         }
+    }
+
+    #[test]
+    fn local_endpoints_complete_the_alpn_handshake() {
+        let runtime = Runtime::new().expect("tokio runtime");
+        runtime.block_on(async {
+            let server = IrohEndpoint::builder(presets::Minimal)
+                .secret_key(SecretKey::from_bytes(&[11; 32]))
+                .alpns(vec![ALPN.to_vec()])
+                .bind_addr("127.0.0.1:0")
+                .expect("server address")
+                .bind()
+                .await
+                .expect("server endpoint");
+            let client = IrohEndpoint::builder(presets::Minimal)
+                .secret_key(SecretKey::from_bytes(&[12; 32]))
+                .alpns(vec![ALPN.to_vec()])
+                .bind_addr("127.0.0.1:0")
+                .expect("client address")
+                .bind()
+                .await
+                .expect("client endpoint");
+            let address = EndpointAddr::from_parts(
+                server.id(),
+                server.addr().ip_addrs().cloned().map(TransportAddr::Ip),
+            );
+            let accepting = async {
+                let incoming = server.accept().await.expect("incoming connection");
+                incoming
+                    .into_future()
+                    .await
+                    .expect("server handshake")
+            };
+            let connecting = client.connect(address, ALPN);
+            let (server_result, client_result) = tokio::join!(accepting, connecting);
+            assert_eq!(server_result.alpn(), ALPN);
+            assert_eq!(client_result.expect("client handshake").alpn(), ALPN);
+            server.close().await;
+            client.close().await;
+        });
     }
 }

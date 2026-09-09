@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:easy_calendar/ai/ai_key_store.dart';
 import 'package:easy_calendar/ai/ai_provider.dart';
@@ -17,10 +16,6 @@ import 'package:easy_calendar/domain/subscription.dart';
 import 'package:easy_calendar/features/subscriptions/subscriptions_page.dart';
 import 'package:easy_calendar/features/transfer/transfer_page.dart';
 import 'package:easy_calendar/sync/token_store.dart';
-import 'package:easy_calendar/sync/p2p_bridge.dart';
-import 'package:easy_calendar/sync/sync_group_store.dart';
-import 'package:easy_calendar/sync/sync_group.dart';
-import 'package:easy_calendar/domain/sync_mode.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -226,60 +221,6 @@ void main() {
     },
   );
 
-  test('creating a sync group enables group mode automatically', () async {
-    final repository = _MemoryRepository();
-    final controller = ItemController(
-      repository: repository,
-      config: config,
-      syncGroupSetup: SyncGroupSetupController(
-        _MemoryGroupStore(),
-        endpointIdentityStore: _MemoryEndpointIdentityStore(),
-        endpointKeyStore: _MemoryEndpointKeyStore(),
-      ),
-    );
-    await controller.initialize();
-
-    await controller.createSyncGroupAutomatically(_SetupP2pBridge());
-
-    expect(controller.preferences.syncEnabled, isTrue);
-    expect(controller.preferences.syncMode, SyncMode.group);
-    expect(repository.storedPreferences?.syncMode, SyncMode.group);
-  });
-
-  test(
-    'migrates an enabled legacy group profile away from cloud mode',
-    () async {
-      final groupStore = _MemoryGroupStore()
-        ..value = SyncGroupProfile.createPrimary(
-          primaryEndpointId: 'endpoint-primary',
-          endpointTicket: 'ticket-primary',
-        );
-      final repository = _MemoryRepository(
-        storedPreferences: const ClientPreferences(
-          apiUrl: 'http://localhost:8000',
-          deviceId: 'test-device',
-          syncEnabled: true,
-          syncMode: SyncMode.cloud,
-          notificationsEnabled: false,
-        ),
-      );
-      final controller = ItemController(
-        repository: repository,
-        config: config,
-        syncGroupSetup: SyncGroupSetupController(
-          groupStore,
-          endpointIdentityStore: _MemoryEndpointIdentityStore(),
-          endpointKeyStore: _MemoryEndpointKeyStore(),
-        ),
-      );
-
-      await controller.initialize();
-
-      expect(controller.preferences.syncMode, SyncMode.group);
-      expect(repository.storedPreferences?.syncMode, SyncMode.group);
-    },
-  );
-
   test(
     'portable settings import preserves device and collection identity',
     () async {
@@ -469,93 +410,6 @@ class _MemoryTokenStore implements SyncTokenStore {
 
   @override
   Future<void> clear() async => value = null;
-}
-
-class _MemoryGroupStore implements SyncGroupProfileStore {
-  SyncGroupProfile? value;
-
-  @override
-  Future<SyncGroupProfile?> read() async => value;
-
-  @override
-  Future<void> write(SyncGroupProfile profile) async => value = profile;
-
-  @override
-  Future<void> clear() async => value = null;
-}
-
-class _MemoryEndpointIdentityStore implements SyncEndpointIdentityStore {
-  String? value;
-
-  @override
-  Future<String?> read() async => value;
-
-  @override
-  Future<void> write(String endpointId) async => value = endpointId;
-
-  @override
-  Future<void> clear() async => value = null;
-}
-
-class _MemoryEndpointKeyStore implements SyncEndpointKeyStore {
-  String? value;
-
-  @override
-  Future<String?> read() async => value;
-
-  @override
-  Future<void> write(String encodedKey) async => value = encodedKey;
-
-  @override
-  Future<void> clear() async => value = null;
-}
-
-class _SetupP2pBridge implements P2pBridge {
-  @override
-  int get protocolVersion => 1;
-
-  @override
-  int get maxFrameBytes => 1024 * 1024;
-
-  @override
-  Future<void> start({
-    required String endpointId,
-    required String groupId,
-    String? endpointSecret,
-  }) async {}
-
-  @override
-  Future<String> endpointId() async => 'endpoint-native';
-
-  @override
-  Future<String> exportTicket() async => 'ticket-native';
-
-  @override
-  Future<int> connect(String ticket) async => 1;
-
-  @override
-  Future<int?> accept({
-    Duration timeout = const Duration(milliseconds: 250),
-  }) async => null;
-
-  @override
-  Future<Uint8List> request({
-    required int connectionId,
-    required Uint8List frame,
-  }) async => Uint8List(0);
-
-  @override
-  Future<Uint8List> receiveRequest({required int connectionId}) async =>
-      Uint8List(0);
-
-  @override
-  Future<void> respond({
-    required int connectionId,
-    required Uint8List frame,
-  }) async {}
-
-  @override
-  Future<void> close() async {}
 }
 
 class _MemoryAiKeyStore implements AiApiKeyStore {
