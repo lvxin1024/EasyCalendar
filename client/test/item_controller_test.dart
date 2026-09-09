@@ -247,6 +247,40 @@ void main() {
   });
 
   test(
+    'migrates an enabled legacy group profile away from cloud mode',
+    () async {
+      final groupStore = _MemoryGroupStore()
+        ..value = SyncGroupProfile.createPrimary(
+          primaryEndpointId: 'endpoint-primary',
+          endpointTicket: 'ticket-primary',
+        );
+      final repository = _MemoryRepository(
+        storedPreferences: const ClientPreferences(
+          apiUrl: 'http://localhost:8000',
+          deviceId: 'test-device',
+          syncEnabled: true,
+          syncMode: SyncMode.cloud,
+          notificationsEnabled: false,
+        ),
+      );
+      final controller = ItemController(
+        repository: repository,
+        config: config,
+        syncGroupSetup: SyncGroupSetupController(
+          groupStore,
+          endpointIdentityStore: _MemoryEndpointIdentityStore(),
+          endpointKeyStore: _MemoryEndpointKeyStore(),
+        ),
+      );
+
+      await controller.initialize();
+
+      expect(controller.preferences.syncMode, SyncMode.group);
+      expect(repository.storedPreferences?.syncMode, SyncMode.group);
+    },
+  );
+
+  test(
     'portable settings import preserves device and collection identity',
     () async {
       final controller = ItemController(

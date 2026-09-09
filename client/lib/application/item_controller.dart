@@ -271,12 +271,27 @@ class ItemController extends ChangeNotifier {
         loadedPreferences.deviceName,
         deviceId: deviceId,
       );
-      _preferences = loadedPreferences.copyWith(
+      var effectivePreferences = loadedPreferences.copyWith(
         deviceId: deviceId,
         deviceName: deviceName,
       );
+      SyncGroupProfile? configuredGroup;
+      try {
+        configuredGroup = await _syncGroupSetup.load();
+      } catch (_) {
+        // A malformed optional group profile must not block local startup.
+      }
+      if (configuredGroup != null &&
+          effectivePreferences.syncEnabled &&
+          effectivePreferences.syncMode != SyncMode.group) {
+        effectivePreferences = effectivePreferences.copyWith(
+          syncMode: SyncMode.group,
+        );
+      }
+      _preferences = effectivePreferences;
       if (deviceId != loadedPreferences.deviceId ||
-          deviceName != loadedPreferences.deviceName) {
+          deviceName != loadedPreferences.deviceName ||
+          effectivePreferences.syncMode != loadedPreferences.syncMode) {
         await repository.savePreferences(_preferences!);
       }
       await _applyRuntimeSettings(_preferences!);
