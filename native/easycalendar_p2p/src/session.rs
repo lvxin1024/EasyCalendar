@@ -1,6 +1,4 @@
 use iroh::endpoint::{Connection, RecvStream, SendStream};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-
 use crate::error::P2pError;
 use crate::protocol::{Frame, MAX_FRAME_BYTES};
 
