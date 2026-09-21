@@ -90,15 +90,13 @@ class _SettingSwitch extends StatelessWidget {
   final String title;
   final String subtitle;
   final bool value;
-  final ValueChanged<bool> onChanged;
+  final ValueChanged<bool>? onChanged;
 
   @override
-  Widget build(BuildContext context) => DecoratedBox(
-    decoration: BoxDecoration(
-      color: Theme.of(context).colorScheme.surface,
-      border: Border(
-        bottom: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-      ),
+  Widget build(BuildContext context) => Material(
+    color: Theme.of(context).colorScheme.surface,
+    shape: Border(
+      bottom: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
     ),
     child: SwitchListTile(
       secondary: Icon(icon),

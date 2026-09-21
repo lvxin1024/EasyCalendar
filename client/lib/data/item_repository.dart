@@ -102,6 +102,10 @@ abstract interface class ItemRepository {
 
   Future<void> savePreferences(ClientPreferences preferences);
 
+  Future<Map<String, dynamic>?> loadAssistantDraft();
+
+  Future<void> saveAssistantDraft(Map<String, dynamic> draft);
+
   Future<void> close();
 }
 

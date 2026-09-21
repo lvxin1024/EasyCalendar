@@ -1,3 +1,5 @@
+import 'dart:ui' show AppExitResponse;
+
 import 'package:flutter/material.dart';
 
 import '../../application/cycle_controller.dart';
@@ -54,12 +56,36 @@ class _HomeShellState extends State<HomeShell> {
   int _itemsPageVersion = 0;
   ItemTypeFilter _itemsInitialFilter = ItemTypeFilter.all;
   late final CalendarNavigationController _calendarNavigation;
+  late final AppLifecycleListener _lifecycle;
   final _calendarDestinationTaps = CalendarDestinationTapTracker();
 
   @override
   void initState() {
     super.initState();
     _calendarNavigation = CalendarNavigationController();
+    _lifecycle = AppLifecycleListener(
+      onExitRequested: () async {
+        final assistant = widget.controller.assistant;
+        await assistant.flush();
+        if (assistant.extracting || assistant.confirming) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('助手正在生成或确认候选，请完成后再退出。')),
+            );
+          }
+          return AppExitResponse.cancel;
+        }
+        if (assistant.initialized && assistant.storageError != null) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('助手草稿尚未保存，请在助手页重试后退出。')),
+            );
+          }
+          return AppExitResponse.cancel;
+        }
+        return AppExitResponse.exit;
+      },
+    );
     widget.widgetDeepLinks.addListener(_handleWidgetDeepLink);
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _handleWidgetDeepLink(),
@@ -76,6 +102,7 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   void dispose() {
+    _lifecycle.dispose();
     widget.widgetDeepLinks.removeListener(_handleWidgetDeepLink);
     _calendarNavigation.dispose();
     super.dispose();

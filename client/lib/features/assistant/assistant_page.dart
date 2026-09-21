@@ -1,13 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
-import '../../ai/ai_assistant_client.dart';
-import '../../ai/local_rule_parser.dart';
 import '../../ai/ai_provider.dart';
 import '../../ai/assistant_models.dart';
+import '../../application/assistant_controller.dart';
 import '../../application/item_controller.dart';
 import '../../config/app_config.dart';
 import '../../domain/item.dart';
-import '../../utils/configured_time.dart';
 
 class AssistantPage extends StatefulWidget {
   const AssistantPage({
@@ -25,25 +25,34 @@ class AssistantPage extends StatefulWidget {
 
 class _AssistantPageState extends State<AssistantPage> {
   final _textController = TextEditingController();
-  late final AiAssistantClient _client;
-  static const _localParser = LocalRuleParser();
-  CandidateWorkbench? _workbench;
-  List<AiCandidateIssue> _candidateIssues = const [];
-  List<String> _warnings = const [];
-  bool _extracting = false;
-  String? _error;
+  late final AssistantController _assistant;
+
+  CandidateWorkbench? get _workbench => _assistant.workbench;
 
   @override
   void initState() {
     super.initState();
-    _client = AiAssistantClient();
+    _assistant = widget.controller.assistant;
+    _textController.text = _assistant.text;
+    _assistant.addListener(_draftChanged);
+    unawaited(_assistant.initialize());
   }
 
   @override
   void dispose() {
+    _assistant.removeListener(_draftChanged);
     _textController.dispose();
-    _client.close();
     super.dispose();
+  }
+
+  void _draftChanged() {
+    if (_textController.text != _assistant.text) {
+      _textController.value = TextEditingValue(
+        text: _assistant.text,
+        selection: TextSelection.collapsed(offset: _assistant.text.length),
+      );
+    }
+    setState(() {});
   }
 
   @override
@@ -58,7 +67,9 @@ class _AssistantPageState extends State<AssistantPage> {
             const Spacer(),
             if (_workbench != null)
               TextButton.icon(
-                onPressed: _workbench!.candidates.isEmpty ? null : _rejectAll,
+                onPressed: _assistant.busy || _workbench!.candidates.isEmpty
+                    ? null
+                    : _assistant.rejectAll,
                 icon: const Icon(Icons.clear_all),
                 label: const Text('清空候选'),
               ),
@@ -69,23 +80,47 @@ class _AssistantPageState extends State<AssistantPage> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 4, 20, 96),
           children: [
+            SwitchListTile.adaptive(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('调用 AI'),
+              subtitle: Text(
+                _assistant.useAi
+                    ? (_provider == null
+                          ? '请先在设置中配置并启用 AI Provider'
+                          : '使用 ${_provider!.name} 生成候选')
+                    : '传统规则解析 · 本地运行，无需联网',
+              ),
+              value: _assistant.useAi,
+              onChanged: _assistant.busy ? null : _assistant.setUseAi,
+            ),
+            const SizedBox(height: 8),
             TextField(
               controller: _textController,
+              enabled: _assistant.initialized,
+              onChanged: _assistant.updateText,
               minLines: 4,
               maxLines: 8,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: '输入安排或 Due',
                 hintText: '例如：明天下午三点评审，周五前提交报告',
                 alignLabelWithHint: true,
-                prefixIcon: Icon(Icons.edit_note_outlined),
+                prefixIcon: const Icon(Icons.edit_note_outlined),
+                suffixIcon: IconButton(
+                  tooltip: '清空输入',
+                  onPressed:
+                      _assistant.initialized && _assistant.text.isNotEmpty
+                      ? () => _assistant.updateText('')
+                      : null,
+                  icon: const Icon(Icons.close),
+                ),
               ),
             ),
             const SizedBox(height: 12),
             Align(
               alignment: Alignment.centerRight,
               child: FilledButton.icon(
-                onPressed: _extracting ? null : _extract,
-                icon: _extracting
+                onPressed: _assistant.busy ? null : _extract,
+                icon: _assistant.extracting
                     ? const SizedBox.square(
                         dimension: 18,
                         child: CircularProgressIndicator(strokeWidth: 2),
@@ -94,19 +129,39 @@ class _AssistantPageState extends State<AssistantPage> {
                 label: const Text('生成候选'),
               ),
             ),
-            if (_error != null) ...[
+            if (_assistant.storageError != null) ...[
               const SizedBox(height: 12),
               Text(
-                _error!,
+                _assistant.storageError!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  onPressed: () {
+                    if (_assistant.initialized) {
+                      _assistant.retrySave();
+                    } else {
+                      unawaited(_assistant.initialize());
+                    }
+                  },
+                  child: const Text('重试保存或恢复草稿'),
+                ),
+              ),
+            ],
+            if (_assistant.error != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _assistant.error!,
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ],
-            for (final warning in _warnings)
+            for (final warning in _assistant.warnings)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Text('提醒：$warning'),
               ),
-            for (final issue in _candidateIssues)
+            for (final issue in _assistant.issues)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Text(
@@ -128,12 +183,18 @@ class _AssistantPageState extends State<AssistantPage> {
                 )
                   _CandidateTile(
                     candidate: _workbench!.candidates[index],
-                    onEdit: () => _edit(index),
-                    onReject: () => _reject(index),
-                    onConfirm: () => _confirm(index),
-                    onSplit: () => _split(index),
-                    onMerge: index + 1 < _workbench!.candidates.length
-                        ? () => _merge(index)
+                    onEdit: _assistant.busy ? null : () => _edit(index),
+                    onReject: _assistant.busy
+                        ? null
+                        : () => _assistant.reject(index),
+                    onConfirm: _assistant.busy ? null : () => _confirm(index),
+                    onSplit: _assistant.busy
+                        ? null
+                        : () => _assistant.split(index),
+                    onMerge:
+                        !_assistant.busy &&
+                            index + 1 < _workbench!.candidates.length
+                        ? () => _assistant.merge(index)
                         : null,
                   ),
             ],
@@ -150,43 +211,10 @@ class _AssistantPageState extends State<AssistantPage> {
     return candidates.isEmpty ? null : candidates.first;
   }
 
-  Future<void> _extract() async {
-    final text = _textController.text.trim();
-    final provider = _provider;
-    if (text.isEmpty) {
-      setState(() => _error = '请输入需要拆分的文本');
-      return;
-    }
-    setState(() {
-      _extracting = true;
-      _error = null;
-      _candidateIssues = const [];
-      _warnings = const [];
-    });
-    try {
-      final result = provider == null
-          ? _localParser.extract(
-              text,
-              now: configuredNow(),
-              timezone: widget.controller.activeTimezone,
-            )
-          : await _client.extract(
-              provider: provider,
-              text: text,
-              timezone: widget.controller.activeTimezone,
-            );
-      if (!mounted) return;
-      setState(() {
-        _workbench = CandidateWorkbench(result.candidates);
-        _candidateIssues = result.issues;
-        _warnings = result.warnings;
-      });
-    } catch (error) {
-      if (mounted) setState(() => _error = '$error');
-    } finally {
-      if (mounted) setState(() => _extracting = false);
-    }
-  }
+  Future<void> _extract() => _assistant.extract(
+    provider: _provider,
+    timezone: widget.controller.activeTimezone,
+  );
 
   Future<void> _edit(int index) async {
     final candidate = _workbench!.candidates[index];
@@ -211,43 +239,15 @@ class _AssistantPageState extends State<AssistantPage> {
       },
     );
     if (title == null || title.isEmpty || !mounted) return;
-    setState(() => _workbench!.edit(index, candidate.copyWith(title: title)));
+    _assistant.edit(index, candidate.copyWith(title: title));
   }
-
-  void _reject(int index) => setState(() => _workbench!.reject(index));
-
-  void _rejectAll() =>
-      setState(() => _workbench = CandidateWorkbench(const []));
 
   Future<void> _confirm(int index) async {
     final candidate = _workbench!.candidates[index];
-    try {
+    await _assistant.confirm(index, () async {
       await widget.controller.saveItem(draft: candidate.toDraft());
-      if (mounted) setState(() => _workbench!.reject(index));
-    } catch (error) {
-      if (mounted) setState(() => _error = '确认失败：$error');
-    }
+    });
   }
-
-  void _split(int index) {
-    final original = _workbench!.candidates[index];
-    final parts = original.title
-        .split(RegExp(r'\s*(?:、|和|及|与|以及|,|，)\s*'))
-        .where((value) => value.trim().isNotEmpty)
-        .toList();
-    if (parts.length < 2) {
-      setState(() => _error = '标题中没有可拆分的多个安排');
-      return;
-    }
-    setState(
-      () => _workbench!.split(index, [
-        for (var part = 0; part < parts.length; part++)
-          original.copyWith(title: parts[part].trim()),
-      ]),
-    );
-  }
-
-  void _merge(int index) => setState(() => _workbench!.merge(index, index + 1));
 }
 
 class _CandidateTile extends StatelessWidget {
@@ -261,10 +261,10 @@ class _CandidateTile extends StatelessWidget {
   });
 
   final AiCandidate candidate;
-  final VoidCallback onEdit;
-  final VoidCallback onReject;
-  final VoidCallback onConfirm;
-  final VoidCallback onSplit;
+  final VoidCallback? onEdit;
+  final VoidCallback? onReject;
+  final VoidCallback? onConfirm;
+  final VoidCallback? onSplit;
   final VoidCallback? onMerge;
 
   @override

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 import '../ai/ai_key_store.dart';
+import '../ai/ai_assistant_client.dart';
 import '../ai/ai_provider.dart';
 import '../ai/ai_provider_connection_tester.dart';
 import '../ai/ai_provider_service.dart';
@@ -31,6 +32,7 @@ import '../utils/configured_time.dart';
 import '../widget/widget_snapshot_writer.dart';
 import '../window/desktop_window_controller.dart';
 import 'service_connection_service.dart';
+import 'assistant_controller.dart';
 import 'subscription_service.dart';
 
 class ItemController extends ChangeNotifier {
@@ -42,6 +44,7 @@ class ItemController extends ChangeNotifier {
     this.widgetCycleStatesProvider,
     this.desktopWindowController,
     this.notificationService,
+    AiAssistantClient? aiAssistantClient,
     AiApiKeyStore? aiApiKeyStore,
     AiProviderConnectionTester? aiProviderConnectionTester,
     DeviceIdentity? deviceIdentity,
@@ -50,6 +53,10 @@ class ItemController extends ChangeNotifier {
     ServiceProbeClient? serviceProbeClient,
     SubscriptionFetchClient? subscriptionFetchClient,
   }) {
+    assistant = AssistantController(
+      repository: repository,
+      client: aiAssistantClient,
+    );
     syncCoordinator?.addListener(_syncChanged);
     _aiProviderService = AiProviderService(
       keyStore: aiApiKeyStore,
@@ -80,6 +87,7 @@ class ItemController extends ChangeNotifier {
   final Map<DateTime, CycleDayState> Function()? widgetCycleStatesProvider;
   final DesktopWindowController? desktopWindowController;
   final NotificationService? notificationService;
+  late final AssistantController assistant;
   late final AiProviderService _aiProviderService;
   late final DeviceIdentity _deviceIdentity;
   late final SyncGroupSetupController _syncGroupSetup;
@@ -782,7 +790,8 @@ class ItemController extends ChangeNotifier {
   void dispose() {
     syncCoordinator?.removeListener(_syncChanged);
     syncCoordinator?.dispose();
-    unawaited(repository.close());
+    assistant.dispose();
+    unawaited(assistant.flush().then((_) => repository.close()));
     _aiProviderService.close();
     _serviceConnectionService.close();
     _subscriptionService.close();

@@ -78,7 +78,7 @@ class _SettingsPageState extends State<SettingsPage> {
   late final TextEditingController _tokenController;
   late bool _syncEnabled;
   late SyncMode _syncMode;
-  late bool _notificationsEnabled;
+  bool _savingNotifications = false;
   late double _windowOpacity;
   late bool _windowAlwaysOnTop;
   late bool _assistantEnabled;
@@ -97,6 +97,9 @@ class _SettingsPageState extends State<SettingsPage> {
   String? _featureProbeStatus;
   bool _syncProbeFailed = false;
   bool _featureProbeFailed = false;
+
+  bool get _notificationsEnabled =>
+      widget.controller.preferences.notificationsEnabled;
 
   @override
   void initState() {
@@ -120,7 +123,6 @@ class _SettingsPageState extends State<SettingsPage> {
     _syncMode = preferences.syncMode == SyncMode.group
         ? SyncMode.group
         : SyncMode.cloud;
-    _notificationsEnabled = preferences.notificationsEnabled;
     _windowOpacity = preferences.windowOpacity;
     _windowAlwaysOnTop = preferences.windowAlwaysOnTop;
     _assistantEnabled = preferences.assistantEnabled;
@@ -445,22 +447,11 @@ class _SettingsPageState extends State<SettingsPage> {
               _SettingSwitch(
                 icon: Icons.notifications_outlined,
                 title: '通知',
-                subtitle: _notificationsEnabled
-                    ? widget.controller.notificationService?.statusText ?? '已启用'
-                    : '已关闭',
+                subtitle: _notificationsEnabled ? '已开启（自动保存）' : '已关闭（自动保存）',
                 value: _notificationsEnabled,
-                onChanged: (value) async {
-                  setState(() => _notificationsEnabled = value);
-                  if (value) {
-                    await widget.controller.notificationService?.initialize();
-                    await widget.controller.notificationService?.reconcileAll(
-                      widget.controller.items,
-                    );
-                  } else {
-                    await widget.controller.notificationService?.cancelAll();
-                  }
-                  if (mounted) setState(() {});
-                },
+                onChanged: _savingNotifications || widget.controller.mutating
+                    ? null
+                    : _setNotificationsEnabled,
               ),
               if (widget.controller.notificationService != null)
                 Padding(
@@ -825,7 +816,6 @@ class _SettingsPageState extends State<SettingsPage> {
       _syncMode = preferences.syncMode == SyncMode.group
           ? SyncMode.group
           : SyncMode.cloud;
-      _notificationsEnabled = preferences.notificationsEnabled;
       _windowOpacity = preferences.windowOpacity;
       _windowAlwaysOnTop = preferences.windowAlwaysOnTop;
       _assistantEnabled = preferences.assistantEnabled;
@@ -1234,6 +1224,22 @@ class _SettingsPageState extends State<SettingsPage> {
     if (mounted) setState(() {});
   }
 
+  Future<void> _setNotificationsEnabled(bool value) async {
+    setState(() => _savingNotifications = true);
+    try {
+      await widget.controller.savePreferences(
+        widget.controller.preferences.copyWith(notificationsEnabled: value),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('保存通知设置失败：$error')));
+    } finally {
+      if (mounted) setState(() => _savingNotifications = false);
+    }
+  }
+
   Future<void> _requestNotificationPermission() async {
     final service = widget.controller.notificationService;
     if (service == null) return;
@@ -1256,7 +1262,11 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _refreshNotificationPermission() async {
-    await widget.controller.notificationService?.refreshPermission();
+    final service = widget.controller.notificationService;
+    await service?.refreshPermission();
+    if (_notificationsEnabled && service?.available == true) {
+      await service!.reconcileAll(widget.controller.items);
+    }
     if (mounted) setState(() {});
   }
 

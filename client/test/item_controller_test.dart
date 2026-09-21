@@ -363,6 +363,7 @@ void main() {
       config: config,
       featureTokenStore: _MemoryTokenStore(),
       serviceProbeClient: _featureProbeClient(icsTransfer: true),
+      syncGroupSetup: SyncGroupSetupController(_MemoryGroupStore()),
     );
     await controller.initialize();
 
@@ -391,6 +392,7 @@ void main() {
       config: config,
       featureTokenStore: _MemoryTokenStore(),
       serviceProbeClient: _featureProbeClient(icsSubscriptions: true),
+      syncGroupSetup: SyncGroupSetupController(_MemoryGroupStore()),
     );
     await controller.initialize();
 
@@ -823,6 +825,12 @@ class _MemoryRepository implements ItemRepository {
   Future<void> savePreferences(ClientPreferences preferences) async {
     storedPreferences = preferences;
   }
+
+  @override
+  Future<Map<String, dynamic>?> loadAssistantDraft() async => null;
+
+  @override
+  Future<void> saveAssistantDraft(Map<String, dynamic> draft) async {}
 
   @override
   Future<void> close() async {}

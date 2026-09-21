@@ -1559,6 +1559,28 @@ class LocalItemRepository
   @override
   Future<void> savePreferences(ClientPreferences preferences) =>
       LocalPreferencesStore(_db).save(preferences);
+
+  @override
+  Future<Map<String, dynamic>?> loadAssistantDraft() async {
+    final rows = await _db.query(
+      'app_settings',
+      columns: ['value'],
+      where: 'key = ?',
+      whereArgs: ['assistant_draft'],
+    );
+    return rows.isEmpty
+        ? null
+        : jsonDecode(rows.single['value'] as String) as Map<String, dynamic>;
+  }
+
+  @override
+  Future<void> saveAssistantDraft(Map<String, dynamic> draft) async {
+    await _db.insert('app_settings', {
+      'key': 'assistant_draft',
+      'value': jsonEncode(draft),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
   Future<void> _writeOutbox(
     Transaction transaction,
     CalendarItem item,
