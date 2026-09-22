@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
@@ -170,5 +172,22 @@ Future<void> main() async {
   if (Platform.environment['EASYCALENDAR_SMOKE_TEST'] == '1') {
     await WidgetsBinding.instance.waitUntilFirstFrameRasterized;
     stdout.writeln('EASYCALENDAR_FIRST_FRAME_READY');
+    final bridge = IsolateP2pBridge();
+    final random = Random.secure();
+    try {
+      await bridge.start(
+        endpointId: 'smoke',
+        groupId: 'smoke',
+        endpointSecret: base64Url.encode(
+          List<int>.generate(32, (_) => random.nextInt(256)),
+        ),
+      );
+      if ((await bridge.endpointId()).isEmpty) {
+        throw StateError('Native P2P endpoint ID is empty');
+      }
+    } finally {
+      await bridge.close();
+    }
+    stdout.writeln('EASYCALENDAR_P2P_READY');
   }
 }
