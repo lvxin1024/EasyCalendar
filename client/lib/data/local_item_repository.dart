@@ -1559,6 +1559,28 @@ class LocalItemRepository
   @override
   Future<void> savePreferences(ClientPreferences preferences) =>
       LocalPreferencesStore(_db).save(preferences);
+
+  @override
+  Future<Map<String, dynamic>?> loadAssistantDraft() async {
+    final rows = await _db.query(
+      'app_settings',
+      columns: ['value'],
+      where: 'key = ?',
+      whereArgs: ['assistant_draft'],
+    );
+    return rows.isEmpty
+        ? null
+        : jsonDecode(rows.single['value'] as String) as Map<String, dynamic>;
+  }
+
+  @override
+  Future<void> saveAssistantDraft(Map<String, dynamic> draft) async {
+    await _db.insert('app_settings', {
+      'key': 'assistant_draft',
+      'value': jsonEncode(draft),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
   Future<void> _writeOutbox(
     Transaction transaction,
     CalendarItem item,
@@ -1858,6 +1880,10 @@ class LocalItemRepository
         'last_error IN ('
         "'constraint_violation: Change could not be applied', "
         "'constraint_violation: Referenced collection does not exist'"
+        ') OR last_error IN ('
+        "'transport_rejected: 同步 transport 尚未启动。', "
+        "'transport_rejected: Group transport has not been started.', "
+        "'transport_rejected: P2P native bridge has not been started.'"
         '))',
   );
 

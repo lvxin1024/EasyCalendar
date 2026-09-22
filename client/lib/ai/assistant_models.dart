@@ -65,20 +65,12 @@ class AiCandidate {
     }
     final rawSpan = json['source_text_span'];
     AiTextSpan? span;
-    if (rawSpan != null) {
-      if (rawSpan is! Map) {
-        throw const FormatException('source_text_span must be an object');
-      }
-      span = AiTextSpan(
-        start:
-            (rawSpan['start'] as num?)?.toInt() ??
-            (throw const FormatException('source span start is required')),
-        end:
-            (rawSpan['end'] as num?)?.toInt() ??
-            (throw const FormatException('source span end is required')),
-      );
-      if (span.start < 0 || span.end < span.start) {
-        throw const FormatException('Invalid source text span');
+    // Source highlighting is optional metadata, not required to save a schedule.
+    if (rawSpan is Map) {
+      final start = rawSpan['start'];
+      final end = rawSpan['end'];
+      if (start is int && end is int && start >= 0 && end >= start) {
+        span = AiTextSpan(start: start, end: end);
       }
     }
     final startAt = _date(json['start_at']);
@@ -164,8 +156,8 @@ class AiCandidate {
     dueAt: dueAt ?? this.dueAt,
     timezone: timezone,
     allDay: allDay,
-    location: location,
-    priority: priority,
+    location: location ?? this.location,
+    priority: priority ?? this.priority,
     confidence: confidence,
     reasoning: reasoning,
     sourceTextSpan: sourceTextSpan,
@@ -261,13 +253,22 @@ class CandidateWorkbench {
   AiCandidate merge(int firstIndex, int secondIndex) {
     final first = candidates[firstIndex];
     final second = candidates[secondIndex];
+    final starts = [
+      first.startAt,
+      second.startAt,
+    ].whereType<DateTime>().toList()..sort();
+    final ends = [
+      first.endAt ?? first.startAt,
+      second.endAt ?? second.startAt,
+    ].whereType<DateTime>().toList()..sort();
     final merged = first.copyWith(
       title: '${first.title} / ${second.title}',
       body: [
         first.body,
         second.body,
       ].whereType<String>().where((value) => value.isNotEmpty).join('\n'),
-      endAt: second.endAt ?? first.endAt,
+      startAt: starts.isEmpty ? null : starts.first,
+      endAt: ends.isEmpty ? null : ends.last,
     );
     final low = firstIndex < secondIndex ? firstIndex : secondIndex;
     final high = firstIndex < secondIndex ? secondIndex : firstIndex;

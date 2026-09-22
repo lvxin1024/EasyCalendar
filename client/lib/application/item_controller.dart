@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 import '../ai/ai_key_store.dart';
+import '../ai/ai_assistant_client.dart';
 import '../ai/ai_provider.dart';
 import '../ai/ai_provider_connection_tester.dart';
 import '../ai/ai_provider_service.dart';
@@ -19,6 +20,7 @@ import '../device/device_identity.dart';
 import '../domain/item.dart';
 import '../domain/cycle_prediction.dart';
 import '../domain/subscription.dart';
+import '../domain/sync_mode.dart';
 import '../notification/notification_service.dart';
 import '../sync/sync_coordinator.dart';
 import '../sync/sync_group.dart';
@@ -30,6 +32,7 @@ import '../utils/configured_time.dart';
 import '../widget/widget_snapshot_writer.dart';
 import '../window/desktop_window_controller.dart';
 import 'service_connection_service.dart';
+import 'assistant_controller.dart';
 import 'subscription_service.dart';
 
 class ItemController extends ChangeNotifier {
@@ -41,6 +44,7 @@ class ItemController extends ChangeNotifier {
     this.widgetCycleStatesProvider,
     this.desktopWindowController,
     this.notificationService,
+    AiAssistantClient? aiAssistantClient,
     AiApiKeyStore? aiApiKeyStore,
     AiProviderConnectionTester? aiProviderConnectionTester,
     DeviceIdentity? deviceIdentity,
@@ -49,6 +53,10 @@ class ItemController extends ChangeNotifier {
     ServiceProbeClient? serviceProbeClient,
     SubscriptionFetchClient? subscriptionFetchClient,
   }) {
+    assistant = AssistantController(
+      repository: repository,
+      client: aiAssistantClient,
+    );
     syncCoordinator?.addListener(_syncChanged);
     _aiProviderService = AiProviderService(
       keyStore: aiApiKeyStore,
@@ -79,6 +87,7 @@ class ItemController extends ChangeNotifier {
   final Map<DateTime, CycleDayState> Function()? widgetCycleStatesProvider;
   final DesktopWindowController? desktopWindowController;
   final NotificationService? notificationService;
+  late final AssistantController assistant;
   late final AiProviderService _aiProviderService;
   late final DeviceIdentity _deviceIdentity;
   late final SyncGroupSetupController _syncGroupSetup;
@@ -120,20 +129,29 @@ class ItemController extends ChangeNotifier {
   Future<SyncGroupProfile> joinSyncGroup(String code) => _syncGroupSetup
       .joinAutomatically(code: code, fallbackDeviceId: preferences.deviceId);
 
-  Future<SyncGroupProfile> createSyncGroupAutomatically(P2pBridge bridge) =>
-      _syncGroupSetup.createPrimaryAutomatically(
-        bridge: bridge,
-        fallbackDeviceId: preferences.deviceId,
-      );
+  Future<SyncGroupProfile> createSyncGroupAutomatically(
+    P2pBridge bridge,
+  ) async {
+    final profile = await _syncGroupSetup.createPrimaryAutomatically(
+      bridge: bridge,
+      fallbackDeviceId: preferences.deviceId,
+    );
+    await _enableGroupSync();
+    return profile;
+  }
 
   Future<SyncGroupProfile> joinSyncGroupAutomatically(
     String code,
     P2pBridge bridge,
-  ) => _syncGroupSetup.joinAutomaticallyWithBridge(
-    code: code,
-    fallbackDeviceId: preferences.deviceId,
-    bridge: bridge,
-  );
+  ) async {
+    final profile = await _syncGroupSetup.joinAutomaticallyWithBridge(
+      code: code,
+      fallbackDeviceId: preferences.deviceId,
+      bridge: bridge,
+    );
+    await _enableGroupSync();
+    return profile;
+  }
 
   Future<void> clearSyncGroup() => _syncGroupSetup.clear();
 
@@ -261,12 +279,27 @@ class ItemController extends ChangeNotifier {
         loadedPreferences.deviceName,
         deviceId: deviceId,
       );
-      _preferences = loadedPreferences.copyWith(
+      var effectivePreferences = loadedPreferences.copyWith(
         deviceId: deviceId,
         deviceName: deviceName,
       );
+      SyncGroupProfile? configuredGroup;
+      try {
+        configuredGroup = await _syncGroupSetup.load();
+      } catch (_) {
+        // A malformed optional group profile must not block local startup.
+      }
+      if (configuredGroup != null &&
+          effectivePreferences.syncEnabled &&
+          effectivePreferences.syncMode != SyncMode.group) {
+        effectivePreferences = effectivePreferences.copyWith(
+          syncMode: SyncMode.group,
+        );
+      }
+      _preferences = effectivePreferences;
       if (deviceId != loadedPreferences.deviceId ||
-          deviceName != loadedPreferences.deviceName) {
+          deviceName != loadedPreferences.deviceName ||
+          effectivePreferences.syncMode != loadedPreferences.syncMode) {
         await repository.savePreferences(_preferences!);
       }
       await _applyRuntimeSettings(_preferences!);
@@ -437,9 +470,10 @@ class ItemController extends ChangeNotifier {
         ),
       );
       await _applyRuntimeSettings(_preferences!);
-      syncCoordinator?.configure(
+      await syncCoordinator?.configure(
         enabled: _preferences!.syncEnabled,
         serverUrl: _preferences!.apiUrl,
+        mode: _preferences!.effectiveSyncMode,
       );
       _initialized = true;
     });
@@ -589,7 +623,7 @@ class ItemController extends ChangeNotifier {
       } catch (_) {
         // A platform window adapter may be unavailable while the app is starting.
       }
-      syncCoordinator?.configure(
+      await syncCoordinator?.configure(
         enabled: value.syncEnabled,
         serverUrl: value.apiUrl,
         mode: value.effectiveSyncMode,
@@ -604,6 +638,14 @@ class ItemController extends ChangeNotifier {
       }
       if (value.syncEnabled) unawaited(syncCoordinator?.synchronize());
     }, reloadItems: false);
+  }
+
+  Future<void> _enableGroupSync() async {
+    final current = preferences;
+    if (current.syncEnabled && current.syncMode == SyncMode.group) return;
+    await savePreferences(
+      current.copyWith(syncEnabled: true, syncMode: SyncMode.group),
+    );
   }
 
   Future<ClientPreferences> regenerateDeviceIdentity() async {
@@ -748,7 +790,8 @@ class ItemController extends ChangeNotifier {
   void dispose() {
     syncCoordinator?.removeListener(_syncChanged);
     syncCoordinator?.dispose();
-    unawaited(repository.close());
+    assistant.dispose();
+    unawaited(assistant.flush().then((_) => repository.close()));
     _aiProviderService.close();
     _serviceConnectionService.close();
     _subscriptionService.close();

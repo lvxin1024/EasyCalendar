@@ -68,19 +68,12 @@ class SyncCoordinator extends ChangeNotifier {
       // Secure storage availability must not block local-first startup.
       _tokenConfigured = false;
     }
-    configure(enabled: enabled, serverUrl: serverUrl, mode: mode);
+    await configure(enabled: enabled, serverUrl: serverUrl, mode: mode);
     if (transport case final SyncTransportLifecycle lifecycle) {
       _transportEventsSubscription ??= lifecycle.events.listen(
         _handleTransportEvent,
       );
       await lifecycle.start();
-    }
-    if (enabled && mode == SyncMode.group) {
-      try {
-        await platformLifecycle?.start();
-      } catch (_) {
-        // Foreground service support is optional; local-first startup continues.
-      }
     }
     _connectivitySubscription ??= connectivityMonitor.onlineChanges.listen((
       online,
@@ -91,15 +84,17 @@ class SyncCoordinator extends ChangeNotifier {
     if (_enabled) unawaited(synchronize());
   }
 
-  void configure({
+  Future<void> configure({
     required bool enabled,
     required String serverUrl,
     SyncMode mode = SyncMode.cloud,
-  }) {
+  }) async {
+    final previousEnabled = _enabled;
+    final previousMode = _mode;
     _enabled = enabled;
     _mode = mode;
     if (transport case final SyncTransportSelector selector) {
-      unawaited(selector.setMode(mode));
+      await selector.setMode(mode);
     }
     _serverUrl = Uri.tryParse(serverUrl);
     _retryTimer?.cancel();
@@ -116,6 +111,25 @@ class SyncCoordinator extends ChangeNotifier {
       _periodicSyncTimer = Timer.periodic(const Duration(seconds: 10), (_) {
         unawaited(synchronize());
       });
+    }
+    if (platformLifecycle != null &&
+        enabled &&
+        mode == SyncMode.group &&
+        (!previousEnabled || previousMode != SyncMode.group)) {
+      try {
+        await platformLifecycle!.start();
+      } catch (_) {
+        // Foreground service support is optional; local-first startup continues.
+      }
+    } else if (platformLifecycle != null &&
+        (!enabled || mode != SyncMode.group) &&
+        previousEnabled &&
+        previousMode == SyncMode.group) {
+      try {
+        await platformLifecycle!.close();
+      } catch (_) {
+        // Lifecycle cleanup must not block settings changes.
+      }
     }
   }
 

@@ -68,6 +68,46 @@ def test_android_native_build_targets_match_flutter_supported_abis():
     assert "lib/x86/libeasycalendar_p2p.so" not in release_workflow
 
 
+def test_release_builds_native_bridges_before_packaging_platform_artifacts():
+    release_workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(
+        encoding="utf-8"
+    )
+    android_native = release_workflow.index("- name: Build native P2P bridge")
+    android_flutter = release_workflow.index("- name: Build APK")
+    assert android_native < android_flutter
+    assert "test -f android/app/src/main/jniLibs/arm64-v8a/libeasycalendar_p2p.so" in release_workflow
+    assert "test -f android/app/src/main/jniLibs/armeabi-v7a/libeasycalendar_p2p.so" in release_workflow
+    assert "test -f android/app/src/main/jniLibs/x86_64/libeasycalendar_p2p.so" in release_workflow
+    assert 'entry="lib/$abi/libeasycalendar_p2p.so"' in release_workflow
+
+    windows_native = release_workflow.index(
+        "- name: Build native P2P bridge", android_native + 1
+    )
+    windows_flutter = release_workflow.index("- name: Build Windows application")
+    assert windows_native < windows_flutter
+    assert 'Test-Path $library' in release_workflow
+
+
+def test_group_sync_ui_keeps_join_code_inside_explicit_join_flow():
+    panel = (CLIENT / "lib" / "features" / "sync" / "sync_group_setup_panel.dart").read_text(
+        encoding="utf-8"
+    )
+    assert "bool _showJoinForm = false;" in panel
+    assert "onPressed: _working || _loading ? null : _create" in panel
+    assert "onPressed: _working || _loading ? null : _showJoin" in panel
+    assert "if (_showJoinForm) ...[" in panel
+    assert "labelText: '粘贴 ECG1 同步码'" in panel
+
+
+def test_onboarding_setup_segments_have_a_wrapping_two_line_safe_layout():
+    page = (CLIENT / "lib" / "features" / "onboarding" / "first_run_page.dart").read_text(
+        encoding="utf-8"
+    )
+    assert "minimumSize: WidgetStatePropertyAll(Size(0, 64))" in page
+    assert page.count("maxLines: 2") >= 3
+    assert page.count("textAlign: TextAlign.center") >= 3
+
+
 def test_macos_builds_use_xcode_26_compatible_runners():
     workflow = (ROOT / ".github" / "workflows" / "tests.yml").read_text(
         encoding="utf-8"

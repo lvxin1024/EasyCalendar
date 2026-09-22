@@ -128,14 +128,12 @@ class GroupSyncTransport implements SyncTransport, SyncTransportLifecycle {
 
   String get _currentEndpointId => endpointIdProvider?.call() ?? endpointId;
 
-  String get _currentDisplayName =>
-      displayNameProvider?.call() ?? displayName;
+  String get _currentDisplayName => displayNameProvider?.call() ?? displayName;
 
   Future<void> _ensureCurrentConnection() async {
     if (!_started) {
       throw const SyncTransportException(
         'Group transport has not been started.',
-        permanent: true,
       );
     }
     if (_connectedDeviceId == _currentDeviceId &&
@@ -150,7 +148,6 @@ class GroupSyncTransport implements SyncTransport, SyncTransportLifecycle {
     if (!_started) {
       throw const SyncTransportException(
         'Group transport has not been started.',
-        permanent: true,
       );
     }
     if (_connectedDeviceId == batchDeviceId) return;

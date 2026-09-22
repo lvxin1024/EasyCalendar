@@ -76,11 +76,10 @@ Future<void> main() async {
     groupTransportFactory: () async {
       final profile = await syncProfileStore.read();
       if (profile == null) return null;
-      final endpointSecret = await syncEndpointKeyStore.read();
-      if (endpointSecret == null) return null;
-      final api = FfiP2pNativeApi.tryLoad();
-      if (api == null) return null;
-      final bridge = NativeP2pBridge(api: api);
+      final endpointSecret =
+          await syncEndpointKeyStore.read() ??
+          await syncGroupSetup.ensureLocalEndpointKey();
+      final bridge = IsolateP2pBridge();
       final storedEndpointId = await syncEndpointIdentityStore.read();
       final endpointId = storedEndpointId ?? controller.preferences.deviceId;
       await bridge.start(

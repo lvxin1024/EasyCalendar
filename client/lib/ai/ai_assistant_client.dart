@@ -18,6 +18,7 @@ class AiAssistantClient {
     required AiProviderConfig provider,
     required String text,
     required String timezone,
+    DateTime? now,
   }) async {
     final key = await _keyStore.read(provider.id);
     if (provider.kind == AiProviderKind.openaiCompatible &&
@@ -33,9 +34,22 @@ class AiAssistantClient {
     }
     final prompt =
         'Return JSON only: {"candidates":[...],"warnings":[...]}. '
-        'Every candidate needs temp_id, type (event|task|note), title, confidence, timezone. '
-        'Use ISO 8601 times and include source_text_span when possible. '
-        'Timezone: $timezone. Input: $text';
+        'Every candidate needs a unique string temp_id, type (event|task|note), '
+        'a nonempty string title, numeric confidence between 0 and 1, and timezone. '
+        'Events require start_at; tasks require due_at. '
+        'Use ISO 8601 strings with UTC offsets for start_at, end_at, and due_at; '
+        'end_at must not precede start_at. Omit unknown optional fields or use null. '
+        'Optional body, location, and reasoning are strings; all_day is a boolean; '
+        'priority is an integer from 0 to 3. '
+        'Optional source_text_span must be an object {"start":0,"end":5} '
+        'with zero-based UTF-16 offsets into the input (end exclusive), '
+        'never a string or array. Omit it if unsure. '
+        'Optional reminders is an array of {"minutes_before":30,"enabled":true}; '
+        'recurrence is an object {"rrule":"FREQ=WEEKLY"}. '
+        'Warnings must be strings. '
+        'Current instant (UTC): ${(now ?? DateTime.now()).toUtc().toIso8601String()}. '
+        'Resolve relative dates in timezone $timezone. '
+        'Input: ${jsonEncode(text)}';
     final endpoint = provider.kind == AiProviderKind.ollama
         ? resolveAiProviderEndpoint(base, 'api/chat')
         : resolveAiProviderEndpoint(base, 'chat/completions');

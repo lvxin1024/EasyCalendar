@@ -36,7 +36,10 @@ void main() {
       enabled: false,
       serverUrl: 'https://sync.example.com',
     );
-    coordinator.configure(enabled: true, serverUrl: 'https://sync.example.com');
+    await coordinator.configure(
+      enabled: true,
+      serverUrl: 'https://sync.example.com',
+    );
   });
 
   tearDown(() {
@@ -215,7 +218,11 @@ void main() {
   test('group change notification pulls without a cloud token', () async {
     repository.pending.clear();
     tokenStore.value = null;
-    coordinator.configure(enabled: true, serverUrl: '', mode: SyncMode.group);
+    await coordinator.configure(
+      enabled: true,
+      serverUrl: '',
+      mode: SyncMode.group,
+    );
     transport.pullPages.add(
       const PullSyncPage(cursor: 'cur_0', hasMore: false, changes: []),
     );

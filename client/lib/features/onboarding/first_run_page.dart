@@ -91,21 +91,39 @@ class _FirstRunPageState extends State<FirstRunPage> {
                   const SizedBox(height: 12),
                   SegmentedButton<_SetupMode>(
                     showSelectedIcon: false,
+                    style: const ButtonStyle(
+                      minimumSize: WidgetStatePropertyAll(Size(0, 64)),
+                      padding: WidgetStatePropertyAll(
+                        EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                      ),
+                    ),
                     segments: const [
                       ButtonSegment(
                         value: _SetupMode.local,
                         icon: Icon(Icons.computer_outlined),
-                        label: Text('仅本地使用'),
+                        label: Text(
+                          '仅本地使用',
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                        ),
                       ),
                       ButtonSegment(
                         value: _SetupMode.cloud,
                         icon: Icon(Icons.cloud_sync_outlined),
-                        label: Text('连接已有服务'),
+                        label: Text(
+                          '连接已有服务',
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                        ),
                       ),
                       ButtonSegment(
                         value: _SetupMode.group,
                         icon: Icon(Icons.hub_outlined),
-                        label: Text('设备群组同步'),
+                        label: Text(
+                          '设备群组同步',
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                        ),
                       ),
                     ],
                     selected: {_mode},
@@ -222,9 +240,8 @@ class _FirstRunPageState extends State<FirstRunPage> {
                   ] else ...[
                     SyncGroupSetupPanel(
                       controller: widget.controller,
-                      onProfileChanged: (profile) => setState(
-                        () => _groupConfigured = profile != null,
-                      ),
+                      onProfileChanged: (profile) =>
+                          setState(() => _groupConfigured = profile != null),
                     ),
                     const SizedBox(height: 20),
                     Align(

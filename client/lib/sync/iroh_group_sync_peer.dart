@@ -226,7 +226,7 @@ class IrohSyncGroupPeer implements SyncGroupPeer {
     );
     _primary = true;
     _acceptTimer ??= Timer.periodic(
-      const Duration(milliseconds: 100),
+      const Duration(milliseconds: 250),
       (_) => unawaited(_acceptOnce()),
     );
   }
