@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
@@ -147,12 +148,11 @@ Future<void> main() async {
   );
   cycleController.addListener(() {
     if (cycleController.initialized) {
-      unawaited(controller.refreshWidgetSnapshot().catchError((_) {}));
+      unawaited(controller.refreshWidgetSnapshot());
     }
   });
   await controller.initialize();
   await cycleController.initialize();
-  await controller.refreshWidgetSnapshot();
   await notificationService.initialize();
   if (controller.preferences.notificationsEnabled) {
     unawaited(notificationService.reconcileAll(controller.items));
@@ -167,4 +167,8 @@ Future<void> main() async {
       widgetDeepLinks: widgetDeepLinks,
     ),
   );
+  if (Platform.environment['EASYCALENDAR_SMOKE_TEST'] == '1') {
+    await WidgetsBinding.instance.waitUntilFirstFrameRasterized;
+    stdout.writeln('EASYCALENDAR_FIRST_FRAME_READY');
+  }
 }

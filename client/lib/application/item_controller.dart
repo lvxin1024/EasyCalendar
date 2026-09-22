@@ -612,11 +612,7 @@ class ItemController extends ChangeNotifier {
       }
       _preferences = value;
       await _applyRuntimeSettings(value);
-      try {
-        await _writeWidgetSnapshot();
-      } catch (_) {
-        // Widget refresh is derived state and must not block settings changes.
-      }
+      await _writeWidgetSnapshot();
       try {
         await desktopWindowController?.setOpacity(value.windowOpacity);
         await desktopWindowController?.setAlwaysOnTop(value.windowAlwaysOnTop);
@@ -703,11 +699,7 @@ class ItemController extends ChangeNotifier {
   Future<void> _reload({bool notify = true}) async {
     _items = await repository.listItems();
     _collections = await repository.listCollections();
-    try {
-      await _writeWidgetSnapshot();
-    } catch (_) {
-      // Widget refresh is derived state and must not block local CRUD.
-    }
+    await _writeWidgetSnapshot();
     if (preferences.notificationsEnabled) {
       unawaited(notificationService?.reconcileAll(_items));
     }
@@ -715,12 +707,17 @@ class ItemController extends ChangeNotifier {
   }
 
   Future<void> _writeWidgetSnapshot() async {
-    await widgetSnapshotWriter?.write(
-      items: _items,
-      timezone: activeTimezone,
-      quotes: preferences.widgetQuotes,
-      cycleStates: widgetCycleStatesProvider?.call() ?? const {},
-    );
+    try {
+      await widgetSnapshotWriter?.write(
+        items: _items,
+        timezone: activeTimezone,
+        quotes: preferences.widgetQuotes,
+        cycleStates: widgetCycleStatesProvider?.call() ?? const {},
+      );
+    } catch (_) {
+      // Derived widget data is optional, including when an unsigned macOS
+      // build has no App Group permission. Never block startup or local data.
+    }
   }
 
   Future<void> saveSyncToken(String token) async {

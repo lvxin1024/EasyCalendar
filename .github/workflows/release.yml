@@ -365,6 +365,7 @@ jobs:
           codesign --force --options runtime --timestamp --sign "$MACOS_SIGNING_IDENTITY" \
             --entitlements client/macos/Runner/Release.entitlements "$app"
           codesign --verify --deep --strict --verbose=2 "$app"
+          python3 scripts/smoke_test_macos.py "$app/Contents/MacOS/EasyCalendar"
           mkdir -p client/build/release/dmg
           cp -R "$app" client/build/release/dmg/EasyCalendar.app
           ln -s /Applications client/build/release/dmg/Applications
@@ -400,6 +401,7 @@ jobs:
           codesign --force --sign - \
             --entitlements "$entitlements" "$app"
           codesign --verify --deep --strict --verbose=2 "$app"
+          python3 scripts/smoke_test_macos.py "$app/Contents/MacOS/EasyCalendar"
 
           rm -rf client/build/release/dmg
           mkdir -p client/build/release/dmg

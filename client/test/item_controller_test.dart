@@ -13,6 +13,7 @@ import 'package:easy_calendar/data/settings_transfer.dart';
 import 'package:easy_calendar/data/transfer_models.dart';
 import 'package:easy_calendar/device/device_identity.dart';
 import 'package:easy_calendar/domain/item.dart';
+import 'package:easy_calendar/domain/cycle_prediction.dart';
 import 'package:easy_calendar/domain/subscription.dart';
 import 'package:easy_calendar/domain/sync_mode.dart';
 import 'package:easy_calendar/features/subscriptions/subscriptions_page.dart';
@@ -21,7 +22,9 @@ import 'package:easy_calendar/sync/token_store.dart';
 import 'package:easy_calendar/sync/p2p_bridge.dart';
 import 'package:easy_calendar/sync/sync_group_store.dart';
 import 'package:easy_calendar/sync/sync_group.dart';
+import 'package:easy_calendar/widget/widget_snapshot_writer.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -91,6 +94,61 @@ void main() {
     expect(controller.items.single.status, ItemStatus.done);
     expect(controller.items.single.version, 2);
   });
+
+  test(
+    'denied widget writes do not block startup or saves and can recover',
+    () async {
+      final repository = _MemoryRepository();
+      final writer = _WidgetSnapshotWriter();
+      final controller = ItemController(
+        repository: repository,
+        config: config,
+        widgetSnapshotWriter: writer,
+      );
+      addTearDown(controller.dispose);
+
+      await controller.initialize();
+      expect(controller.initialized, isTrue);
+      expect(controller.error, isNull);
+      expect(writer.attempts, greaterThan(0));
+      await controller.refreshWidgetSnapshot();
+      final created = await controller.saveItem(
+        draft: const ItemDraft(
+          type: ItemType.note,
+          title: '保存在本地',
+          timezone: 'Asia/Shanghai',
+        ),
+      );
+      await controller.savePreferences(
+        controller.preferences.copyWith(
+          timezone: 'UTC',
+          widgetQuotes: ['保存后的 Widget 内容'],
+        ),
+      );
+
+      expect((await repository.listItems()).single.title, '保存在本地');
+      expect(repository.storedPreferences?.timezone, 'UTC');
+      expect(controller.error, isNull);
+      expect(writer.items, isNull);
+
+      writer.denyWrites = false;
+      await controller.refreshWidgetSnapshot();
+
+      expect(writer.items!.single.id, created!.id);
+      expect(writer.timezone, 'UTC');
+      expect(writer.quotes, ['保存后的 Widget 内容']);
+
+      await controller.saveItem(
+        current: created,
+        draft: const ItemDraft(
+          type: ItemType.note,
+          title: '更新后的内容',
+          timezone: 'UTC',
+        ),
+      );
+      expect(writer.items!.single.title, '更新后的内容');
+    },
+  );
 
   test('controller migrates a tag and removes its color preference', () async {
     final repository = _MemoryRepository(
@@ -459,6 +517,33 @@ ServiceProbeClient _featureProbeClient({
     };
   }),
 );
+
+class _WidgetSnapshotWriter implements WidgetSnapshotWriter {
+  bool denyWrites = true;
+  int attempts = 0;
+  List<CalendarItem>? items;
+  String? timezone;
+  List<String>? quotes;
+
+  @override
+  Future<void> write({
+    required List<CalendarItem> items,
+    required String timezone,
+    required List<String> quotes,
+    Map<DateTime, CycleDayState> cycleStates = const {},
+  }) async {
+    attempts++;
+    if (denyWrites) {
+      throw PlatformException(
+        code: 'widget_snapshot_write_failed',
+        message: 'Permission to write the App Group widget folder was denied',
+      );
+    }
+    this.items = List.of(items);
+    this.timezone = timezone;
+    this.quotes = List.of(quotes);
+  }
+}
 
 class _MemoryTokenStore implements SyncTokenStore {
   String? value;
