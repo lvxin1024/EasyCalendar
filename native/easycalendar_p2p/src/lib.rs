@@ -2,6 +2,8 @@ mod auth;
 mod endpoint;
 mod error;
 mod iroh_endpoint;
+#[cfg(target_os = "macos")]
+mod macos_proxy;
 mod protocol;
 mod session;
 

@@ -224,30 +224,100 @@ void main() {
     },
   );
 
-  test('device identity changes keep older outbox batches on the active connection',
-      () async {
-    var currentDeviceId = 'primary-device';
+  test(
+    'close reaches the peer before start and after a failed start',
+    () async {
+      final peer = _FailingGroupPeer(authority: authority, notifications: hub);
+      final transport = GroupSyncTransport(
+        peer: peer,
+        profile: primaryProfile,
+        deviceId: 'primary-device',
+        endpointId: 'endpoint-primary',
+      );
+
+      await transport.close();
+      expect(peer.closeCount, 1);
+
+      await expectLater(
+        transport.start(),
+        throwsA(isA<SyncTransportException>()),
+      );
+      await transport.close();
+      expect(peer.closeCount, 2);
+
+      peer.failConnect = false;
+      await transport.start();
+      await transport.close();
+      expect(peer.closeCount, 3);
+      await transport.close();
+    },
+  );
+
+  test('changed device and endpoint reconnect before pulling', () async {
+    await authority.establishGroup(primaryProfile.groupId);
+    var currentDeviceId = 'phone-device';
+    var currentEndpointId = 'endpoint-phone';
     final transport = GroupSyncTransport(
       peer: AuthoritySyncGroupPeer(authority: authority, notifications: hub),
-      profile: primaryProfile,
-      deviceId: 'primary-device',
-      endpointId: 'endpoint-primary',
+      profile: replicaProfile,
+      deviceId: currentDeviceId,
+      endpointId: currentEndpointId,
       deviceIdProvider: () => currentDeviceId,
+      endpointIdProvider: () => currentEndpointId,
     );
+    final events = <SyncTransportEvent>[];
+    final subscription = transport.events.listen(events.add);
 
     await transport.start();
-    currentDeviceId = 'new-device';
-    final result = await transport.push(
-      serverUrl: Uri.parse('group://primary'),
-      token: '',
-      deviceId: 'primary-device',
-      idempotencyKey: 'old-device-push-1',
-      changes: [_change()],
+    currentDeviceId = 'tablet-device';
+    currentEndpointId = 'endpoint-tablet';
+    await transport.pull(serverUrl: Uri.parse('group://primary'), token: '');
+    expect(
+      await store.findMember(
+        deviceId: currentDeviceId,
+        endpointId: currentEndpointId,
+      ),
+      isNotNull,
     );
-
-    expect(result.accepted, ['primary-change-1']);
     await transport.close();
+    await transport.close();
+    await Future<void>.delayed(Duration.zero);
+
+    expect(events.map((event) => event.kind), [
+      SyncTransportEventKind.connected,
+      SyncTransportEventKind.disconnected,
+      SyncTransportEventKind.connected,
+      SyncTransportEventKind.disconnected,
+    ]);
+    await subscription.cancel();
   });
+
+  test(
+    'device identity changes keep older outbox batches on the active connection',
+    () async {
+      var currentDeviceId = 'primary-device';
+      final transport = GroupSyncTransport(
+        peer: AuthoritySyncGroupPeer(authority: authority, notifications: hub),
+        profile: primaryProfile,
+        deviceId: 'primary-device',
+        endpointId: 'endpoint-primary',
+        deviceIdProvider: () => currentDeviceId,
+      );
+
+      await transport.start();
+      currentDeviceId = 'new-device';
+      final result = await transport.push(
+        serverUrl: Uri.parse('group://primary'),
+        token: '',
+        deviceId: 'primary-device',
+        idempotencyKey: 'old-device-push-1',
+        changes: [_change()],
+      );
+
+      expect(result.accepted, ['primary-change-1']);
+      await transport.close();
+    },
+  );
 }
 
 PendingSyncChange _change() {
@@ -269,4 +339,33 @@ PendingSyncChange _change() {
     },
     retryCount: 0,
   );
+}
+
+class _FailingGroupPeer extends AuthoritySyncGroupPeer {
+  _FailingGroupPeer({required super.authority, required super.notifications});
+
+  bool failConnect = true;
+  int closeCount = 0;
+
+  @override
+  Future<void> connect({
+    required SyncGroupProfile profile,
+    required String deviceId,
+    required String endpointId,
+    required String displayName,
+  }) async {
+    if (failConnect) throw const SyncTransportException('Connection failed.');
+    await super.connect(
+      profile: profile,
+      deviceId: deviceId,
+      endpointId: endpointId,
+      displayName: displayName,
+    );
+  }
+
+  @override
+  Future<void> close() async {
+    closeCount++;
+    await super.close();
+  }
 }

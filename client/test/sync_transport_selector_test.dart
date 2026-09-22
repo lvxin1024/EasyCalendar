@@ -7,6 +7,54 @@ import 'package:easy_calendar/sync/sync_transport_selector.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final mode in [SyncMode.group, SyncMode.cloud]) {
+    for (final failPush in [true, false]) {
+      test(
+        '$mode retries ${failPush ? 'push' : 'pull'} after failure',
+        () async {
+          final cloud = _RecordingTransport();
+          final groups = <_RecordingTransport>[];
+          final selector = SyncTransportSelector(
+            cloudTransport: cloud,
+            groupTransportFactory: () async {
+              final group = _RecordingTransport();
+              groups.add(group);
+              return group;
+            },
+          );
+          addTearDown(selector.close);
+          await selector.setMode(mode);
+          await selector.start();
+          final failed = mode == SyncMode.group ? groups.single : cloud;
+          failed.requestError = const SyncTransportException('connection lost');
+
+          Future<Object> request() => failPush
+              ? selector.push(
+                  serverUrl: Uri.parse('group://primary'),
+                  token: '',
+                  deviceId: 'device',
+                  idempotencyKey: 'retry-key',
+                  changes: const [],
+                )
+              : selector.pull(
+                  serverUrl: Uri.parse('group://primary'),
+                  token: '',
+                );
+
+          await expectLater(request(), throwsA(isA<SyncTransportException>()));
+          expect(failed.closeCount, mode == SyncMode.group ? 1 : 0);
+          await request();
+          if (mode == SyncMode.group) {
+            expect(groups, hasLength(2));
+            expect(groups.last.startCount, 1);
+          } else {
+            expect(cloud.startCount, 1);
+          }
+        },
+      );
+    }
+  }
+
   test(
     'starts with cloud transport and switches lifecycle transports by mode',
     () async {
@@ -95,6 +143,13 @@ class _RecordingTransport implements SyncTransport, SyncTransportLifecycle {
   final _events = StreamController<SyncTransportEvent>.broadcast();
   int startCount = 0;
   int closeCount = 0;
+  SyncTransportException? requestError;
+
+  void _checkRequest() {
+    final error = requestError;
+    requestError = null;
+    if (error != null) throw error;
+  }
 
   @override
   Stream<SyncTransportEvent> get events => _events.stream;
@@ -118,7 +173,10 @@ class _RecordingTransport implements SyncTransport, SyncTransportLifecycle {
     required String deviceId,
     required String idempotencyKey,
     required List<PendingSyncChange> changes,
-  }) async => const PushSyncResult(accepted: [], rejected: []);
+  }) async {
+    _checkRequest();
+    return const PushSyncResult(accepted: [], rejected: []);
+  }
 
   @override
   Future<PullSyncPage> pull({
@@ -126,5 +184,8 @@ class _RecordingTransport implements SyncTransport, SyncTransportLifecycle {
     required String token,
     String? cursor,
     int limit = 200,
-  }) async => const PullSyncPage(cursor: '0', hasMore: false, changes: []);
+  }) async {
+    _checkRequest();
+    return const PullSyncPage(cursor: '0', hasMore: false, changes: []);
+  }
 }

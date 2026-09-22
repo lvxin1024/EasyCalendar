@@ -1207,7 +1207,8 @@ class _SettingsPageState extends State<SettingsPage> {
       SyncPhase.disabled => '已关闭',
       SyncPhase.idle => snapshot?.lastSyncedAt == null ? '等待同步' : '已同步',
       SyncPhase.syncing => '同步中',
-      SyncPhase.backoff => '等待重试',
+      SyncPhase.backoff =>
+        snapshot?.message == null ? '等待重试' : '等待重试：${snapshot!.message}',
       SyncPhase.needsAuthentication => '需要访问令牌',
       SyncPhase.failed => snapshot?.message ?? '同步失败',
       null => '不可用',

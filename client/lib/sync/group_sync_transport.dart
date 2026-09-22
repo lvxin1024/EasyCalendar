@@ -117,10 +117,10 @@ class GroupSyncTransport implements SyncTransport, SyncTransportLifecycle {
 
   @override
   Future<void> close() async {
-    if (!_started) return;
     _started = false;
     _connectedDeviceId = null;
     _connectedEndpointId = null;
+    // The peer may own a bound endpoint even when connect has not succeeded.
     await _peer.close();
   }
 

@@ -52,16 +52,15 @@ class SyncTransportSelector implements SyncTransport, SyncTransportLifecycle {
     required String deviceId,
     required String idempotencyKey,
     required List<PendingSyncChange> changes,
-  }) async {
-    await _ensureActive();
-    return _requireActive().push(
+  }) => _run(
+    (active) => active.push(
       serverUrl: serverUrl,
       token: token,
       deviceId: deviceId,
       idempotencyKey: idempotencyKey,
       changes: changes,
-    );
-  }
+    ),
+  );
 
   @override
   Future<PullSyncPage> pull({
@@ -69,14 +68,28 @@ class SyncTransportSelector implements SyncTransport, SyncTransportLifecycle {
     required String token,
     String? cursor,
     int limit = 200,
-  }) async {
-    await _ensureActive();
-    return _requireActive().pull(
+  }) => _run(
+    (active) => active.pull(
       serverUrl: serverUrl,
       token: token,
       cursor: cursor,
       limit: limit,
-    );
+    ),
+  );
+
+  Future<T> _run<T>(Future<T> Function(SyncTransport) operation) async {
+    await _ensureActive();
+    final active = _requireActive();
+    try {
+      return await operation(active);
+    } catch (_) {
+      // A group connection cannot recover by replaying on the same dead handle.
+      // Release it so the coordinator's next retry connects and authenticates.
+      if (_mode == SyncMode.group && identical(_active, active)) {
+        await _closeActive();
+      }
+      rethrow;
+    }
   }
 
   @override
