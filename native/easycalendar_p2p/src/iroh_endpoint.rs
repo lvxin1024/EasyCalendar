@@ -83,8 +83,7 @@ impl IrohEndpointHandle {
             Ok::<EndpointAddr, P2pError>(stable_ticket_address(self.endpoint.addr()))
         });
         let address = address.map_err(|error| self.record_error(error))?;
-        serde_json::to_string(&address)
-            .map_err(|error| self.record_transport(error))
+        serde_json::to_string(&address).map_err(|error| self.record_transport(error))
     }
 
     pub fn connect(&self, ticket: &str) -> Result<u64, P2pError> {
@@ -288,10 +287,7 @@ mod tests {
             );
             let accepting = async {
                 let incoming = server.accept().await.expect("incoming connection");
-                incoming
-                    .into_future()
-                    .await
-                    .expect("server handshake")
+                incoming.into_future().await.expect("server handshake")
             };
             let connecting = client.connect(address, ALPN);
             let (server_result, client_result) = tokio::join!(accepting, connecting);
@@ -355,7 +351,10 @@ mod tests {
         );
         let stable = stable_ticket_address(address);
         assert_eq!(stable.id, id);
-        assert_eq!(stable.relay_urls().cloned().collect::<Vec<_>>(), vec![relay]);
+        assert_eq!(
+            stable.relay_urls().cloned().collect::<Vec<_>>(),
+            vec![relay]
+        );
         assert_eq!(stable.ip_addrs().count(), 0);
     }
 }

@@ -1,6 +1,6 @@
-use iroh::endpoint::{Connection, RecvStream, SendStream};
 use crate::error::P2pError;
 use crate::protocol::{Frame, MAX_FRAME_BYTES};
+use iroh::endpoint::{Connection, RecvStream, SendStream};
 
 const HEADER_BYTES: usize = 10;
 
