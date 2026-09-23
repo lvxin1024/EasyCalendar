@@ -133,6 +133,16 @@ class SyncCoordinator extends ChangeNotifier {
     }
   }
 
+  Future<void> restartTransport() async {
+    if (!_enabled) return;
+    if (transport case final SyncTransportSelector selector) {
+      await selector.restart();
+    } else if (transport case final SyncTransportLifecycle lifecycle) {
+      await lifecycle.close();
+      await lifecycle.start();
+    }
+  }
+
   Future<void> saveToken(String token) async {
     final normalized = token.trim();
     if (normalized.length < 32) {

@@ -134,6 +134,30 @@ void main() {
     );
     await selector.close();
   });
+
+  test(
+    'restarts an unchanged group mode after replacing its profile',
+    () async {
+      final groups = <_RecordingTransport>[];
+      final selector = SyncTransportSelector(
+        cloudTransport: _RecordingTransport(),
+        groupTransportFactory: () async {
+          final group = _RecordingTransport();
+          groups.add(group);
+          return group;
+        },
+      );
+      addTearDown(selector.close);
+
+      await selector.start();
+      await selector.setMode(SyncMode.group);
+      await selector.restart();
+
+      expect(groups, hasLength(2));
+      expect(groups.first.closeCount, 1);
+      expect(groups.last.startCount, 1);
+    },
+  );
 }
 
 class _RecordingTransport implements SyncTransport, SyncTransportLifecycle {

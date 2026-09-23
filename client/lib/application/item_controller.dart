@@ -597,7 +597,10 @@ class ItemController extends ChangeNotifier {
         await repository.setTaskCompleted(item, completed: completed);
       });
 
-  Future<void> savePreferences(ClientPreferences value) async {
+  Future<void> savePreferences(
+    ClientPreferences value, {
+    bool synchronizeAfterSave = true,
+  }) async {
     try {
       tz.getLocation(_resolveTimezone(value));
     } catch (_) {
@@ -632,16 +635,22 @@ class ItemController extends ChangeNotifier {
           await notificationService?.cancelAll();
         }
       }
-      if (value.syncEnabled) unawaited(syncCoordinator?.synchronize());
+      if (value.syncEnabled && synchronizeAfterSave) {
+        unawaited(syncCoordinator?.synchronize());
+      }
     }, reloadItems: false);
   }
 
   Future<void> _enableGroupSync() async {
     final current = preferences;
-    if (current.syncEnabled && current.syncMode == SyncMode.group) return;
-    await savePreferences(
-      current.copyWith(syncEnabled: true, syncMode: SyncMode.group),
-    );
+    if (!(current.syncEnabled && current.syncMode == SyncMode.group)) {
+      await savePreferences(
+        current.copyWith(syncEnabled: true, syncMode: SyncMode.group),
+        synchronizeAfterSave: false,
+      );
+    }
+    await syncCoordinator?.restartTransport();
+    if (preferences.syncEnabled) unawaited(syncCoordinator?.synchronize());
   }
 
   Future<ClientPreferences> regenerateDeviceIdentity() async {

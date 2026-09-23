@@ -35,6 +35,11 @@ class SyncTransportSelector implements SyncTransport, SyncTransportLifecycle {
     await _activateIfAvailable(force: changed);
   }
 
+  Future<void> restart() async {
+    if (!_started) return;
+    await _ensureActive(force: true);
+  }
+
   @override
   Stream<SyncTransportEvent> get events => _eventsController.stream;
 
