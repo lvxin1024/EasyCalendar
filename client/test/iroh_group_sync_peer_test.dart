@@ -99,6 +99,23 @@ void main() {
     );
 
     expect(result.accepted, ['change-replica-1']);
+    await expectLater(
+      replica.pull(
+        serverUrl: Uri.parse('group://primary'),
+        token: '',
+        cursor: 'invalid-cursor',
+      ).timeout(const Duration(seconds: 2)),
+      throwsA(isA<SyncTransportException>().having(
+        (error) => error.permanent,
+        'permanent rejection',
+        isTrue,
+      )),
+    );
+    final replicaPage = await replica.pull(
+      serverUrl: Uri.parse('group://primary'),
+      token: '',
+    );
+    expect(replicaPage.changes.single.changeId, 'change-replica-1');
     final page = await primary.pull(
       serverUrl: Uri.parse('group://primary'),
       token: '',

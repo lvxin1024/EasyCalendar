@@ -136,6 +136,7 @@ class ItemController extends ChangeNotifier {
       bridge: bridge,
       fallbackDeviceId: preferences.deviceId,
     );
+    await _prepareGroupSync(profile.groupId);
     await _enableGroupSync();
     return profile;
   }
@@ -149,11 +150,26 @@ class ItemController extends ChangeNotifier {
       fallbackDeviceId: preferences.deviceId,
       bridge: bridge,
     );
+    await _prepareGroupSync(profile.groupId);
     await _enableGroupSync();
     return profile;
   }
 
-  Future<void> clearSyncGroup() => _syncGroupSetup.clear();
+  Future<void> clearSyncGroup() async {
+    await _syncGroupSetup.clear();
+    if (preferences.syncMode == SyncMode.group) {
+      await savePreferences(
+        preferences.copyWith(syncEnabled: false, syncMode: SyncMode.cloud),
+        synchronizeAfterSave: false,
+      );
+    }
+  }
+
+  Future<void> _prepareGroupSync(String groupId) async {
+    if (repository case final SyncGroupDataPort groupData) {
+      await groupData.prepareForSyncGroup(groupId);
+    }
+  }
 
   ClientPreferences get _defaultPreferences => ClientPreferences(
     apiUrl: config.apiUrl,
@@ -597,7 +613,10 @@ class ItemController extends ChangeNotifier {
         await repository.setTaskCompleted(item, completed: completed);
       });
 
-  Future<void> savePreferences(ClientPreferences value) async {
+  Future<void> savePreferences(
+    ClientPreferences value, {
+    bool synchronizeAfterSave = true,
+  }) async {
     try {
       tz.getLocation(_resolveTimezone(value));
     } catch (_) {
@@ -632,16 +651,24 @@ class ItemController extends ChangeNotifier {
           await notificationService?.cancelAll();
         }
       }
-      if (value.syncEnabled) unawaited(syncCoordinator?.synchronize());
+      if (value.syncEnabled && synchronizeAfterSave) {
+        unawaited(syncCoordinator?.synchronize());
+      }
     }, reloadItems: false);
   }
 
   Future<void> _enableGroupSync() async {
     final current = preferences;
-    if (current.syncEnabled && current.syncMode == SyncMode.group) return;
-    await savePreferences(
-      current.copyWith(syncEnabled: true, syncMode: SyncMode.group),
-    );
+    if (!(current.syncEnabled && current.syncMode == SyncMode.group)) {
+      await savePreferences(
+        current.copyWith(syncEnabled: true, syncMode: SyncMode.group),
+        synchronizeAfterSave: false,
+      );
+    }
+    await syncCoordinator?.restartTransport();
+    if (preferences.syncEnabled) {
+      unawaited(syncCoordinator?.synchronize(retryPermanentFailures: true));
+    }
   }
 
   Future<ClientPreferences> regenerateDeviceIdentity() async {

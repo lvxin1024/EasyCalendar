@@ -46,6 +46,45 @@ void main() {
     expect(pending.map((change) => change.entityType), ['collection', 'item']);
   });
 
+  test('rebuilds a new group snapshot and resets its remote cursor', () async {
+    final collection = await repository.createCollection(
+      name: 'Work',
+      color: 0xFF2563EB,
+    );
+    await repository.createItem(
+      ItemDraft(
+        collectionId: collection.id,
+        type: ItemType.task,
+        title: 'Existing task',
+        timezone: 'Asia/Shanghai',
+      ),
+    );
+    final initial = await repository.listPendingChanges(now: DateTime.now());
+    await repository.removeAcceptedChanges(
+      initial.map((change) => change.changeId).toList(),
+    );
+    await repository.applyRemoteBatch([
+      _remoteItem('remote-before-group', 'Remote task'),
+    ], 'cur_old_group');
+
+    await repository.prepareForSyncGroup('b' * 64);
+
+    expect(await repository.loadRemoteCursor(), isNull);
+    final pending = await repository.listPendingChanges(now: DateTime.now());
+    expect(
+      pending.map((change) => change.entityType),
+      containsAllInOrder(['collection', 'item']),
+    );
+    expect(
+      pending.any(
+        (change) =>
+            change.entityType == 'collection' &&
+            change.entityId == collection.id,
+      ),
+      isTrue,
+    );
+  });
+
   test(
     'queues a subscription collection before its dependent subscription',
     () async {
@@ -332,6 +371,27 @@ void main() {
         now: DateTime.now(),
       )).map((change) => change.changeId),
       contains(itemChange.changeId),
+    );
+  });
+
+  test('retries a missing group transport after group setup', () async {
+    final pending = await repository.listPendingChanges(now: DateTime.now());
+    final change = pending.single;
+
+    await repository.recordPermanentFailures([
+      SyncRejection(
+        changeId: change.changeId,
+        code: 'transport_rejected',
+        message: '同步组尚未配置或 native P2P bridge 不可用。',
+      ),
+    ]);
+
+    expect(await repository.resetRetryablePermanentFailures(), 1);
+    expect(
+      (await repository.listPendingChanges(
+        now: DateTime.now(),
+      )).single.changeId,
+      change.changeId,
     );
   });
 
@@ -635,6 +695,23 @@ void main() {
       );
     },
   );
+
+  test('group snapshots promote versionless connected collections', () async {
+    final connected = await repository.connectCollection(
+      id: 'collection_shared',
+      name: 'Shared',
+      color: 0xFF0F766E,
+    );
+
+    await repository.prepareForSyncGroup('c' * 64);
+
+    final change = (await repository.listPendingChanges(
+      now: DateTime.now(),
+    )).singleWhere((value) => value.entityId == connected.id);
+    expect(change.operation, 'create');
+    expect(change.version, 1);
+    expect(change.payload['version'], 1);
+  });
 
   test('owns subscription lifecycle and readonly collection locally', () async {
     final created = await repository.createSubscription(

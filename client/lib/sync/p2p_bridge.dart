@@ -37,6 +37,7 @@ abstract interface class P2pBridge {
     required Uint8List frame,
   });
 
+  /// Returns an empty buffer when the receive poll has no request yet.
   Future<Uint8List> receiveRequest({required int connectionId});
 
   Future<void> respond({required int connectionId, required Uint8List frame});

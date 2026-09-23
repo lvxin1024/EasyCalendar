@@ -200,6 +200,39 @@ void main() {
     );
   });
 
+  test('primary can replace a previous sync group', () async {
+    await authority.establishGroup('a' * 64);
+    await authority.push(
+      deviceId: 'phone-device',
+      endpointId: 'endpoint-phone',
+      idempotencyKey: 'old-group-request',
+      changes: [
+        _change(
+          changeId: 'old-group-change',
+          deviceId: 'phone-device',
+          entityId: 'old-group-item',
+          version: 1,
+          minute: 1,
+        ),
+      ],
+    );
+    await store.upsertMember(
+      SyncAuthorityMember(
+        endpointId: 'old-endpoint',
+        deviceId: 'old-device',
+        displayName: '旧设备',
+        status: 'active',
+        joinedAt: DateTime.utc(2026, 9, 6),
+      ),
+    );
+
+    await authority.establishGroup('b' * 64);
+
+    expect(await store.loadState('sync_group_id'), 'b' * 64);
+    expect(await store.findMemberByEndpoint('old-endpoint'), isNull);
+    expect(await store.latestCursor(), 'cur_0');
+  });
+
   test('payload timestamps may use an equivalent explicit offset', () async {
     final updatedAt = DateTime.parse('2026-09-06T09:01:00+08:00');
     final change = PendingSyncChange(

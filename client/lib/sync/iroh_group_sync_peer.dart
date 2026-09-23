@@ -7,6 +7,7 @@ import 'package:crypto/crypto.dart';
 
 import 'group_sync_transport.dart';
 import 'p2p_bridge.dart';
+import 'sync_authority.dart';
 import 'sync_authority_engine.dart';
 import 'sync_group.dart';
 import 'sync_models.dart';
@@ -277,8 +278,17 @@ class IrohSyncGroupPeer implements SyncGroupPeer {
         final bytes = await bridge.receiveRequest(
           connectionId: connection.connectionId,
         );
+        // Native receive polls so idle peers do not block the shared worker.
+        if (bytes.isEmpty) continue;
         final request = _decodeFrame(bytes);
-        final response = await _handleServerFrame(connection, request);
+        _GroupFrame response;
+        try {
+          response = await _handleServerFrame(connection, request);
+        } on SyncAuthorityException catch (error) {
+          // Return rejections (for example a revoked member or invalid cursor)
+          // instead of leaving the replica waiting for a response forever.
+          response = _errorFrame(error.code, error.message);
+        }
         await bridge.respond(
           connectionId: connection.connectionId,
           frame: _encodeFrame(response),

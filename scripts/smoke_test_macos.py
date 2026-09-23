@@ -1,4 +1,4 @@
-"""Launch the signed macOS executable and require a rasterized first frame."""
+"""Require a first frame and a working P2P endpoint in the signed macOS app."""
 
 import argparse
 import os
@@ -32,7 +32,7 @@ def main() -> int:
             if process.poll() is not None:
                 output.extend(process.stdout.read())
                 print(
-                    f"Application exited before its first frame (code {process.returncode}).",
+                    f"Application exited before startup checks completed (code {process.returncode}).",
                     file=sys.stderr,
                 )
                 break
@@ -68,17 +68,23 @@ def main() -> int:
                 chunk = os.read(process.stdout.fileno(), 65536)
                 if not chunk:
                     print(
-                        "Application closed its output before its first frame.",
+                        "Application closed its output before startup checks completed.",
                         file=sys.stderr,
                     )
                     break
                 output.extend(chunk)
-                if b"EASYCALENDAR_FIRST_FRAME_READY" in output.splitlines():
-                    print("macOS smoke test passed: the first frame was rasterized.")
+                if {
+                    b"EASYCALENDAR_FIRST_FRAME_READY",
+                    b"EASYCALENDAR_P2P_READY",
+                }.issubset(bytes(output).splitlines()):
+                    print(
+                        "macOS smoke test passed: first frame rendered "
+                        "and P2P endpoint bound and closed."
+                    )
                     return 0
         else:
             print(
-                "Application did not render its first frame within 30 seconds.",
+                "Application did not complete first-frame and P2P checks within 30 seconds.",
                 file=sys.stderr,
             )
         print(output.decode("utf-8", errors="replace"), file=sys.stderr, end="")
