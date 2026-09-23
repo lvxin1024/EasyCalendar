@@ -202,6 +202,20 @@ void main() {
 
   test('primary can replace a previous sync group', () async {
     await authority.establishGroup('a' * 64);
+    await authority.push(
+      deviceId: 'phone-device',
+      endpointId: 'endpoint-phone',
+      idempotencyKey: 'old-group-request',
+      changes: [
+        _change(
+          changeId: 'old-group-change',
+          deviceId: 'phone-device',
+          entityId: 'old-group-item',
+          version: 1,
+          minute: 1,
+        ),
+      ],
+    );
     await store.upsertMember(
       SyncAuthorityMember(
         endpointId: 'old-endpoint',
@@ -216,6 +230,7 @@ void main() {
 
     expect(await store.loadState('sync_group_id'), 'b' * 64);
     expect(await store.findMemberByEndpoint('old-endpoint'), isNull);
+    expect(await store.latestCursor(), 'cur_0');
   });
 
   test('payload timestamps may use an equivalent explicit offset', () async {

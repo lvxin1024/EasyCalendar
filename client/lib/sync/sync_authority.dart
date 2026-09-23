@@ -297,6 +297,10 @@ class SyncAuthorityStore {
 
   Future<void> resetGroup() async {
     await database.transaction((transaction) async {
+      await transaction.delete('sync_authority_applied_changes');
+      await transaction.delete('sync_authority_requests');
+      await transaction.delete('sync_authority_entity_heads');
+      await transaction.delete('sync_authority_change_log');
       await transaction.delete('sync_group_members');
       await transaction.delete(
         'sync_group_state',

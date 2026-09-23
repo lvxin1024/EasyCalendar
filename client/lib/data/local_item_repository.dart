@@ -26,6 +26,7 @@ class LocalItemRepository
         ItemRepository,
         LocalRecoveryPort,
         RuntimeSettingsPort,
+        SyncGroupDataPort,
         SyncRepository {
   LocalItemRepository(
     this.config, {
@@ -350,6 +351,183 @@ class LocalItemRepository
         );
       }
     });
+  }
+
+  @override
+  Future<void> prepareForSyncGroup(String groupId) async {
+    await _db.transaction((transaction) async {
+      final previous = await transaction.query(
+        'sync_state',
+        columns: ['value'],
+        where: 'key = ?',
+        whereArgs: ['sync_group_id'],
+        limit: 1,
+      );
+      if (previous.isNotEmpty && previous.single['value'] == groupId) return;
+
+      await transaction.delete(
+        'sync_state',
+        where: 'key = ? OR key = ?',
+        whereArgs: ['remote_cursor', 'sync_group_id'],
+      );
+
+      for (final collection in await transaction.query('collections')) {
+        if (await _hasPendingOutbox(
+          transaction,
+          'collection',
+          collection['id'],
+        )) {
+          continue;
+        }
+        final version = (collection['version'] as int?) ?? 1;
+        final snapshot = version < 1
+            ? {...collection, 'version': 1}
+            : collection;
+        await _writeCollectionOutbox(
+          transaction,
+          snapshot,
+          operation: _snapshotOperation(collection['deleted_at'], version),
+        );
+      }
+
+      for (final itemRow in await transaction.query('items')) {
+        if (await _hasPendingOutbox(transaction, 'item', itemRow['id'])) {
+          continue;
+        }
+        await _writeOutbox(
+          transaction,
+          _itemFromRow(itemRow),
+          _snapshotOperation(itemRow['deleted_at'], itemRow['version']),
+        );
+      }
+
+      for (final subscription in await transaction.query('subscriptions')) {
+        if (await _hasPendingOutbox(
+          transaction,
+          'subscription',
+          subscription['id'],
+        )) {
+          continue;
+        }
+        final payload =
+            (jsonDecode(subscription['payload_json'] as String)
+                    as Map<String, dynamic>)
+                .cast<String, Object?>();
+        await _writeSubscriptionOutbox(
+          transaction,
+          payload,
+          operation: _snapshotOperation(
+            subscription['deleted_at'],
+            subscription['version'],
+          ),
+        );
+      }
+
+      for (final period in await transaction.query('cycle_periods')) {
+        if (await _hasPendingOutbox(
+          transaction,
+          'cycle_period',
+          period['id'],
+        )) {
+          continue;
+        }
+        final logs = await transaction.query(
+          'cycle_daily_logs',
+          where: 'period_id = ?',
+          whereArgs: [period['id']],
+          orderBy: 'date ASC',
+        );
+        await writeCycleSyncOutbox(
+          transaction,
+          'cycle_period',
+          period['id'] as String,
+          _snapshotOperation(period['deleted_at'], period['version']),
+          period['version'] as int,
+          DateTime.parse(period['updated_at'] as String),
+          {
+            'id': period['id'],
+            'start_date': period['start_date'],
+            'end_date': period['end_date'],
+            'excluded_from_prediction': period['excluded_from_prediction'] == 1,
+            'context': period['context'],
+            'created_at': period['created_at'],
+            'updated_at': period['updated_at'],
+            'deleted_at': period['deleted_at'],
+            'version': period['version'],
+            'daily_logs': logs
+                .map(
+                  (log) => {
+                    'date': log['date'],
+                    'bleeding_level': log['bleeding_level'],
+                    'spotting': log['spotting'] == 1,
+                    'symptoms': jsonDecode(log['symptoms_json'] as String),
+                    'updated_at': log['updated_at'],
+                  },
+                )
+                .toList(growable: false),
+          },
+        );
+      }
+
+      final settings = await transaction.query(
+        'cycle_settings',
+        where: 'id = 1',
+        limit: 1,
+      );
+      if (settings.isNotEmpty &&
+          (settings.single['enabled'] == 1 ||
+              settings.single['forecast_horizon'] != 1 ||
+              (settings.single['version'] as int? ?? 1) > 1) &&
+          !(await _hasPendingOutbox(
+            transaction,
+            'cycle_settings',
+            'singleton',
+          ))) {
+        final row = settings.single;
+        await writeCycleSyncOutbox(
+          transaction,
+          'cycle_settings',
+          'singleton',
+          'update',
+          row['version'] as int? ?? 1,
+          DateTime.parse(row['updated_at'] as String),
+          {
+            'id': 'singleton',
+            'enabled': row['enabled'] == 1,
+            'forecast_horizon': row['forecast_horizon'],
+            'version': row['version'] as int? ?? 1,
+            'updated_at': row['updated_at'],
+            'deleted_at': null,
+          },
+        );
+      }
+
+      await transaction.insert('sync_state', {
+        'key': 'sync_group_id',
+        'value': groupId,
+        'updated_at': _timeText(DateTime.now()),
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    });
+  }
+
+  static String _snapshotOperation(Object? deletedAt, Object? version) {
+    if (deletedAt != null) return 'delete';
+    return version is int && version <= 1 ? 'create' : 'update';
+  }
+
+  static Future<bool> _hasPendingOutbox(
+    Transaction transaction,
+    String entityType,
+    Object? entityId,
+  ) async {
+    final rows = await transaction.query(
+      'outbox',
+      columns: ['change_id'],
+      where: 'entity_type = ? AND entity_id = ? AND sent_at IS NULL',
+      whereArgs: [entityType, entityId],
+      limit: 1,
+    );
+    return rows.isNotEmpty;
   }
 
   RemoteSyncChange _legacyChange(
@@ -1883,7 +2061,8 @@ class LocalItemRepository
         ') OR last_error IN ('
         "'transport_rejected: 同步 transport 尚未启动。', "
         "'transport_rejected: Group transport has not been started.', "
-        "'transport_rejected: P2P native bridge has not been started.'"
+        "'transport_rejected: P2P native bridge has not been started.', "
+        "'transport_rejected: 同步组尚未配置或 native P2P bridge 不可用。'"
         '))',
   );
 

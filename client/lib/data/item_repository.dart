@@ -117,6 +117,10 @@ abstract interface class RuntimeSettingsPort {
   });
 }
 
+abstract interface class SyncGroupDataPort {
+  Future<void> prepareForSyncGroup(String groupId);
+}
+
 abstract interface class LocalRecoveryPort {
   Future<List<LocalDatabaseBackup>> listLocalDatabaseBackups();
 
