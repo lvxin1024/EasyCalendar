@@ -27,12 +27,9 @@ class SyncAuthorityEngine {
     _validateGroupId(groupId);
     final stored = await store.loadState('sync_group_id');
     if (stored != null && stored != groupId) {
-      throw const SyncAuthorityException(
-        'authentication_failed',
-        'Sync group identity does not match the primary authority',
-      );
+      await store.resetGroup();
     }
-    if (stored == null) await store.saveState('sync_group_id', groupId);
+    if (stored != groupId) await store.saveState('sync_group_id', groupId);
   }
 
   Future<void> verifyGroup(String groupId) async {
