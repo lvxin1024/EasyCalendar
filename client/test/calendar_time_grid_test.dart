@@ -1,6 +1,6 @@
 import 'package:easy_calendar/domain/item.dart';
 import 'package:easy_calendar/features/calendar/calendar_time_grid.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
@@ -119,6 +119,57 @@ void main() {
       72,
     );
   });
+
+  testWidgets('timed event blocks show location instead of time', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1000, 760);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final date = DateTime(2026, 8, 12);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CalendarTimeGrid(
+            dates: [date],
+            items: [
+              _event(
+                'long',
+                9,
+                0,
+                10,
+                0,
+                location: '会议室 A',
+              ),
+              _event(
+                'short',
+                11,
+                0,
+                11,
+                15,
+                location: '会议室 B',
+              ),
+            ],
+            dueItems: const [],
+            selectedDate: date,
+            hourHeight: 72,
+            onHourHeightChanged: (_) {},
+            onDateSelected: (_) {},
+            onEdit: (_) {},
+            onCreateTimedEvent: (_) async {},
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('会议室 A'), findsOneWidget);
+    expect(find.text('会议室 B'), findsNothing);
+    expect(find.textContaining('9:00'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 CalendarItem _event(
@@ -126,14 +177,16 @@ CalendarItem _event(
   int startHour,
   int startMinute,
   int endHour,
-  int endMinute,
-) => CalendarItem(
+  int endMinute, {
+  String? location,
+}) => CalendarItem(
   id: id,
   collectionId: 'collection_local',
   type: ItemType.event,
   title: id,
   startAt: tz.TZDateTime(tz.local, 2026, 8, 12, startHour, startMinute),
   endAt: tz.TZDateTime(tz.local, 2026, 8, 12, endHour, endMinute),
+  location: location,
   timezone: 'Asia/Shanghai',
   allDay: false,
   status: ItemStatus.todo,

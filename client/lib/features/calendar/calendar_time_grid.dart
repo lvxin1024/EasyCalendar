@@ -1065,9 +1065,10 @@ class _PositionedEvent extends StatelessWidget {
                               color: colorScheme.onSurface,
                             ),
                       ),
-                      if (rawHeight >= 38)
+                      if (rawHeight >= 38 &&
+                          placement.item.location?.trim().isNotEmpty == true)
                         Text(
-                          _eventTime(context, placement.item),
+                          placement.item.location!.trim(),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: Theme.of(context).textTheme.labelSmall
@@ -1130,15 +1131,6 @@ Iterable<CalendarItem> _allDayItems(List<CalendarItem> items, DateTime date) {
       .toList(growable: false);
   navigation.dispose();
   return result;
-}
-
-String _eventTime(BuildContext context, CalendarItem item) {
-  if (item.type == ItemType.task) {
-    return '截止 ${formatTime(context, item.dueAt!)}';
-  }
-  final end = item.endAt;
-  if (end == null) return formatTime(context, item.startAt!);
-  return '${formatTime(context, item.startAt!)}–${formatTime(context, end)}';
 }
 
 /// Rounds a timeline tap to the nearest quarter hour and keeps it within the
