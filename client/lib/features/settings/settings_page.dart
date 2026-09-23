@@ -50,6 +50,15 @@ const _clockFormatOptions = <ClockFormat, String>{
   ClockFormat.hour24: '24 小时制',
 };
 
+enum _SettingsSection {
+  sync,
+  notifications,
+  assistant,
+  calendar,
+  data,
+  developer,
+}
+
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
     super.key,
@@ -97,6 +106,7 @@ class _SettingsPageState extends State<SettingsPage> {
   String? _featureProbeStatus;
   bool _syncProbeFailed = false;
   bool _featureProbeFailed = false;
+  _SettingsSection? _activeSection;
 
   bool get _notificationsEnabled =>
       widget.controller.preferences.notificationsEnabled;
@@ -157,19 +167,44 @@ class _SettingsPageState extends State<SettingsPage> {
     children: [
       Padding(
         padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
-        child: Text('设置', style: Theme.of(context).textTheme.headlineSmall),
+        child: Row(
+          children: [
+            if (_activeSection != null)
+              IconButton(
+                tooltip: '返回设置',
+                onPressed: () => setState(() => _activeSection = null),
+                icon: const Icon(Icons.arrow_back),
+              ),
+            Expanded(
+              child: Text(
+                _activeSection == null
+                    ? '设置'
+                    : _settingsSectionTitle(_activeSection!),
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+            ),
+          ],
+        ),
       ),
       Expanded(
-        child: Form(
-          key: _formKey,
-          child: ListView(
+        child: _activeSection == null
+            ? _SettingsHome(
+                onOpen: (section) =>
+                    setState(() => _activeSection = section),
+              )
+            : Form(
+                key: _formKey,
+                child: ListView(
             padding: const EdgeInsets.fromLTRB(20, 4, 20, 96),
             children: [
-              CycleSettingsSection(
-                controller: widget.cycleController,
-                onOpenSummary: _openCycleSummary,
-              ),
-              const SizedBox(height: 24),
+              if (_activeSection == _SettingsSection.calendar) ...[
+                CycleSettingsSection(
+                  controller: widget.cycleController,
+                  onOpenSummary: _openCycleSummary,
+                ),
+                const SizedBox(height: 24),
+              ],
+              if (_activeSection == _SettingsSection.sync) ...[
               _SectionLabel(label: '连接'),
               TextFormField(
                 controller: _apiUrlController,
@@ -444,6 +479,8 @@ class _SettingsPageState extends State<SettingsPage> {
                   ],
                 ),
               ],
+              ],
+              if (_activeSection == _SettingsSection.notifications) ...[
               _SettingSwitch(
                 icon: Icons.notifications_outlined,
                 title: '通知',
@@ -505,6 +542,8 @@ class _SettingsPageState extends State<SettingsPage> {
                     ],
                   ),
                 ),
+              ],
+              if (_activeSection == _SettingsSection.assistant) ...[
               _AiProviderSection(
                 enabled: _assistantEnabled,
                 providers: _aiProviders,
@@ -519,6 +558,8 @@ class _SettingsPageState extends State<SettingsPage> {
                 onToggle: _toggleProvider,
                 onTest: _testProvider,
               ),
+              ],
+              if (_activeSection == _SettingsSection.data) ...[
               _CollectionSection(
                 collections: widget.controller.collections,
                 onAdd: () => _showCollectionEditor(),
@@ -541,7 +582,9 @@ class _SettingsPageState extends State<SettingsPage> {
                   () => _widgetQuotes = [..._widgetQuotes]..removeAt(index),
                 ),
               ),
-              if (widget.controller.desktopWindowController?.available == true)
+              ],
+              if (_activeSection == _SettingsSection.calendar &&
+                  widget.controller.desktopWindowController?.available == true)
                 _DesktopWindowSection(
                   opacity: _windowOpacity,
                   alwaysOnTop: _windowAlwaysOnTop,
@@ -553,6 +596,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   onAlwaysOnTopChanged: _setAlwaysOnTop,
                   onLockedChanged: _setInteractionLocked,
                 ),
+              if (_activeSection == _SettingsSection.calendar) ...[
               const SizedBox(height: 24),
               _SectionLabel(label: '本地环境'),
               DropdownButtonFormField<String>(
@@ -631,11 +675,26 @@ class _SettingsPageState extends State<SettingsPage> {
                   if (value != null) setState(() => _clockFormat = value);
                 },
               ),
+              ],
+              if (_activeSection == _SettingsSection.developer) ...[
               _InfoRow(
                 icon: Icons.storage_outlined,
                 label: '本地数据库',
                 value: widget.controller.databasePath ?? '尚未初始化',
               ),
+              ListTile(
+                leading: const Icon(Icons.fingerprint_outlined),
+                title: const Text('设备身份'),
+                subtitle: Text(
+                  '设备 ID：${_deviceIdController.text}\n'
+                  'Collection ID：${_collectionIdController.text}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                onTap: _copyDeviceId,
+              ),
+              ],
+              if (_activeSection == _SettingsSection.data) ...[
               const SizedBox(height: 24),
               _SectionLabel(label: '数据管理'),
               ListTile(
@@ -674,6 +733,8 @@ class _SettingsPageState extends State<SettingsPage> {
                   );
                 },
               ),
+              ],
+              if (_activeSection == _SettingsSection.developer) ...[
               ListTile(
                 leading: const Icon(Icons.info_outline),
                 title: const Text('关于与更新'),
@@ -685,6 +746,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ).push(MaterialPageRoute(builder: (_) => const AboutPage()));
                 },
               ),
+              ],
               const SizedBox(height: 20),
               Align(
                 alignment: Alignment.centerRight,

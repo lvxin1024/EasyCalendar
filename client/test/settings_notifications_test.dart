@@ -85,6 +85,8 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
+        await tester.tap(find.text('提醒与通知'));
+        await tester.pumpAndSettle();
         await tester.scrollUntilVisible(
           notificationToggle,
           400,

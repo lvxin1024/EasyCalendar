@@ -59,6 +59,12 @@ class _AboutPageState extends State<AboutPage> {
             _InfoRow(label: '数据 schema', value: 'v${info.schemaVersion}'),
             _InfoRow(label: '更新源', value: _updates.repository),
             const SizedBox(height: 24),
+            OutlinedButton.icon(
+              onPressed: _openRepository,
+              icon: const Icon(Icons.code_outlined),
+              label: const Text('查看 GitHub 开源代码'),
+            ),
+            const SizedBox(height: 8),
             FilledButton.tonalIcon(
               onPressed: _checking ? null : () => _check(info.version),
               icon: _checking
@@ -133,6 +139,14 @@ class _AboutPageState extends State<AboutPage> {
   Future<void> _openRelease(ReleaseUpdate release) async {
     if (!await _updates.openRelease(release) && mounted) {
       _showOpenError();
+    }
+  }
+
+  Future<void> _openRepository() async {
+    try {
+      if (!await _updates.openRepository() && mounted) _showOpenError();
+    } catch (_) {
+      if (mounted) _showOpenError();
     }
   }
 

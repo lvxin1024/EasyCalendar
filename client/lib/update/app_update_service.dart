@@ -163,6 +163,20 @@ class AppUpdateService {
 
   Future<bool> openRelease(ReleaseUpdate update) => _open(update.releaseUri);
 
+  Future<bool> openRepository() {
+    final parts = repository.split('/');
+    if (parts.length != 2 ||
+        parts.any(
+          (part) => !RegExp(r'^[A-Za-z0-9_.-]+$').hasMatch(part),
+        )) {
+      throw const AppUpdateException('更新仓库配置无效');
+    }
+    return launchUrl(
+      Uri.https('github.com', '/$repository'),
+      mode: LaunchMode.externalApplication,
+    );
+  }
+
   Future<bool> openPlatformAsset(ReleaseUpdate update) {
     final asset = update.assetUri;
     return asset == null ? Future.value(false) : _open(asset);

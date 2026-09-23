@@ -1,5 +1,79 @@
 part of 'settings_page.dart';
 
+String _settingsSectionTitle(_SettingsSection section) => switch (section) {
+  _SettingsSection.sync => '同步与连接',
+  _SettingsSection.notifications => '提醒与通知',
+  _SettingsSection.assistant => 'AI 助手',
+  _SettingsSection.calendar => '日历与显示',
+  _SettingsSection.data => '数据管理',
+  _SettingsSection.developer => '关于与开发者',
+};
+
+class _SettingsHome extends StatelessWidget {
+  const _SettingsHome({required this.onOpen});
+
+  final ValueChanged<_SettingsSection> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 96),
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 0, 4, 16),
+          child: Text(
+            '按用途管理设置',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+        for (final section in _SettingsSection.values)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Material(
+              color: colorScheme.surface,
+              borderRadius: BorderRadius.circular(14),
+              clipBehavior: Clip.antiAlias,
+              child: ListTile(
+                leading: Icon(_settingsSectionIcon(section)),
+                title: Text(_settingsSectionTitle(section)),
+                subtitle: Text(_settingsSectionSummary(section)),
+                trailing: const Icon(Icons.chevron_right),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 6,
+                ),
+                onTap: () => onOpen(section),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  static IconData _settingsSectionIcon(_SettingsSection section) =>
+      switch (section) {
+    _SettingsSection.sync => Icons.sync_outlined,
+    _SettingsSection.notifications => Icons.notifications_outlined,
+    _SettingsSection.assistant => Icons.auto_awesome_outlined,
+    _SettingsSection.calendar => Icons.calendar_month_outlined,
+    _SettingsSection.data => Icons.storage_outlined,
+    _SettingsSection.developer => Icons.code_outlined,
+  };
+
+  static String _settingsSectionSummary(_SettingsSection section) =>
+      switch (section) {
+    _SettingsSection.sync => '服务地址、设备群组、令牌和同步状态',
+    _SettingsSection.notifications => '通知开关、系统权限和测试通知',
+    _SettingsSection.assistant => 'AI Provider、模型和日程解析方式',
+    _SettingsSection.calendar => '经期、语言、时区和桌面窗口',
+    _SettingsSection.data => '日历、标签、小组件和导入导出',
+    _SettingsSection.developer => '版本、开源项目、数据库和内部标识',
+  };
+}
+
 class _SectionLabel extends StatelessWidget {
   const _SectionLabel({required this.label});
 
