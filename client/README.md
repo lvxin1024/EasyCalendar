@@ -36,6 +36,13 @@ build acceptance additionally requires that platform's SDK and toolchain.
 Release identifiers and the compatibility rules for changing native metadata
 are documented in [`APP_IDENTITY.md`](APP_IDENTITY.md).
 
+Day, week, and month views show mainland China holiday adjustments offline:
+`休` on weekday days off and `工` on weekend make-up workdays. Ordinary weekdays
+and weekends have no marker. The bundled 2025–2026 dates in
+[`china_holiday.dart`](lib/domain/china_holiday.dart) follow the State Council
+notices linked there. Add each year's official dates and extend the tests when
+the next notice is published; years without bundled data have no markers.
+
 Group-sync lifecycle policy:
 
 - Android starts an optional foreground `dataSync` service while a group primary
