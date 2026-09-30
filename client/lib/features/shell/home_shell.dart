@@ -63,14 +63,17 @@ class _HomeShellState extends State<HomeShell> {
   void initState() {
     super.initState();
     _calendarNavigation = CalendarNavigationController();
+    widget.controller.startSubscriptionAutoRefresh();
     _lifecycle = AppLifecycleListener(
+      onResume: widget.controller.startSubscriptionAutoRefresh,
+      onPause: widget.controller.stopSubscriptionAutoRefresh,
       onExitRequested: () async {
         final assistant = widget.controller.assistant;
         await assistant.flush();
         if (assistant.extracting || assistant.confirming) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('助手正在生成或确认候选，请完成后再退出。')),
+              const SnackBar(content: Text('日程识别正在生成或确认候选，请完成后再退出。')),
             );
           }
           return AppExitResponse.cancel;
@@ -78,7 +81,7 @@ class _HomeShellState extends State<HomeShell> {
         if (assistant.initialized && assistant.storageError != null) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('助手草稿尚未保存，请在助手页重试后退出。')),
+              const SnackBar(content: Text('日程识别草稿尚未保存，请在日程识别页重试后退出。')),
             );
           }
           return AppExitResponse.cancel;
@@ -103,6 +106,7 @@ class _HomeShellState extends State<HomeShell> {
   @override
   void dispose() {
     _lifecycle.dispose();
+    widget.controller.stopSubscriptionAutoRefresh();
     widget.widgetDeepLinks.removeListener(_handleWidgetDeepLink);
     _calendarNavigation.dispose();
     super.dispose();
@@ -123,7 +127,7 @@ class _HomeShellState extends State<HomeShell> {
     (
       icon: Icons.auto_awesome_outlined,
       selectedIcon: Icons.auto_awesome,
-      label: '助手',
+      label: '日程识别',
     ),
     (icon: Icons.settings_outlined, selectedIcon: Icons.settings, label: '设置'),
   ];

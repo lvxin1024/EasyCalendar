@@ -1139,14 +1139,38 @@ class LocalItemRepository
     await _db.transaction((transaction) async {
       final rows = await transaction.query(
         'subscriptions',
-        where: 'id = ? AND version = ? AND deleted_at IS NULL',
-        whereArgs: [current.id, current.version],
+        where: 'id = ? AND deleted_at IS NULL',
+        whereArgs: [current.id],
         limit: 1,
       );
       if (rows.isEmpty) {
         throw const RepositoryConflict('订阅已更新或删除，请刷新后重试。');
       }
       final payload = _subscriptionPayloadFromRow(rows.single);
+      final latest = CalendarSubscription.fromJson(payload);
+      if (latest.version != current.version) {
+        final sameSettings =
+            latest.collectionId == current.collectionId &&
+            latest.title == current.title &&
+            latest.url == current.url &&
+            latest.enabled == current.enabled &&
+            latest.refreshIntervalMinutes == current.refreshIntervalMinutes &&
+            jsonEncode(latest.tags) == jsonEncode(current.tags);
+        final fetchChanged =
+            latest.lastFetchedAt != current.lastFetchedAt ||
+            latest.lastSuccessAt != current.lastSuccessAt ||
+            latest.lastError != current.lastError ||
+            latest.etag != current.etag ||
+            latest.lastModified != current.lastModified ||
+            latest.sourceHash != current.sourceHash;
+        if (latest.version < current.version ||
+            !sameSettings ||
+            !fetchChanged) {
+          throw const RepositoryConflict('订阅已更新或删除，请刷新后重试。');
+        }
+        // Preserve newer fetch metadata without overwriting concurrent settings.
+        current = latest;
+      }
       final metadata = Map<String, Object?>.from(
         payload['metadata'] is Map
             ? (payload['metadata'] as Map).cast<String, Object?>()
@@ -1161,7 +1185,7 @@ class LocalItemRepository
         'metadata': metadata,
         'updated_at': _timeText(now),
         'version': current.version + 1,
-        if (normalizedUrl != current.url) ...{
+        if (normalizedUrl != current.url || (enabled && !current.enabled)) ...{
           'last_fetched_at': null,
           'last_success_at': null,
           'last_error': null,
@@ -1208,7 +1232,9 @@ class LocalItemRepository
           );
         }
       }
-      if (jsonEncode(normalizedTags) != jsonEncode(current.tags)) {
+      if (!enabled) {
+        await _deleteSubscriptionItems(transaction, current.collectionId, now);
+      } else if (jsonEncode(normalizedTags) != jsonEncode(current.tags)) {
         final itemRows = await transaction.query(
           'items',
           where: 'collection_id = ? AND deleted_at IS NULL',
@@ -1287,44 +1313,7 @@ class LocalItemRepository
         operation: 'delete',
       );
 
-      final itemRows = await transaction.query(
-        'items',
-        where: 'collection_id = ? AND deleted_at IS NULL',
-        whereArgs: [current.collectionId],
-      );
-      for (final row in itemRows) {
-        final item = _itemFromRow(row);
-        final deletedItem = CalendarItem(
-          id: item.id,
-          collectionId: item.collectionId,
-          type: item.type,
-          title: item.title,
-          body: item.body,
-          startAt: item.startAt,
-          endAt: item.endAt,
-          dueAt: item.dueAt,
-          recurrence: item.recurrence,
-          timezone: item.timezone,
-          allDay: item.allDay,
-          location: item.location,
-          status: item.status,
-          priority: item.priority,
-          reminderEnabled: item.reminderEnabled,
-          reminderMinutes: item.reminderMinutes,
-          tags: item.tags,
-          createdAt: item.createdAt,
-          updatedAt: now,
-          deletedAt: now,
-          version: item.version + 1,
-        );
-        await transaction.update(
-          'items',
-          _itemToRow(deletedItem),
-          where: 'id = ?',
-          whereArgs: [item.id],
-        );
-        await _writeOutbox(transaction, deletedItem, 'delete');
-      }
+      await _deleteSubscriptionItems(transaction, current.collectionId, now);
 
       final collectionRows = await transaction.query(
         'collections',
@@ -1354,6 +1343,33 @@ class LocalItemRepository
     });
   }
 
+  Future<void> _deleteSubscriptionItems(
+    Transaction transaction,
+    String collectionId,
+    DateTime now,
+  ) async {
+    final rows = await transaction.query(
+      'items',
+      where: 'collection_id = ? AND deleted_at IS NULL',
+      whereArgs: [collectionId],
+    );
+    for (final row in rows) {
+      final deletedRow = {
+        ...row,
+        'updated_at': _timeText(now),
+        'deleted_at': _timeText(now),
+        'version': (row['version'] as int) + 1,
+      };
+      await transaction.update(
+        'items',
+        deletedRow,
+        where: 'id = ?',
+        whereArgs: [row['id']],
+      );
+      await _writeOutbox(transaction, _itemFromRow(deletedRow), 'delete');
+    }
+  }
+
   @override
   Future<SubscriptionFetchLog> applySubscriptionRefresh(
     CalendarSubscription current, {
@@ -1379,6 +1395,12 @@ class LocalItemRepository
       );
       if (subscriptionRows.isEmpty) {
         throw const RepositoryConflict('订阅已更新或删除，请刷新后重试。');
+      }
+      final currentPayload = _subscriptionPayloadFromRow(
+        subscriptionRows.single,
+      );
+      if (currentPayload['enabled'] != true) {
+        throw const RepositoryConflict('订阅已停用，请重新开启后刷新。');
       }
       if (!notModified) {
         final existingRows = await transaction.query(
@@ -1477,9 +1499,6 @@ class LocalItemRepository
         deletedCount: deletedCount,
         unchangedCount: unchangedCount,
       );
-      final currentPayload = _subscriptionPayloadFromRow(
-        subscriptionRows.single,
-      );
       final updatedPayload = _appendSubscriptionLog({
         ...currentPayload,
         'last_fetched_at': _timeText(fetchedAt),
@@ -1521,6 +1540,8 @@ class LocalItemRepository
         limit: 1,
       );
       if (rows.isEmpty) return;
+      final payload = _subscriptionPayloadFromRow(rows.single);
+      if (payload['enabled'] != true) return;
       final log = SubscriptionFetchLog(
         status: 'failed',
         fetchedAt: fetchedAt,
@@ -1528,7 +1549,7 @@ class LocalItemRepository
         error: error,
       );
       final updatedPayload = _appendSubscriptionLog({
-        ..._subscriptionPayloadFromRow(rows.single),
+        ...payload,
         'last_fetched_at': _timeText(fetchedAt),
         'last_error': error,
         'updated_at': _timeText(fetchedAt),

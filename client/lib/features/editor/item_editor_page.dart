@@ -13,13 +13,15 @@ class ItemEditorPage extends StatefulWidget {
     required this.config,
     required this.controller,
     this.item,
+    this.initialDraft,
     this.initialStartAt,
     this.initialEndAt,
-  });
+  }) : assert(item == null || initialDraft == null);
 
   final AppConfig config;
   final ItemController controller;
   final CalendarItem? item;
+  final ItemDraft? initialDraft;
   final DateTime? initialStartAt;
   final DateTime? initialEndAt;
 
@@ -45,13 +47,15 @@ class _ItemEditorPageState extends State<ItemEditorPage> {
   DateTime? _dueAt;
   late RecurrenceFrequency _recurrenceFrequency;
   DateTime? _recurrenceUntil;
+  bool _recurrenceChanged = false;
 
   bool get _editing => widget.item != null;
+  bool get _editingDraft => widget.initialDraft != null;
 
   @override
   void initState() {
     super.initState();
-    final item = widget.item;
+    final item = widget.initialDraft ?? widget.item?.toDraft();
     final now = configuredNow();
     _type = item?.type ?? ItemType.event;
     _collectionId = item?.collectionId ?? widget.config.defaultCollectionId;
@@ -60,15 +64,15 @@ class _ItemEditorPageState extends State<ItemEditorPage> {
     _reminderEnabled = item?.reminderEnabled ?? false;
     _reminderMinutes = item?.reminderMinutes ?? 30;
     _priority = item?.priority;
-    _startAt =
-        item?.startAt ??
-        widget.initialStartAt ??
-        now.add(const Duration(hours: 1));
-    _endAt =
-        item?.endAt ??
-        widget.initialEndAt ??
-        _startAt!.add(const Duration(hours: 1));
-    _dueAt = item?.dueAt;
+    final startAt = item == null
+        ? widget.initialStartAt ?? now.add(const Duration(hours: 1))
+        : item.startAt;
+    final endAt = item == null
+        ? widget.initialEndAt ?? startAt!.add(const Duration(hours: 1))
+        : item.endAt;
+    _startAt = startAt == null ? null : inConfiguredTimezone(startAt);
+    _endAt = endAt == null ? null : inConfiguredTimezone(endAt);
+    _dueAt = item?.dueAt == null ? null : inConfiguredTimezone(item!.dueAt!);
     _recurrenceFrequency = _frequencyFromRule(item?.recurrence);
     _recurrenceUntil = _untilFromRule(item?.recurrence);
     _titleController = TextEditingController(text: item?.title ?? '');
@@ -89,7 +93,7 @@ class _ItemEditorPageState extends State<ItemEditorPage> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      title: Text(_editing ? '编辑事项' : '新建事项'),
+      title: Text(_editingDraft ? '编辑识别日程' : (_editing ? '编辑事项' : '新建事项')),
       actions: [
         if (_editing)
           IconButton(
@@ -162,7 +166,7 @@ class _ItemEditorPageState extends State<ItemEditorPage> {
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _titleController,
-                  autofocus: !_editing,
+                  autofocus: !_editing && !_editingDraft,
                   textInputAction: TextInputAction.next,
                   decoration: const InputDecoration(
                     labelText: '标题',
@@ -203,13 +207,40 @@ class _ItemEditorPageState extends State<ItemEditorPage> {
                         labelText: '提前时间',
                         prefixIcon: Icon(Icons.alarm),
                       ),
-                      items: const [
-                        DropdownMenuItem(value: 0, child: Text('准时')),
-                        DropdownMenuItem(value: 5, child: Text('提前 5 分钟')),
-                        DropdownMenuItem(value: 15, child: Text('提前 15 分钟')),
-                        DropdownMenuItem(value: 30, child: Text('提前 30 分钟')),
-                        DropdownMenuItem(value: 60, child: Text('提前 1 小时')),
-                        DropdownMenuItem(value: 1440, child: Text('提前 1 天')),
+                      items: [
+                        const DropdownMenuItem(value: 0, child: Text('准时')),
+                        const DropdownMenuItem(
+                          value: 5,
+                          child: Text('提前 5 分钟'),
+                        ),
+                        const DropdownMenuItem(
+                          value: 15,
+                          child: Text('提前 15 分钟'),
+                        ),
+                        const DropdownMenuItem(
+                          value: 30,
+                          child: Text('提前 30 分钟'),
+                        ),
+                        const DropdownMenuItem(
+                          value: 60,
+                          child: Text('提前 1 小时'),
+                        ),
+                        const DropdownMenuItem(
+                          value: 1440,
+                          child: Text('提前 1 天'),
+                        ),
+                        if (!const [
+                          0,
+                          5,
+                          15,
+                          30,
+                          60,
+                          1440,
+                        ].contains(_reminderMinutes))
+                          DropdownMenuItem(
+                            value: _reminderMinutes,
+                            child: Text('提前 $_reminderMinutes 分钟'),
+                          ),
                       ],
                       onChanged: (value) =>
                           setState(() => _reminderMinutes = value ?? 30),
@@ -283,7 +314,9 @@ class _ItemEditorPageState extends State<ItemEditorPage> {
             child: FilledButton.icon(
               onPressed: widget.controller.mutating ? null : _save,
               icon: const Icon(Icons.save_outlined),
-              label: Text(_editing ? '保存修改' : '创建事项'),
+              label: Text(
+                _editingDraft ? '保存候选' : (_editing ? '保存修改' : '创建事项'),
+              ),
             ),
           ),
         ),
@@ -311,6 +344,12 @@ class _ItemEditorPageState extends State<ItemEditorPage> {
         if (value == null) return;
         final oldStart = _startAt;
         _startAt = value;
+        if (oldStart == null ||
+            oldStart.year != value.year ||
+            oldStart.month != value.month ||
+            oldStart.day != value.day) {
+          _recurrenceChanged = true;
+        }
         if (oldStart != null && _endAt != null) {
           _endAt = value.add(_endAt!.difference(oldStart));
         }
@@ -350,9 +389,10 @@ class _ItemEditorPageState extends State<ItemEditorPage> {
         DropdownMenuItem(value: RecurrenceFrequency.monthly, child: Text('每月')),
         DropdownMenuItem(value: RecurrenceFrequency.yearly, child: Text('每年')),
       ],
-      onChanged: (value) => setState(
-        () => _recurrenceFrequency = value ?? RecurrenceFrequency.none,
-      ),
+      onChanged: (value) => setState(() {
+        _recurrenceFrequency = value ?? RecurrenceFrequency.none;
+        _recurrenceChanged = true;
+      }),
     ),
     if (_recurrenceFrequency != RecurrenceFrequency.none) ...[
       const SizedBox(height: 10),
@@ -361,7 +401,10 @@ class _ItemEditorPageState extends State<ItemEditorPage> {
         value: _recurrenceUntil,
         allDay: true,
         allowClear: true,
-        onChanged: (value) => setState(() => _recurrenceUntil = value),
+        onChanged: (value) => setState(() {
+          _recurrenceUntil = value;
+          _recurrenceChanged = true;
+        }),
       ),
     ],
   ];
@@ -409,6 +452,7 @@ class _ItemEditorPageState extends State<ItemEditorPage> {
       if (value != ItemType.event) {
         _recurrenceFrequency = RecurrenceFrequency.none;
         _recurrenceUntil = null;
+        _recurrenceChanged = true;
       }
     });
   }
@@ -488,6 +532,10 @@ class _ItemEditorPageState extends State<ItemEditorPage> {
       reminderMinutes: _reminderMinutes,
       tags: _tagsController.text.split(','),
     );
+    if (_editingDraft) {
+      Navigator.of(context).pop(draft);
+      return;
+    }
     try {
       await widget.controller.saveItem(current: widget.item, draft: draft);
       if (mounted) Navigator.of(context).pop(true);
@@ -497,6 +545,11 @@ class _ItemEditorPageState extends State<ItemEditorPage> {
   }
 
   RecurrenceRule? _buildRecurrence() {
+    if (!_recurrenceChanged) {
+      final original =
+          widget.initialDraft?.recurrence ?? widget.item?.recurrence;
+      if (original != null) return original;
+    }
     if (_recurrenceFrequency == RecurrenceFrequency.none || _startAt == null) {
       return null;
     }

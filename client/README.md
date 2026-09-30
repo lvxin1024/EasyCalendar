@@ -30,6 +30,17 @@ for the Python Core API. Both endpoints can be changed in Settings. ICS file
 transfer and URL subscription refresh run entirely in the Flutter client and do
 not require either service.
 
+Schedule recognition previews show dates, times, locations, notes, and tags.
+Opening a preview uses the normal item editor but saves only the candidate
+draft; explicit confirmation creates the calendar item.
+
+Subscription intervals are checked every minute while the app is running,
+with an immediate check at startup and on resume. A suspended or closed app
+cannot guarantee background refresh. Disabling a subscription soft-deletes its
+imported items; re-enabling fetches without cached validators to restore them.
+Automatic refresh errors appear in the subscription's fetch history and do not
+block other sources or local editing.
+
 The generated platform runners and `pubspec.lock` are version controlled.
 Analyzer and unit tests run on any Flutter-capable development machine; native
 build acceptance additionally requires that platform's SDK and toolchain.

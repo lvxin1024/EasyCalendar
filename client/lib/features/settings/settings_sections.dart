@@ -3,7 +3,7 @@ part of 'settings_page.dart';
 String _settingsSectionTitle(_SettingsSection section) => switch (section) {
   _SettingsSection.sync => '同步与连接',
   _SettingsSection.notifications => '提醒与通知',
-  _SettingsSection.assistant => 'AI 助手',
+  _SettingsSection.assistant => '日程识别',
   _SettingsSection.calendar => '日历与显示',
   _SettingsSection.data => '数据管理',
   _SettingsSection.developer => '关于与开发者',
@@ -55,23 +55,23 @@ class _SettingsHome extends StatelessWidget {
 
   static IconData _settingsSectionIcon(_SettingsSection section) =>
       switch (section) {
-    _SettingsSection.sync => Icons.sync_outlined,
-    _SettingsSection.notifications => Icons.notifications_outlined,
-    _SettingsSection.assistant => Icons.auto_awesome_outlined,
-    _SettingsSection.calendar => Icons.calendar_month_outlined,
-    _SettingsSection.data => Icons.storage_outlined,
-    _SettingsSection.developer => Icons.code_outlined,
-  };
+        _SettingsSection.sync => Icons.sync_outlined,
+        _SettingsSection.notifications => Icons.notifications_outlined,
+        _SettingsSection.assistant => Icons.auto_awesome_outlined,
+        _SettingsSection.calendar => Icons.calendar_month_outlined,
+        _SettingsSection.data => Icons.storage_outlined,
+        _SettingsSection.developer => Icons.code_outlined,
+      };
 
   static String _settingsSectionSummary(_SettingsSection section) =>
       switch (section) {
-    _SettingsSection.sync => '服务地址、设备群组、令牌和同步状态',
-    _SettingsSection.notifications => '通知开关、系统权限和测试通知',
-    _SettingsSection.assistant => 'AI Provider、模型和日程解析方式',
-    _SettingsSection.calendar => '经期、语言、时区和桌面窗口',
-    _SettingsSection.data => '日历、标签、小组件和导入导出',
-    _SettingsSection.developer => '版本、开源项目、数据库和内部标识',
-  };
+        _SettingsSection.sync => '服务地址、设备群组、令牌和同步状态',
+        _SettingsSection.notifications => '通知开关、系统权限和测试通知',
+        _SettingsSection.assistant => 'AI Provider、模型和日程解析方式',
+        _SettingsSection.calendar => '经期、语言、时区和桌面窗口',
+        _SettingsSection.data => '日历、标签、小组件和导入导出',
+        _SettingsSection.developer => '版本、开源项目、数据库和内部标识',
+      };
 }
 
 class _SectionLabel extends StatelessWidget {
@@ -677,10 +677,10 @@ class _AiProviderSection extends StatelessWidget {
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       const SizedBox(height: 24),
-      const _SectionLabel(label: 'AI 助手'),
+      const _SectionLabel(label: '日程识别'),
       _SettingSwitch(
         icon: Icons.auto_awesome_outlined,
-        title: '启用 AI 助手',
+        title: '使用 AI 识别',
         subtitle: enabled ? '候选项仍需确认后才会写入日程' : '使用本地规则解析器',
         value: enabled,
         onChanged: onEnabledChanged,

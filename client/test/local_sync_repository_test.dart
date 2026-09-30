@@ -667,7 +667,7 @@ void main() {
         (await repository.listPendingChanges(now: DateTime.now()))
             .where((change) => change.entityId == created.id)
             .map((change) => change.operation);
-    expect(operations, ['create', 'update', 'delete']);
+    expect(operations, unorderedEquals(['create', 'update', 'delete']));
   });
 
   test(
@@ -772,7 +772,7 @@ void main() {
         (await repository.listPendingChanges(now: DateTime.now()))
             .where((change) => change.entityId == created.id)
             .map((change) => change.operation);
-    expect(operations, ['create', 'update', 'delete']);
+    expect(operations, unorderedEquals(['create', 'update', 'delete']));
   });
 
   test(

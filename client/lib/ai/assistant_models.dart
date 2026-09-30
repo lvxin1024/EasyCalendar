@@ -45,9 +45,15 @@ class AiCandidate {
     this.sourceTextSpan,
     this.reminders = const [],
     this.recurrence,
+    this.collectionId,
+    this.status = ItemStatus.todo,
+    this.tags = const [],
   });
 
-  factory AiCandidate.fromJson(Map<String, dynamic> json) {
+  factory AiCandidate.fromJson(
+    Map<String, dynamic> json, {
+    bool requireTaskDueAt = true,
+  }) {
     final tempId = _required(json['temp_id'], 'temp_id');
     final title = _required(json['title'], 'title');
     final typeName = _required(json['type'], 'type');
@@ -80,7 +86,7 @@ class AiCandidate {
     if (type == ItemType.event && startAt == null) {
       throw const FormatException('Event candidate requires start_at');
     }
-    if (type == ItemType.task && dueAt == null) {
+    if (requireTaskDueAt && type == ItemType.task && dueAt == null) {
       throw const FormatException('Task candidate requires due_at');
     }
     if (startAt != null && endAt != null && endAt.isBefore(startAt)) {
@@ -116,6 +122,9 @@ class AiCandidate {
       recurrence: recurrence is Map
           ? RecurrenceRule.fromJson(recurrence.cast<String, Object?>())
           : null,
+      collectionId: json['collection_id'] as String?,
+      status: ItemStatus.values.byName(json['status'] as String? ?? 'todo'),
+      tags: List<String>.from(json['tags'] as List? ?? const []),
     );
   }
 
@@ -135,6 +144,9 @@ class AiCandidate {
   final AiTextSpan? sourceTextSpan;
   final List<Map<String, dynamic>> reminders;
   final RecurrenceRule? recurrence;
+  final String? collectionId;
+  final ItemStatus status;
+  final List<String> tags;
 
   AiCandidate copyWith({
     ItemType? type,
@@ -163,9 +175,43 @@ class AiCandidate {
     sourceTextSpan: sourceTextSpan,
     reminders: reminders,
     recurrence: recurrence ?? this.recurrence,
+    collectionId: collectionId,
+    status: status,
+    tags: tags,
+  );
+
+  AiCandidate withDraft(ItemDraft draft) => AiCandidate(
+    tempId: tempId,
+    type: draft.type,
+    title: draft.title.trim(),
+    body: draft.body,
+    startAt: draft.startAt,
+    endAt: draft.endAt,
+    dueAt: draft.dueAt,
+    timezone: draft.timezone,
+    allDay: draft.allDay,
+    location: draft.location,
+    priority: draft.priority,
+    confidence: confidence,
+    reasoning: reasoning,
+    sourceTextSpan: sourceTextSpan,
+    reminders: [
+      {
+        'enabled': draft.reminderEnabled,
+        'minutes_before': draft.reminderMinutes,
+      },
+    ],
+    recurrence: draft.recurrence,
+    collectionId: draft.collectionId,
+    status: draft.status,
+    tags: draft.tags
+        .map((tag) => tag.trim())
+        .where((tag) => tag.isNotEmpty)
+        .toList(),
   );
 
   ItemDraft toDraft() => ItemDraft(
+    collectionId: collectionId,
     type: type,
     title: title,
     body: body,
@@ -181,6 +227,8 @@ class AiCandidate {
     ),
     reminderMinutes: _suggestedReminderMinutes,
     recurrence: recurrence,
+    status: status,
+    tags: tags,
   );
 
   int get _suggestedReminderMinutes {
@@ -216,6 +264,9 @@ class AiCandidate {
       },
     'reminders': reminders,
     if (recurrence != null) 'recurrence': recurrence!.toJson(),
+    if (collectionId != null) 'collection_id': collectionId,
+    'status': status.name,
+    'tags': tags,
   };
 
   static String _required(Object? value, String field) {

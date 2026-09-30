@@ -56,6 +56,50 @@ void main() {
   });
 
   test(
+    'full editor draft survives restart with cleared optional values',
+    () async {
+      controller.updateText('评审');
+      controller.setUseAi(true);
+      await extract();
+      final original = controller.workbench!.candidates.first;
+      final edited = original.withDraft(
+        const ItemDraft(
+          collectionId: 'collection_local',
+          type: ItemType.task,
+          title: '待补截止时间',
+          timezone: 'Asia/Shanghai',
+          status: ItemStatus.done,
+          reminderMinutes: 45,
+          tags: [' 工作 ', '项目', ''],
+        ),
+      );
+      controller.edit(0, edited);
+
+      await reopen();
+
+      final restored = controller.workbench!.candidates.first;
+      expect(restored.toJson(), edited.toJson());
+      expect(restored.confidence, original.confidence);
+      expect(restored.sourceTextSpan?.start, original.sourceTextSpan?.start);
+      final draft = restored.toDraft();
+      expect(draft.type, ItemType.task);
+      expect(draft.dueAt, isNull);
+      expect(draft.startAt, isNull);
+      expect(draft.endAt, isNull);
+      expect(draft.body, isNull);
+      expect(draft.location, isNull);
+      expect(draft.priority, isNull);
+      expect(draft.recurrence, isNull);
+      expect(draft.reminderEnabled, isFalse);
+      expect(draft.reminderMinutes, 45);
+      expect(draft.status, ItemStatus.done);
+      expect(draft.collectionId, 'collection_local');
+      expect(draft.tags, ['工作', '项目']);
+      expect(await repository.listItems(), isEmpty);
+    },
+  );
+
+  test(
     'reopening SQLite restores input, mode, edited/split/merged candidates and warnings',
     () async {
       final initialOutbox = await repository.listPendingChanges(
@@ -281,7 +325,7 @@ void main() {
       await controller.initialize();
 
       expect(controller.busy, isTrue);
-      expect(controller.storageError, contains('读取助手草稿失败'));
+      expect(controller.storageError, contains('读取日程识别草稿失败'));
       controller.updateText('读取失败时不能覆盖草稿');
       await repository.initialize();
       await controller.initialize();
