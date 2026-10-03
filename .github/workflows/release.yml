@@ -468,6 +468,7 @@ jobs:
     needs: [version, android, windows, macos, ios]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: release-assets
@@ -478,26 +479,15 @@ jobs:
           set -euo pipefail
           notice="$RUNNER_TEMP/release-installation-notice.md"
           {
+            if [ -f ".github/release-notes/${GITHUB_REF_NAME}.md" ]; then
+              cat ".github/release-notes/${GITHUB_REF_NAME}.md"
+              echo
+            fi
             echo "## Installation notes"
             echo
-            if compgen -G 'release-assets/*-unsigned-macos.dmg' > /dev/null; then
+            if compgen -G 'release-assets/*-unsigned-*' > /dev/null; then
               echo '> [!WARNING]'
-              echo '> The macOS DMG is ad-hoc signed and not notarized. After copying EasyCalendar to Applications, open it from Finder with **Right-click > Open**. The macOS Widget is not included in this build.'
-              echo
-            fi
-            if compgen -G 'release-assets/*-unsigned-android.apk' > /dev/null; then
-              echo '> [!WARNING]'
-              echo '> The Android APK was built with a temporary CI key because Android signing secrets were not configured. Configure the Android secrets before distributing production updates.'
-              echo
-            fi
-            if compgen -G 'release-assets/*-unsigned-windows-x64-setup.exe' > /dev/null; then
-              echo '> [!WARNING]'
-              echo '> The Windows installer is unsigned. Windows SmartScreen may require **More info > Run anyway**.'
-              echo
-            fi
-            if compgen -G 'release-assets/*-unsigned-ios.ipa' > /dev/null; then
-              echo '> [!WARNING]'
-              echo '> The iOS IPA is unsigned and is intended for build verification or manual signing before device installation.'
+              echo '> Some platform artifacts are unsigned or ad-hoc signed; Windows SmartScreen and macOS Gatekeeper may require manual approval, Android updates need a stable signing key, and iOS installation requires manual signing.'
               echo
             fi
           } > "$notice"
