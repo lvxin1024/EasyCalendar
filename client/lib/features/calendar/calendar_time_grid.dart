@@ -10,6 +10,7 @@ import '../../domain/item.dart';
 import '../../utils/configured_time.dart';
 import '../../utils/date_formatters.dart';
 import '../../utils/tag_colors.dart';
+import 'calendar_date_label.dart';
 import 'calendar_navigation_controller.dart';
 import 'cycle_day_marker.dart';
 
@@ -559,9 +560,12 @@ class _DateHeader extends StatelessWidget {
                     children: [
                       FittedBox(
                         fit: BoxFit.scaleDown,
-                        child: Text(
-                          formatCompactDateWithWeekday(context, date),
-                          style: Theme.of(context).textTheme.labelSmall,
+                        child: CalendarDateLabel(
+                          date: date,
+                          child: Text(
+                            formatCompactDateWithWeekday(context, date),
+                            style: Theme.of(context).textTheme.labelSmall,
+                          ),
                         ),
                       ),
                       if (showCycleMarkers)

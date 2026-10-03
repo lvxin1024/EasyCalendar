@@ -75,7 +75,8 @@ class ItemController extends ChangeNotifier {
       repository: repository,
       localIcsService: _localIcsService,
       activeTimezone: () => activeTimezone,
-      runMutation: _mutate,
+      runMutation: (operation, {reloadItems = true}) =>
+          _mutate(operation, reloadItems: reloadItems, background: true),
       fetchClient: subscriptionFetchClient,
     );
   }
@@ -101,6 +102,7 @@ class ItemController extends ChangeNotifier {
   bool _loading = true;
   bool _initialized = false;
   bool _mutating = false;
+  bool _disposed = false;
   Object? _error;
   bool _featureTokenConfigured = false;
   ServiceProbeResult? _syncServiceProbe;
@@ -569,6 +571,11 @@ class ItemController extends ChangeNotifier {
   Future<List<CalendarSubscription>> listSubscriptions() =>
       _subscriptionService.list();
 
+  void startSubscriptionAutoRefresh() =>
+      _subscriptionService.startAutoRefresh();
+
+  void stopSubscriptionAutoRefresh() => _subscriptionService.stopAutoRefresh();
+
   Future<CalendarSubscription> createSubscription({
     required String title,
     required String url,
@@ -701,25 +708,31 @@ class ItemController extends ChangeNotifier {
   Future<void> _mutate(
     Future<void> Function() operation, {
     bool reloadItems = true,
+    bool background = false,
   }) async {
-    if (_mutating) {
+    if (_disposed) throw StateError('日程服务已关闭。');
+    if (!background && _mutating) {
       throw const RepositoryConflict('另一个本地操作正在进行。');
     }
-    _mutating = true;
-    _error = null;
-    notifyListeners();
+    // Subscription transactions have version checks and must not block edits.
+    if (!background) {
+      _mutating = true;
+      _error = null;
+      notifyListeners();
+    }
     try {
       await operation();
+      if (_disposed) return;
       if (reloadItems) await _reload(notify: false);
-      if (reloadItems && preferences.syncEnabled) {
+      if (!_disposed && reloadItems && preferences.syncEnabled) {
         unawaited(syncCoordinator?.synchronize());
       }
     } catch (caught) {
-      _error = caught;
+      if (!background) _error = caught;
       rethrow;
     } finally {
-      _mutating = false;
-      notifyListeners();
+      if (!background) _mutating = false;
+      if (!_disposed) notifyListeners();
     }
   }
 
@@ -812,6 +825,7 @@ class ItemController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     syncCoordinator?.removeListener(_syncChanged);
     syncCoordinator?.dispose();
     assistant.dispose();

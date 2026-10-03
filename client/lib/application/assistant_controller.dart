@@ -56,6 +56,7 @@ class AssistantController extends ChangeNotifier {
               restored.add(
                 AiCandidate.fromJson(
                   Map<String, dynamic>.from(candidates[index] as Map),
+                  requireTaskDueAt: false,
                 ),
               );
             } catch (caught) {
@@ -71,7 +72,7 @@ class AssistantController extends ChangeNotifier {
       initialized = true;
       storageError = null;
     } catch (caught) {
-      storageError = '读取助手草稿失败：$caught';
+      storageError = '读取日程识别草稿失败：$caught';
       _initialization = null;
     }
     _notify();
@@ -217,7 +218,7 @@ class AssistantController extends ChangeNotifier {
         await repository.saveAssistantDraft(draft);
         storageError = null;
       } catch (caught) {
-        storageError = '助手草稿尚未保存：$caught';
+        storageError = '日程识别草稿尚未保存：$caught';
       }
       _notify();
     });

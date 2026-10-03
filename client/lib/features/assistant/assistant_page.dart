@@ -8,6 +8,8 @@ import '../../application/assistant_controller.dart';
 import '../../application/item_controller.dart';
 import '../../config/app_config.dart';
 import '../../domain/item.dart';
+import '../../utils/date_formatters.dart';
+import '../editor/item_editor_page.dart';
 
 class AssistantPage extends StatefulWidget {
   const AssistantPage({
@@ -63,7 +65,7 @@ class _AssistantPageState extends State<AssistantPage> {
         padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
         child: Row(
           children: [
-            Text('AI 助手', style: Theme.of(context).textTheme.headlineSmall),
+            Text('日程识别', style: Theme.of(context).textTheme.headlineSmall),
             const Spacer(),
             if (_workbench != null)
               TextButton.icon(
@@ -171,7 +173,7 @@ class _AssistantPageState extends State<AssistantPage> {
               ),
             if (_workbench != null) ...[
               const SizedBox(height: 24),
-              Text('候选预览', style: Theme.of(context).textTheme.titleMedium),
+              Text('日程预览', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 8),
               if (_workbench!.candidates.isEmpty)
                 const Text('没有待确认候选项')
@@ -218,28 +220,17 @@ class _AssistantPageState extends State<AssistantPage> {
 
   Future<void> _edit(int index) async {
     final candidate = _workbench!.candidates[index];
-    final title = await showDialog<String>(
-      context: context,
-      builder: (context) {
-        final controller = TextEditingController(text: candidate.title);
-        return AlertDialog(
-          title: const Text('编辑候选标题'),
-          content: TextField(controller: controller, autofocus: true),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, controller.text.trim()),
-              child: const Text('保存'),
-            ),
-          ],
-        );
-      },
+    final draft = await Navigator.of(context).push<ItemDraft>(
+      MaterialPageRoute(
+        builder: (context) => ItemEditorPage(
+          config: widget.config,
+          controller: widget.controller,
+          initialDraft: candidate.toDraft(),
+        ),
+      ),
     );
-    if (title == null || title.isEmpty || !mounted) return;
-    _assistant.edit(index, candidate.copyWith(title: title));
+    if (draft == null || !mounted) return;
+    _assistant.edit(index, candidate.withDraft(draft));
   }
 
   Future<void> _confirm(int index) async {
@@ -277,14 +268,33 @@ class _CandidateTile extends StatelessWidget {
         children: [
           ListTile(
             contentPadding: EdgeInsets.zero,
-            leading: Icon(
-              candidate.type == ItemType.task
-                  ? Icons.check_circle_outline
-                  : Icons.event_outlined,
-            ),
+            onTap: onEdit,
+            leading: Icon(switch (candidate.type) {
+              ItemType.event => Icons.event_outlined,
+              ItemType.task => Icons.check_circle_outline,
+              ItemType.note => Icons.notes_outlined,
+            }),
             title: Text(candidate.title),
-            subtitle: Text(
-              '置信度 ${(candidate.confidence * 100).round()}% · ${candidate.reasoning ?? '结构化候选'}',
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (candidate.type == ItemType.event) ...[
+                  Text('开始：${_timeLabel(context, candidate.startAt)}'),
+                  if (candidate.endAt != null)
+                    Text('结束：${_timeLabel(context, candidate.endAt)}'),
+                ],
+                if (candidate.type == ItemType.task)
+                  Text('截止：${_timeLabel(context, candidate.dueAt)}'),
+                if (candidate.location?.trim().isNotEmpty == true)
+                  Text('地点：${candidate.location}'),
+                if (candidate.body?.trim().isNotEmpty == true)
+                  Text('备注：${candidate.body}'),
+                if (candidate.tags.isNotEmpty)
+                  Text('标签：${candidate.tags.join('、')}'),
+                Text(
+                  '置信度 ${(candidate.confidence * 100).round()}% · ${candidate.reasoning ?? '结构化候选'}',
+                ),
+              ],
             ),
           ),
           Wrap(
@@ -322,4 +332,9 @@ class _CandidateTile extends StatelessWidget {
       ),
     ),
   );
+
+  String _timeLabel(BuildContext context, DateTime? value) {
+    if (value == null) return '未设置时间';
+    return '${formatDate(context, value)} · ${candidate.allDay ? '全天' : formatTime(context, value)}';
+  }
 }

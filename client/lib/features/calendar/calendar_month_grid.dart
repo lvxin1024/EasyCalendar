@@ -5,6 +5,7 @@ import '../../domain/item.dart';
 import '../../utils/configured_time.dart';
 import '../../utils/date_formatters.dart';
 import '../../utils/tag_colors.dart';
+import 'calendar_date_label.dart';
 import 'calendar_navigation_controller.dart';
 import 'cycle_day_marker.dart';
 
@@ -50,30 +51,33 @@ class CalendarMonthGrid extends StatelessWidget {
     }
     return LayoutBuilder(
       builder: (context, constraints) {
-        final width = constraints.maxWidth < 760 ? 760.0 : constraints.maxWidth;
+        final width = (constraints.maxWidth - 24).clamp(760.0, double.infinity);
         return Scrollbar(
           child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 96),
-            child: SizedBox(
-              width: width,
-              child: Column(
-                children: [
-                  _WeekdayHeader(firstWeek: weeks.first),
-                  for (final week in weeks)
-                    _MonthWeekRow(
-                      week: week,
-                      selectedDate: navigation.selectedDate,
-                      currentMonth: navigation.selectedDate.month,
-                      items: items,
-                      navigation: navigation,
-                      onEdit: onEdit,
-                      onDateSelected: onDateSelected,
-                      tagColors: tagColors,
-                      collectionColors: collectionColors,
-                      cycleStates: cycleStates,
-                      showCycleMarkers: showCycleMarkers,
-                    ),
-                ],
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SizedBox(
+                width: width,
+                child: Column(
+                  children: [
+                    _WeekdayHeader(firstWeek: weeks.first),
+                    for (final week in weeks)
+                      _MonthWeekRow(
+                        week: week,
+                        selectedDate: navigation.selectedDate,
+                        currentMonth: navigation.selectedDate.month,
+                        items: items,
+                        navigation: navigation,
+                        onEdit: onEdit,
+                        onDateSelected: onDateSelected,
+                        tagColors: tagColors,
+                        collectionColors: collectionColors,
+                        cycleStates: cycleStates,
+                        showCycleMarkers: showCycleMarkers,
+                      ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -263,13 +267,16 @@ class _MonthDayCell extends StatelessWidget {
                       ),
                     ),
                   const Spacer(),
-                  _DayNumber(
-                    day: date.day,
-                    isToday: isToday,
-                    isCurrentMonth: isCurrentMonth,
-                    isSelected: isSelected,
-                    cycleState: cycleState,
-                    showCycleMarker: showCycleMarker,
+                  CalendarDateLabel(
+                    date: date,
+                    child: _DayNumber(
+                      day: date.day,
+                      isToday: isToday,
+                      isCurrentMonth: isCurrentMonth,
+                      isSelected: isSelected,
+                      cycleState: cycleState,
+                      showCycleMarker: showCycleMarker,
+                    ),
                   ),
                 ],
               ),

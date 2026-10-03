@@ -30,11 +30,29 @@ for the Python Core API. Both endpoints can be changed in Settings. ICS file
 transfer and URL subscription refresh run entirely in the Flutter client and do
 not require either service.
 
+Schedule recognition previews show dates, times, locations, notes, and tags.
+Opening a preview uses the normal item editor but saves only the candidate
+draft; explicit confirmation creates the calendar item.
+
+Subscription intervals are checked every minute while the app is running,
+with an immediate check at startup and on resume. A suspended or closed app
+cannot guarantee background refresh. Disabling a subscription soft-deletes its
+imported items; re-enabling fetches without cached validators to restore them.
+Automatic refresh errors appear in the subscription's fetch history and do not
+block other sources or local editing.
+
 The generated platform runners and `pubspec.lock` are version controlled.
 Analyzer and unit tests run on any Flutter-capable development machine; native
 build acceptance additionally requires that platform's SDK and toolchain.
 Release identifiers and the compatibility rules for changing native metadata
 are documented in [`APP_IDENTITY.md`](APP_IDENTITY.md).
+
+Day, week, and month views show mainland China holiday adjustments offline:
+`休` on weekday days off and `工` on weekend make-up workdays. Ordinary weekdays
+and weekends have no marker. The bundled 2025–2026 dates in
+[`china_holiday.dart`](lib/domain/china_holiday.dart) follow the State Council
+notices linked there. Add each year's official dates and extend the tests when
+the next notice is published; years without bundled data have no markers.
 
 Group-sync lifecycle policy:
 

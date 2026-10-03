@@ -24,7 +24,20 @@ class _SubscriptionsPageState extends State<SubscriptionsPage> {
   @override
   void initState() {
     super.initState();
+    widget.controller.addListener(_controllerChanged);
     unawaited(_reload());
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_controllerChanged);
+    super.dispose();
+  }
+
+  void _controllerChanged() {
+    if (!_loading && !widget.controller.mutating) {
+      unawaited(_reload(showLoading: false));
+    }
   }
 
   @override
@@ -53,6 +66,10 @@ class _SubscriptionsPageState extends State<SubscriptionsPage> {
             ),
           ],
         ),
+      ),
+      const Padding(
+        padding: EdgeInsets.fromLTRB(20, 0, 20, 12),
+        child: Text('关闭会移除该订阅的日程，重新开启后立即拉取。'),
       ),
       if (_error != null)
         Padding(
@@ -85,40 +102,56 @@ class _SubscriptionsPageState extends State<SubscriptionsPage> {
     ],
   );
 
-  Future<void> _reload() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+  Future<void> _reload({bool showLoading = true}) async {
+    if (!mounted) return;
+    if (showLoading) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
     try {
       final values = await widget.controller.listSubscriptions();
       if (mounted) setState(() => _subscriptions = values);
     } catch (error) {
       if (mounted) setState(() => _error = '$error');
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && showLoading) setState(() => _loading = false);
     }
+  }
+
+  Future<void> _runOperation(Future<void> Function() operation) async {
+    if (!mounted || _loading) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    String? message;
+    try {
+      await operation();
+    } catch (error) {
+      message = '$error';
+    }
+    await _reload();
+    if (mounted && message != null) setState(() => _error = message);
   }
 
   Future<void> _showCreateDialog() async {
     final draft = await showDialog<_SubscriptionDraft>(
       context: context,
-      builder: (_) => _SubscriptionDialog(
-        tagSuggestions: _subscriptionTagSuggestions,
-      ),
+      builder: (_) =>
+          _SubscriptionDialog(tagSuggestions: _subscriptionTagSuggestions),
     );
     if (draft == null) return;
-    try {
+    await _runOperation(() async {
       final created = await widget.controller.createSubscription(
         title: draft.title,
         url: draft.url,
         refreshIntervalMinutes: draft.refreshIntervalMinutes,
         tags: draft.tags,
       );
-      await _refresh(created);
-    } catch (error) {
-      if (mounted) setState(() => _error = '$error');
-    }
+      await widget.controller.refreshSubscription(created);
+    });
   }
 
   Future<void> _showEditDialog(CalendarSubscription current) async {
@@ -130,7 +163,7 @@ class _SubscriptionsPageState extends State<SubscriptionsPage> {
       ),
     );
     if (draft == null) return;
-    try {
+    await _runOperation(() async {
       await widget.controller.updateSubscription(
         current,
         title: draft.title,
@@ -139,14 +172,11 @@ class _SubscriptionsPageState extends State<SubscriptionsPage> {
         refreshIntervalMinutes: draft.refreshIntervalMinutes,
         tags: draft.tags,
       );
-      await _reload();
-    } catch (error) {
-      if (mounted) setState(() => _error = '$error');
-    }
+    });
   }
 
   Future<void> _toggle(CalendarSubscription current, bool enabled) async {
-    try {
+    await _runOperation(() async {
       await widget.controller.updateSubscription(
         current,
         title: current.title,
@@ -155,31 +185,15 @@ class _SubscriptionsPageState extends State<SubscriptionsPage> {
         refreshIntervalMinutes: current.refreshIntervalMinutes,
         tags: current.tags,
       );
-      await _reload();
-    } catch (error) {
-      if (mounted) setState(() => _error = '$error');
-    }
+    });
   }
 
-  Future<void> _refresh(CalendarSubscription current) async {
-    try {
-      await widget.controller.refreshSubscription(current);
-      await _reload();
-    } catch (error) {
-      final message = '$error';
-      await _reload();
-      if (mounted) setState(() => _error = message);
-    }
-  }
+  Future<void> _refresh(CalendarSubscription current) => _runOperation(
+    () async => await widget.controller.refreshSubscription(current),
+  );
 
-  Future<void> _delete(CalendarSubscription current) async {
-    try {
-      await widget.controller.deleteSubscription(current);
-      await _reload();
-    } catch (error) {
-      if (mounted) setState(() => _error = '$error');
-    }
-  }
+  Future<void> _delete(CalendarSubscription current) =>
+      _runOperation(() => widget.controller.deleteSubscription(current));
 
   Future<void> _showLogs(CalendarSubscription current) async {
     try {
@@ -297,7 +311,7 @@ class _SubscriptionTile extends StatelessWidget {
         title: Text(subscription.title),
         subtitle: Text(
           '${subscription.url}\n'
-          '每 ${_interval(subscription.refreshIntervalMinutes)}刷新 · $status'
+          '${subscription.enabled ? '每 ${_interval(subscription.refreshIntervalMinutes)}自动刷新' : '已关闭'} · $status'
           '${subscription.tags.isEmpty ? '' : '\n标签：${subscription.tags.join(' · ')}'}'
           '${etag == null ? '' : '\nETag ${_SubscriptionsPageState._short(etag)}'}'
           '${sourceHash == null ? '' : ' · 哈希 ${_SubscriptionsPageState._short(sourceHash)}'}',
@@ -309,7 +323,7 @@ class _SubscriptionTile extends StatelessWidget {
           children: [
             IconButton(
               tooltip: '立即刷新',
-              onPressed: onRefresh,
+              onPressed: subscription.enabled ? onRefresh : null,
               icon: const Icon(Icons.sync),
             ),
             Switch(value: subscription.enabled, onChanged: onToggle),
@@ -379,10 +393,7 @@ class _SubscriptionDraft {
 }
 
 class _SubscriptionDialog extends StatefulWidget {
-  const _SubscriptionDialog({
-    this.initial,
-    this.tagSuggestions = const [],
-  });
+  const _SubscriptionDialog({this.initial, this.tagSuggestions = const []});
 
   final CalendarSubscription? initial;
   final List<String> tagSuggestions;
@@ -435,7 +446,11 @@ class _SubscriptionDialogState extends State<_SubscriptionDialog> {
             const SizedBox(height: 12),
             DropdownButtonFormField<int>(
               initialValue: _refreshIntervalMinutes,
-              decoration: const InputDecoration(labelText: '刷新间隔'),
+              decoration: const InputDecoration(
+                labelText: '刷新间隔',
+                helperText: '应用运行时自动刷新，回到前台后补刷到期订阅',
+                helperMaxLines: 2,
+              ),
               items: _intervalOptions
                   .map(
                     (minutes) => DropdownMenuItem(
@@ -536,7 +551,7 @@ class _SubscriptionDialogState extends State<_SubscriptionDialog> {
       ),
     ],
   );
-  
+
   List<String> get _availableTags {
     final tags = <String>{};
     for (final tag in widget.tagSuggestions) {
