@@ -38,7 +38,16 @@ def _candidate_prompt(text: str, timezone_name: str, now: datetime) -> str:
         "Return JSON only with this shape: {\"candidates\":[candidate objects],\"warnings\":[string]}. "
         "Each candidate must contain temp_id, type (event|task|note), title, confidence (0..1), "
         "and timezone. Event uses start_at/end_at, task uses due_at. Include source_text_span with "
-        "character start/end when possible. Do not create or modify persisted items.\n"
+        "character start/end when possible. Do not create or modify persisted items. "
+        "Infer the dominant language of the input. Use that same language for all user-visible string values "
+        "(title, body, location, tags, reasoning, and warnings): Simplified Chinese input uses "
+        "Simplified Chinese output and English input uses English output. Preserve names, quoted "
+        "phrases, and mixed-language terms instead of translating them. For mixed-language input, "
+        "each field follows the language of its corresponding source phrase. Keep JSON keys, enum "
+        "values, and timezone names unchanged. Warnings may contain only actionable extraction "
+        "uncertainty; omit input truncation notes, recipient/assignee commentary, optional "
+        "follow-up suggestions, and other meta commentary. Return an empty warnings array when "
+        "there is no actionable uncertainty.\n"
         f"Timezone: {timezone_name}\nReference time: {now.isoformat()}\nInput: {text}"
     )
 

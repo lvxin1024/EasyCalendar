@@ -66,6 +66,7 @@ def test_openai_provider_enforces_json_and_does_not_log_key():
     def requester(request, *, timeout):
         captured["authorization"] = request.headers.get("Authorization")
         captured["timeout"] = timeout
+        captured["body"] = json.loads(request.data.decode())
         return Response()
 
     provider = OpenAICompatibleProvider(
@@ -82,7 +83,13 @@ def test_openai_provider_enforces_json_and_does_not_log_key():
         timezone_name="Asia/Shanghai",
     )
     assert result.candidates[0].title == "Design review"
-    assert captured == {"authorization": "Bearer secret-key", "timeout": 7}
+    assert captured["authorization"] == "Bearer secret-key"
+    assert captured["timeout"] == 7
+    prompt = captured["body"]["messages"][0]["content"]
+    assert "same language for all user-visible string values" in prompt
+    assert "corresponding source phrase" in prompt
+    assert "actionable extraction uncertainty" in prompt
+    assert "recipient/assignee commentary" in prompt
 
 
 def test_registry_keeps_rules_available_without_ai_configuration():

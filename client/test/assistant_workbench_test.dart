@@ -146,6 +146,10 @@ void main() {
       expect(prompt, contains('source_text_span'));
       expect(prompt, contains('"start"'));
       expect(prompt, contains('"end"'));
+      expect(prompt, contains('same language for all user-visible'));
+      expect(prompt, contains('corresponding source phrase'));
+      expect(prompt, contains('actionable extraction uncertainty'));
+      expect(prompt, contains('recipient/assignee commentary'));
       expect(prompt, contains('2026-09-21T02:00:00.000Z'));
       expect(prompt, contains('Asia/Shanghai'));
       expect(prompt, contains('明天评审，周五前提交报告'));
