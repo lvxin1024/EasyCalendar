@@ -56,7 +56,7 @@
 | 🗑️ 回收站 | 软删除恢复，乐观锁幂等保护 |
 | 🔔 通知提醒 | 平台通知适配接口，提醒改期自动协调 |
 | 🌙 经期跟踪 | 经期、流量、点滴出血和症状记录，本地预测默认不上传 |
-| 🔄 自动同步 | 日程、日历、订阅和经期记录通过 outbox push / cursor pull 同步 |
+| 🔄 自动同步 | 本地日程、日历、订阅配置和经期记录通过 outbox push / cursor pull 同步；订阅源日程由各设备分别抓取 |
 | 🪟 桌面窗口 | macOS/Windows 透明度、置顶、点击穿透，桌面日历 overlay |
 | 🧩 macOS Widget | App Group 离线 timeline，快照损坏容错 |
 
@@ -463,7 +463,7 @@ unsigned/ad-hoc 产物仍然是优化后的 Release 构建，不是 Debug 构建
 | AI | OpenAI-compatible / DeepSeek / Ollama Provider, Candidate 确认流程 |
 | 本地解析 | Flutter `LocalRuleParser`，不依赖 AI 或 Python |
 
-离线优先架构：客户端 `LocalItemRepository` 直连本地 SQLite，所有 CRUD 即时完成。同步层通过 outbox push / cursor pull 异步交换变更，确定性 LWW 冲突恢复。ICS 订阅由客户端直接执行 ETag/Last-Modified 条件请求，解析到只读 Collection 后通过同一同步协议交换。
+离线优先架构：客户端 `LocalItemRepository` 直连本地 SQLite，所有 CRUD 即时完成。同步层通过 outbox push / cursor pull 异步交换变更，确定性 LWW 冲突恢复。ICS 订阅由各客户端直接执行 ETag/Last-Modified 条件请求，解析到只读 Collection；订阅源返回的日程只保存在本机，不进入同步协议。
 
 
 

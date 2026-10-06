@@ -27,7 +27,8 @@ class LocalItemRepository
         LocalRecoveryPort,
         RuntimeSettingsPort,
         SyncGroupDataPort,
-        SyncRepository {
+        SyncRepository,
+        SyncPendingChangeCounter {
   LocalItemRepository(
     this.config, {
     Uuid? uuid,
@@ -116,6 +117,7 @@ class LocalItemRepository
       );
       await _ensureDefaultCollection();
       await _ensureLegacySyncHeads();
+      await _pruneSubscriptionSyncArtifacts();
     } catch (_) {
       // Do not leave a partially opened handle behind. The controller exposes
       // a retry action when startup fails, and retry must be able to reopen it.
@@ -254,7 +256,18 @@ class LocalItemRepository
           _legacyChange('collection', collection, payload),
         );
       }
+      final subscriptionCollectionIds = {
+        for (final row in await transaction.query(
+          'collections',
+          columns: ['id'],
+          where: "kind = 'subscription'",
+        ))
+          row['id'] as String,
+      };
       for (final itemRow in await transaction.query('items')) {
+        if (subscriptionCollectionIds.contains(itemRow['collection_id'])) {
+          continue;
+        }
         if (await _hasSyncHead(transaction, 'item', itemRow['id'])) continue;
         final item = _itemFromRow(itemRow);
         await _upsertSyncHead(
@@ -353,6 +366,27 @@ class LocalItemRepository
     });
   }
 
+  Future<void> _pruneSubscriptionSyncArtifacts() async {
+    await _db.transaction((transaction) async {
+      const itemIds =
+          'SELECT items.id FROM items '
+          'INNER JOIN collections ON collections.id = items.collection_id '
+          "WHERE collections.kind = 'subscription'";
+      await transaction.delete(
+        'outbox',
+        where: "entity_type = 'item' AND entity_id IN ($itemIds)",
+      );
+      await transaction.delete(
+        'sync_entity_heads',
+        where: "entity_type = 'item' AND entity_id IN ($itemIds)",
+      );
+      await transaction.delete(
+        'sync_conflicts',
+        where: "entity_type = 'item' AND entity_id IN ($itemIds)",
+      );
+    });
+  }
+
   @override
   Future<void> prepareForSyncGroup(String groupId) async {
     await _db.transaction((transaction) async {
@@ -390,7 +424,18 @@ class LocalItemRepository
         );
       }
 
+      final subscriptionCollectionIds = {
+        for (final row in await transaction.query(
+          'collections',
+          columns: ['id'],
+          where: "kind = 'subscription'",
+        ))
+          row['id'] as String,
+      };
       for (final itemRow in await transaction.query('items')) {
+        if (subscriptionCollectionIds.contains(itemRow['collection_id'])) {
+          continue;
+        }
         if (await _hasPendingOutbox(transaction, 'item', itemRow['id'])) {
           continue;
         }
@@ -1785,6 +1830,17 @@ class LocalItemRepository
     CalendarItem item,
     String operation,
   ) async {
+    final collectionRows = await transaction.query(
+      'collections',
+      columns: ['kind'],
+      where: 'id = ?',
+      whereArgs: [item.collectionId],
+      limit: 1,
+    );
+    if (collectionRows.isNotEmpty &&
+        collectionRows.single['kind'] == 'subscription') {
+      return;
+    }
     final changeId = 'change_${_uuid.v4()}';
     final payload = _itemPayload(item);
     await transaction.insert('outbox', {
@@ -1949,7 +2005,11 @@ class LocalItemRepository
       'outbox',
       where:
           'sent_at IS NULL AND permanent_failure = 0 '
-          'AND (next_attempt_at IS NULL OR next_attempt_at <= ?)',
+          'AND (next_attempt_at IS NULL OR next_attempt_at <= ?) '
+          "AND NOT (entity_type = 'item' AND entity_id IN ("
+          'SELECT items.id FROM items '
+          'INNER JOIN collections ON collections.id = items.collection_id '
+          "WHERE collections.kind = 'subscription'))",
       whereArgs: [_timeText(now)],
       orderBy:
           'CASE entity_type '
@@ -1977,6 +2037,21 @@ class LocalItemRepository
           ),
         )
         .toList(growable: false);
+  }
+
+  @override
+  Future<int> countPendingChanges({required DateTime now}) async {
+    final rows = await _db.rawQuery(
+      'SELECT COUNT(*) AS pending_count FROM outbox '
+      'WHERE sent_at IS NULL AND permanent_failure = 0 '
+      'AND (next_attempt_at IS NULL OR next_attempt_at <= ?) '
+      "AND NOT (entity_type = 'item' AND entity_id IN ("
+      'SELECT items.id FROM items '
+      'INNER JOIN collections ON collections.id = items.collection_id '
+      "WHERE collections.kind = 'subscription'))",
+      [_timeText(now)],
+    );
+    return (rows.single['pending_count'] as int?) ?? 0;
   }
 
   @override
@@ -2076,6 +2151,7 @@ class LocalItemRepository
         'sent_at IS NULL AND permanent_failure = 1 AND ('
         "(entity_type IN ('cycle_period', 'cycle_settings') "
         "AND last_error LIKE '%entity_type is invalid%') OR "
+        "last_error LIKE '%TimeoutException%' OR "
         'last_error IN ('
         "'constraint_violation: Change could not be applied', "
         "'constraint_violation: Referenced collection does not exist'"
@@ -2190,6 +2266,14 @@ class LocalItemRepository
         change.payload['deleted_at'] is! String) {
       throw const FormatException('Remote delete requires a tombstone');
     }
+    if (change.entityType == 'item' &&
+        (change.entityId.startsWith('item_ics_') ||
+            await _isSubscriptionCollection(
+              transaction,
+              change.payload['collection_id'],
+            ))) {
+      return;
+    }
     final rows = await transaction.query(
       'sync_entity_heads',
       where: 'entity_type = ? AND entity_id = ?',
@@ -2268,6 +2352,21 @@ class LocalItemRepository
         throw FormatException('Unsupported sync entity: ${change.entityType}');
     }
     await _upsertSyncHead(transaction, change);
+  }
+
+  static Future<bool> _isSubscriptionCollection(
+    Transaction transaction,
+    Object? collectionId,
+  ) async {
+    if (collectionId is! String || collectionId.isEmpty) return false;
+    final rows = await transaction.query(
+      'collections',
+      columns: ['kind'],
+      where: 'id = ?',
+      whereArgs: [collectionId],
+      limit: 1,
+    );
+    return rows.isNotEmpty && rows.single['kind'] == 'subscription';
   }
 
   Future<void> _applyRemoteCyclePeriod(

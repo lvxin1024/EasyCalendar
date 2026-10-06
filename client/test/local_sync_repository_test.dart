@@ -112,6 +112,48 @@ void main() {
     },
   );
 
+  test(
+    'subscription events stay local and remote copies are ignored',
+    () async {
+      final subscription = await repository.createSubscription(
+        title: 'Team calendar',
+        url: 'https://calendar.example.com/team.ics',
+        refreshIntervalMinutes: 180,
+        tags: const [],
+      );
+      await repository.applySubscriptionRefresh(
+        subscription,
+        events: [
+          LocalIcsEvent(
+            externalId: 'meeting@example.com',
+            draft: ItemDraft(
+              type: ItemType.event,
+              title: 'Team meeting',
+              startAt: DateTime.utc(2026, 8, 19, 1),
+              timezone: 'UTC',
+            ),
+          ),
+        ],
+        notModified: false,
+        httpStatus: 200,
+        fetchedAt: DateTime.utc(2026, 8, 18, 1),
+      );
+
+      final pending = await repository.listPendingChanges(now: DateTime.now());
+      expect(pending.where((change) => change.entityType == 'item'), isEmpty);
+
+      await repository.applyRemoteBatch([
+        _remoteSubscriptionItem(subscription.collectionId),
+      ], 'cur_subscription_item');
+      final localItems = (await repository.listItems())
+          .where((item) => item.collectionId == subscription.collectionId)
+          .toList();
+      expect(localItems, hasLength(1));
+      expect(localItems.single.title, 'Team meeting');
+      expect(await repository.loadRemoteCursor(), 'cur_subscription_item');
+    },
+  );
+
   test('tag migration replaces and deduplicates tags atomically', () async {
     await repository.createItem(
       const ItemDraft(
@@ -373,6 +415,37 @@ void main() {
       contains(itemChange.changeId),
     );
   });
+
+  test(
+    'retries changes that previously exhausted on a network timeout',
+    () async {
+      final created = await repository.createItem(
+        const ItemDraft(
+          type: ItemType.task,
+          title: 'Timed out task',
+          timezone: 'Asia/Shanghai',
+        ),
+      );
+      final itemChange = (await repository.listPendingChanges(
+        now: DateTime.now(),
+      )).singleWhere((change) => change.entityId == created.id);
+
+      await repository.recordTransientFailure(
+        [itemChange.changeId],
+        '网络请求失败：TimeoutException after 0:00:30.000000: Future not completed',
+        now: DateTime.now(),
+        retryLimit: 1,
+      );
+
+      expect(await repository.resetRetryablePermanentFailures(), 1);
+      expect(
+        (await repository.listPendingChanges(
+          now: DateTime.now(),
+        )).map((change) => change.changeId),
+        contains(itemChange.changeId),
+      );
+    },
+  );
 
   test('retries a missing group transport after group setup', () async {
     final pending = await repository.listPendingChanges(now: DateTime.now());
@@ -831,11 +904,8 @@ void main() {
 
       final pending = await repository.listPendingChanges(now: DateTime.now());
       expect(
-        pending
-            .where((change) => change.entityId == firstItem.id)
-            .single
-            .operation,
-        'create',
+        pending.where((change) => change.entityId == firstItem.id),
+        isEmpty,
       );
     },
   );
@@ -1018,6 +1088,42 @@ RemoteSyncChange _remoteItem(
       'reminders': [],
       'tags': [],
       'source': 'local',
+      'metadata': {},
+      'created_at': timestamp,
+      'updated_at': timestamp,
+      'deleted_at': null,
+      'version': 1,
+    },
+  );
+}
+
+RemoteSyncChange _remoteSubscriptionItem(String collectionId) {
+  const timestamp = '2026-08-11T08:00:00.000Z';
+  return RemoteSyncChange(
+    changeId: 'change_item_ics_remote',
+    deviceId: 'other-device',
+    entityType: 'item',
+    entityId: 'item_ics_remote',
+    operation: 'create',
+    version: 1,
+    updatedAt: DateTime.parse(timestamp),
+    payload: {
+      'id': 'item_ics_remote',
+      'collection_id': collectionId,
+      'type': 'event',
+      'title': 'Remote subscription event',
+      'body': null,
+      'start_at': '2026-08-19T01:00:00.000Z',
+      'end_at': null,
+      'due_at': null,
+      'timezone': 'UTC',
+      'all_day': false,
+      'location': null,
+      'status': 'todo',
+      'priority': null,
+      'reminders': [],
+      'tags': [],
+      'source': 'ics',
       'metadata': {},
       'created_at': timestamp,
       'updated_at': timestamp,

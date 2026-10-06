@@ -103,8 +103,7 @@ void main() {
       final deletes = (await repository.listPendingChanges(
         now: DateTime.now(),
       )).where((change) => change.operation == 'delete');
-      expect(deletes.single.entityId, original.id);
-      expect(deletes.single.payload['deleted_at'], isNotNull);
+      expect(deletes, isEmpty);
       expect(
         (await repository.listCollections()).map((collection) => collection.id),
         contains(created.collectionId),
@@ -132,10 +131,7 @@ void main() {
       final changes = (await repository.listPendingChanges(
         now: DateTime.now(),
       )).where((change) => change.entityId == original.id);
-      expect(
-        changes.map((change) => change.operation),
-        unorderedEquals(['create', 'delete', 'update']),
-      );
+      expect(changes, isEmpty);
     },
   );
 
@@ -278,36 +274,33 @@ void main() {
     },
   );
 
-  test(
-    'disable rolls back if an item deletion cannot enter the outbox',
-    () async {
-      final created = await createSubscription();
-      await refresh(created);
-      final current = (await repository.listSubscriptions()).single;
-      final database = await repository.openSharedDatabase();
-      await database.execute('''
+  test('subscription item deletion stays local', () async {
+    final created = await createSubscription();
+    await refresh(created);
+    final current = (await repository.listSubscriptions()).single;
+    final database = await repository.openSharedDatabase();
+    await database.execute('''
       CREATE TRIGGER reject_item_delete BEFORE INSERT ON outbox
       WHEN NEW.entity_type = 'item' AND NEW.operation = 'delete'
       BEGIN SELECT RAISE(ABORT, 'outbox unavailable'); END
     ''');
 
-      await expectLater(update(current, enabled: false), throwsA(anything));
-      final unchanged = (await repository.listSubscriptions()).single;
-      expect(unchanged.enabled, isTrue);
-      expect(unchanged.version, current.version);
-      expect(
-        (await repository.listItems()).single.collectionId,
-        current.collectionId,
-      );
-      expect(await repository.listDeletedItems(), isEmpty);
-      expect(
-        (await repository.listPendingChanges(
-          now: DateTime.now(),
-        )).where((change) => change.operation == 'delete'),
-        isEmpty,
-      );
-    },
-  );
+    final disabled = await update(current, enabled: false);
+    expect(disabled.enabled, isFalse);
+    expect(disabled.version, current.version + 1);
+    expect(
+      (await repository.listItems()).where(
+        (item) => item.collectionId == current.collectionId,
+      ),
+      isEmpty,
+    );
+    expect(
+      (await repository.listPendingChanges(
+        now: DateTime.now(),
+      )).where((change) => change.operation == 'delete'),
+      isEmpty,
+    );
+  });
 }
 
 const _config = AppConfig(
