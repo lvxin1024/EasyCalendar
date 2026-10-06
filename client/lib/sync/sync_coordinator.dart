@@ -26,6 +26,8 @@ class SyncCoordinator extends ChangeNotifier {
   }) : _uuid = uuid ?? Uuid(),
        _clock = clock ?? DateTime.now;
 
+  static const _syncBatchSize = 25;
+
   final SyncRepository repository;
   final SyncTransport transport;
   final SyncTokenStore tokenStore;
@@ -70,6 +72,15 @@ class SyncCoordinator extends ChangeNotifier {
     }
     await configure(enabled: enabled, serverUrl: serverUrl, mode: mode);
     if (transport case final SyncTransportLifecycle lifecycle) {
+      if (_enabled && _mode == SyncMode.group) {
+        _setSnapshot(
+          SyncSnapshot(
+            phase: SyncPhase.syncing,
+            lastSyncedAt: _snapshot.lastSyncedAt,
+            message: '正在尝试握手…',
+          ),
+        );
+      }
       _transportEventsSubscription ??= lifecycle.events.listen(
         _handleTransportEvent,
       );
@@ -205,17 +216,36 @@ class SyncCoordinator extends ChangeNotifier {
       SyncSnapshot(
         phase: SyncPhase.syncing,
         lastSyncedAt: _snapshot.lastSyncedAt,
+        message: _mode == SyncMode.group ? '正在尝试握手…' : '正在连接同步服务…',
       ),
     );
     var attemptedChangeIds = <String>[];
     var localDataChanged = false;
+    var pushedChanges = 0;
     try {
+      final totalChanges = repository is SyncPendingChangeCounter
+          ? await (repository as SyncPendingChangeCounter).countPendingChanges(
+              now: _clock(),
+            )
+          : null;
       while (true) {
         final pending = await repository.listPendingChanges(
           now: _clock(),
-          limit: 200,
+          limit: _syncBatchSize,
         );
         if (pending.isEmpty) break;
+        final minimumTotal = pushedChanges + pending.length;
+        final total = totalChanges == null || totalChanges < minimumTotal
+            ? minimumTotal
+            : totalChanges;
+        _setSnapshot(
+          SyncSnapshot(
+            phase: SyncPhase.syncing,
+            lastSyncedAt: _snapshot.lastSyncedAt,
+            message: '正在同步 $pushedChanges/$total',
+            localDataChanged: localDataChanged,
+          ),
+        );
         final batchDeviceId = pending.first.deviceId;
         final batch = pending
             .where((change) => change.deviceId == batchDeviceId)
@@ -232,21 +262,43 @@ class SyncCoordinator extends ChangeNotifier {
         localDataChanged = localDataChanged || result.conflicts.isNotEmpty;
         await repository.removeAcceptedChanges(result.accepted);
         await repository.recordPermanentFailures(result.rejected);
+        pushedChanges += result.accepted.length + result.rejected.length;
+        _setSnapshot(
+          SyncSnapshot(
+            phase: SyncPhase.syncing,
+            lastSyncedAt: _snapshot.lastSyncedAt,
+            message: '正在同步 $pushedChanges/$total',
+            localDataChanged: localDataChanged,
+          ),
+        );
         if (result.accepted.isEmpty && result.rejected.isEmpty) {
           throw const SyncTransportException('同步服务未处理当前批次。');
         }
       }
 
       var cursor = await repository.loadRemoteCursor();
+      var pulledBatches = 0;
       while (true) {
+        _setSnapshot(
+          SyncSnapshot(
+            phase: SyncPhase.syncing,
+            lastSyncedAt: _snapshot.lastSyncedAt,
+            message: pulledBatches == 0
+                ? '正在检查远端更新…'
+                : '正在拉取第 ${pulledBatches + 1} 批远端更新…',
+            localDataChanged: localDataChanged,
+          ),
+        );
         final page = await transport.pull(
           serverUrl: endpoint,
           token: authToken,
           cursor: cursor,
+          limit: _syncBatchSize,
         );
         await repository.applyRemoteBatch(page.changes, page.cursor);
         localDataChanged = localDataChanged || page.changes.isNotEmpty;
         cursor = page.cursor;
+        pulledBatches += 1;
         if (!page.hasMore) break;
       }
       final completedAt = _clock();

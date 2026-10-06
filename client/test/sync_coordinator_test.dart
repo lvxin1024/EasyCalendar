@@ -65,6 +65,32 @@ void main() {
     expect(coordinator.snapshot.phase, SyncPhase.idle);
     expect(transport.pushCalls, 1);
     expect(transport.pullCalls, 1);
+    expect(transport.pullLimits, [25]);
+  });
+
+  test('reports progress while sending small batches', () async {
+    repository.pending
+      ..clear()
+      ..addAll(
+        List.generate(
+          26,
+          (index) => _pendingChange(
+            changeId: 'change_${index + 1}',
+            entityId: 'item_${index + 1}',
+          ),
+        ),
+      );
+    transport.acceptAll = true;
+    final messages = <String?>[];
+    void recordSnapshot() => messages.add(coordinator.snapshot.message);
+    coordinator.addListener(recordSnapshot);
+
+    await coordinator.synchronize();
+
+    coordinator.removeListener(recordSnapshot);
+    expect(transport.pushCalls, 2);
+    expect(messages, contains('正在同步 0/26'));
+    expect(messages, contains('正在同步 25/26'));
   });
 
   test(
@@ -243,16 +269,18 @@ void main() {
 PendingSyncChange _pendingChange({
   int retryCount = 0,
   String entityType = 'item',
+  String changeId = 'change_01',
+  String entityId = 'item_01',
 }) => PendingSyncChange(
-  changeId: 'change_01',
+  changeId: changeId,
   deviceId: 'test-device',
   entityType: entityType,
-  entityId: 'item_01',
+  entityId: entityId,
   operation: 'create',
   version: 1,
   updatedAt: DateTime.utc(2026, 8, 11, 8),
   payload: {
-    'id': 'item_01',
+    'id': entityId,
     'collection_id': 'collection_local',
     'type': 'task',
     'title': 'Sync me',
@@ -273,7 +301,8 @@ RemoteSyncChange _remoteChange() => RemoteSyncChange(
   payload: const {'id': 'item_02', 'version': 1},
 );
 
-class _MemorySyncRepository implements SyncRepository {
+class _MemorySyncRepository
+    implements SyncRepository, SyncPendingChangeCounter {
   final List<PendingSyncChange> pending = [];
   final List<RemoteSyncChange> applied = [];
   final List<String> permanentFailures = [];
@@ -290,6 +319,10 @@ class _MemorySyncRepository implements SyncRepository {
     required DateTime now,
     int limit = 200,
   }) async => pending.take(limit).toList();
+
+  @override
+  Future<int> countPendingChanges({required DateTime now}) async =>
+      pending.length;
 
   @override
   Future<void> removeAcceptedChanges(List<String> changeIds) async {
@@ -374,6 +407,7 @@ class _FakeTransport implements SyncTransport, SyncTransportLifecycle {
   SyncTransportException? pushError;
   int pushCalls = 0;
   int pullCalls = 0;
+  final List<int> pullLimits = [];
   bool acceptAll = false;
   final List<String> pushedDeviceIds = [];
 
@@ -418,6 +452,7 @@ class _FakeTransport implements SyncTransport, SyncTransportLifecycle {
     int limit = 200,
   }) async {
     pullCalls += 1;
+    pullLimits.add(limit);
     return pullPages.isEmpty
         ? PullSyncPage(
             cursor: cursor ?? 'cur_0',

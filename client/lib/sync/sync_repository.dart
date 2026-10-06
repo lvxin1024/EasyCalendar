@@ -1,5 +1,12 @@
 import 'sync_models.dart';
 
+/// Optional outbox count used to show an accurate sync progress total.
+/// Repositories that cannot count cheaply may omit this interface; the
+/// coordinator will still report batch progress.
+abstract interface class SyncPendingChangeCounter {
+  Future<int> countPendingChanges({required DateTime now});
+}
+
 abstract interface class SyncRepository {
   Future<List<PendingSyncChange>> listPendingChanges({
     required DateTime now,
