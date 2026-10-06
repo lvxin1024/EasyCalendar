@@ -447,6 +447,34 @@ void main() {
     },
   );
 
+  test('retries changes that previously exhausted on a DNS failure', () async {
+    final created = await repository.createItem(
+      const ItemDraft(
+        type: ItemType.task,
+        title: 'DNS failure task',
+        timezone: 'Asia/Shanghai',
+      ),
+    );
+    final itemChange = (await repository.listPendingChanges(
+      now: DateTime.now(),
+    )).singleWhere((change) => change.entityId == created.id);
+
+    await repository.recordTransientFailure(
+      [itemChange.changeId],
+      "网络请求失败：ClientException with SocketException: Failed host lookup: 'calendar.example.com'",
+      now: DateTime.now(),
+      retryLimit: 1,
+    );
+
+    expect(await repository.resetRetryablePermanentFailures(), 1);
+    expect(
+      (await repository.listPendingChanges(
+        now: DateTime.now(),
+      )).map((change) => change.changeId),
+      contains(itemChange.changeId),
+    );
+  });
+
   test('retries a missing group transport after group setup', () async {
     final pending = await repository.listPendingChanges(now: DateTime.now());
     final change = pending.single;

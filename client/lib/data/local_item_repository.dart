@@ -2152,6 +2152,7 @@ class LocalItemRepository
         "(entity_type IN ('cycle_period', 'cycle_settings') "
         "AND last_error LIKE '%entity_type is invalid%') OR "
         "last_error LIKE '%TimeoutException%' OR "
+        "last_error LIKE '%SocketException%' OR "
         'last_error IN ('
         "'constraint_violation: Change could not be applied', "
         "'constraint_violation: Referenced collection does not exist'"
